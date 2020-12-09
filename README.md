@@ -15,6 +15,29 @@ cp default.conf user.conf
 vi user.conf # edit to your liking without adding new elements
 ```
 
+## Mac and Window users
+
+In order to use singularity you must have a virtual machine running. 
+Assuming you have vagrant (and something like virtualbox) setup on your host, you can follow these steps
+
+Provision the virtual machine defined in `Vagrantfile` with:
+
+``` sh
+vagrant up
+```
+
+Create a `user.conf` as described above
+
+> Note: git will not track `user.conf`
+
+Modify `user.conf` such that `path` is set to route through vagrant
+
+``` yaml
+[ENV]
+path:vagrant ssh -c singularity
+```
+
+
 ## Contributing
 
 ### Contributing Commandments
