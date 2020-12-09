@@ -10,6 +10,7 @@ supported targets:
 "
 
 cont_pull_url="todo"
+SING="${ENV['path']} exec "
 
 [ $# -eq 0 ] || [[ "${@}" =~ "help" ]] && echo "$usage"
 
@@ -18,13 +19,13 @@ cont_pull_url="todo"
 [[ "${@}" =~ "cont_pull" ]] && echo "pulling container" && \
     wget "$cont_pull_url" -O "${ENV[cont]}"
 [[ "${@}" =~ "cont_build" ]] && echo "building container" && \
-    SINGULARITY_TMPDIR=/var/tmp sudo -E singularity build "${ENV[cont]}" "${ENV[build]}"
+    SINGULARITY_TMPDIR=/var/tmp sudo -E $SING build "${ENV[cont]}" "${ENV[build]}"
 
 
 # python setup
 [[ "${@}" =~ "python" ]] || echo "Not touching python"
 [[ "${@}" =~ "python" ]] && echo "building python env" && \
-    singularity exec ${ENV[cont]} bash -c "virtualenv ${ENV[pyenv]} && \
+    $SING exec ${ENV[cont]} bash -c "virtualenv ${ENV[pyenv]} && \
     source ${ENV[pyenv]}/bin/activate && \
     python -m pip install --upgrade pip && \
     cd functional_scenes && poetry install"
