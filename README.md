@@ -2,9 +2,18 @@
 
 
 ## Setup and running
-2. Run `./setup.sh cont_build python julia` to build the container and setup enviroment
-3. Enter `./run.sh julia` to get into Julia REPL
 
+1. Run `./setup.sh cont_build python julia` to build the container and setup enviroment
+2. Enter `./run.sh julia` to get into Julia REPL
+
+This project has automatic configuration!! This configuration is defined in `default.conf`.
+You should always prepend `./run.sh` before any command (including running programs like `julia`) to ensure consistency. 
+If you wish to have different values than `default.conf`, simply:
+
+``` sh
+cp default.conf user.conf
+vi user.conf # edit to your liking without adding new elements
+```
 
 ## Contributing
 
