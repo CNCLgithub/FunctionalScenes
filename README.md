@@ -11,7 +11,7 @@
 ### Contributing Commandments
 
 Thou ...
-1. Shalt place all re-used code in packages (`src` or `field_functions`)
+1. Shalt place all re-used code in packages (`src` or `functional_scenes`)
 2. Shalt place all interactive code in `scripts`
 3. Shalt not use "hard" paths. Instead update `PATHS` in the config.
 4. Shalt add contributions to branches derived from `master` or `dev`
@@ -21,7 +21,7 @@ Thou ...
 
 ### Project layout
 
-The python package environment is managed by poetry, located under `field_functions` and can be imported using `import field_functions`
+The python package environment is managed by poetry, located under `functional_scenes` and can be imported using `import functional_scenes`
 
 Likewise, the Julia package is described under `src` and `test`
 
@@ -32,5 +32,7 @@ All scripts are located under `scripts` and data/output is under `output` as spe
 ### Changing the enviroment
 
 To add new python or julia packages use the provided package managers (`poetry add` or `Pkg.add ` for python and julia respectively.)
+
+For julia you can also use `] add ` in the REPL
 
 > for more info checkout [poetry](https://python-poetry.org/docs/cli/) and [Pkg](https://julialang.github.io/Pkg.jl/v1/managing-packages/)
