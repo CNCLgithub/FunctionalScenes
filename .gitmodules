@@ -1,0 +1,3 @@
+[submodule "deps/GenRFS"]
+	path = deps/GenRFS
+	url = git@github.com:CNCLgithub/GenRFS.git
