@@ -15,9 +15,12 @@ end
 
 function valid_spaces(r)
     g = pathgraph(r)
-    special = [entrance(r), exits(r)...]
+    # cannot block entrance
+    e = entrance(r)
+    special = [e, neighbors(g, e)..., exits(r)...]
     vs = @> g vertices setdiff(special)
-    ns = @>> vs filter(v -> isfloor(g, v)) lazymap(v -> @>> v neighbors(g))
+    vs = @>> vs filter(v -> isfloor(g, v))
+    ns = @>> vs lazymap(v -> @>> v neighbors(g))
     nns = @>> ns lazymap(length)
     (vs, ns, nns)
 end
@@ -35,8 +38,10 @@ end
     # first sample a vertex to add furniture to
     # - baking in a prior about number of immediate neighbors
     (vs, ns, nns) = valid_spaces(r)
-    ws = nns ./ sum(nns)
+    # ws = nns ./ sum(nns)
+    ws = fill(1.0 / length(nns), length(nns))
     vi = @trace(categorical(ws), :vertex)
+    v = vs[vi]
     # then pick a subset of neighbors if any
     # defined as a mbrfs
     p = 1.0 / nns[vi]
@@ -44,7 +49,6 @@ end
     mbrfs = RFSElements{Any}(mbrfs)
     others = @trace(rfs(mbrfs), :neighbors)
     f = [vs[vi], others...]
-    display(f)
     return f
 end
 
@@ -56,4 +60,4 @@ end
 
 furniture_chain = Gen.Unfold(furniture_step)
 
-export add, Furniture, furniture
+export add, Furniture, furniture, furniture_step, furniture_chain

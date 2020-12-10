@@ -5,7 +5,6 @@ using Lazy
 using GenRFS
 using LightGraphs
 using MetaGraphs
-using UnicodePlots
 
 function __init__()
     # needed to deal with Gen static functions

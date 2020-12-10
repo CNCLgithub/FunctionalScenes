@@ -49,22 +49,28 @@ function Room(steps::Tuple{T,T}, bounds::Tuple{G,G},
     return Room(steps, bounds, entrance, exits, g)
 end
 
+type_map = Dict{Symbol, Char}(
+    :entrance => '◉',
+    :exit => '◎',
+    :wall => '■',
+    :floor => '□',
+    :furniture => '◆'
+)
+
+print_row(i) = print("$(String(i))")
+
 function Base.show(io::IO, m::MIME"text/plain", r::Room)
     g = pathgraph(r)
     types = @>> pathgraph(r) vertices lazymap(v -> get_prop(g, v, :type)) collect(Symbol)
     types[entrance(r)] = :entrance
     types[exits(r)] .= :exit
-    color_map = unique(types)
-    color_map = Dict(zip(color_map, 1:length(color_map)))
-    colors = @>> types lazymap(t -> color_map[t]) collect(Int64)
-    colors = reshape(colors, steps(r))
-    h = heatmap(colors)
-    # TODO: properly address `show` return type
-    show(io, m, h)
-    # display(h)
-    # open("output.html", "w") do io
-              #     i = IOContext(io, :color => true); show(i, h)
-              # end;
+    grid = @>> types lazymap(t -> type_map[t]) collect(Char)
+    grid = reshape(grid, steps(r))
+    for i in eachrow(grid)
+        print("\n")
+        print(String(i))
+    end
+    # show(io, m, grid)
 end
 
 
