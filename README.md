@@ -20,11 +20,19 @@ vi user.conf # edit to your liking without adding new elements
 In order to use singularity you must have a virtual machine running. 
 Assuming you have vagrant (and something like virtualbox) setup on your host, you can follow these steps
 
+### Using `setup.sh`
+
+
+### Using `run.sh`
+
 Provision the virtual machine defined in `Vagrantfile` with:
 
 ``` sh
 vagrant up
 ```
+
+
+
 
 Create a `user.conf` as described above
 
