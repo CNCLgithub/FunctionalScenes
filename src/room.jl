@@ -1,4 +1,6 @@
 
+Tile = Int64
+
 """
 Defines a room
 """
@@ -7,7 +9,7 @@ struct Room
     bounds::Tuple{Float64, Float64}
     entrance::Int64
     exits::Vector{Int64}
-    graph::MetaGraph{Int64, Float64}
+    graph::MetaGraph{Tile, Float64}
 end
 
 pathgraph(r::Room) = r.graph
@@ -18,8 +20,8 @@ exits(r::Room) = r.exits
 
 
 # helpers
-
-isfloor(g, v) = get_prop(g, v, :type) == :floor
+istype(g,v,t) = get_prop(g, v, :type) == t
+isfloor(g,v) = istype(g,v,:floor)
 iswall(g,v) = (length ∘ neighbors)(g, v) < 4
 matched_type(g, e) = get_prop(g, src(e), :type) ==
     get_prop(g, dst(e), :type)
