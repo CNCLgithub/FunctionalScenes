@@ -168,6 +168,8 @@ class Scene:
         """
         # Setup floor
         self.create_obj('floor', scene_dict['floor'])
+        # Camera
+        self.set_camera(scene_dict['camera'])
         # Load Objects / Tiles
         obj_data = scene_dict['objects']
         obj_names = list(map(str, range(len(obj_data))))
@@ -189,28 +191,21 @@ class Scene:
         # bpy.context.scene.render.tile_x = 16
         # bpy.context.scene.render.tile_y = 16
 
-    # TODO allow configurable camera
-    # def set_camera(self, rot):
+    def set_camera(self, params):
         """ Moves the camera along a circular path.
 
         :param rot: Angle in radians along path.
         :type rot: float
         """
-        # radius = 70.0
-        # Move camera to position on ring
-        # xyz = [np.cos(rot) * radius, np.sin(rot) * radius, 50]
-        # camera = bpy.data.objects['Camera']
-        # camera.location = xyz
-        # bpy.context.view_layer.update()
-        # The camera automatically tracks Empty
-        # camera_track = bpy.data.objects['Empty']
-        # self.move_obj(camera_track, [0, 0, 1])
-        # camera.keyframe_insert(data_path='location', index = -1)
-        # camera.keyframe_insert(data_path='rotation_quaternion', index = -1)
+        camera = bpy.data.objects['Camera']
+        camera.location = params['position']
+        self.rotate_obj(camera, params['orientation'])
+        bpy.context.view_layer.update()
+        camera.keyframe_insert(data_path='location', index = -1)
+        camera.keyframe_insert(data_path='rotation_quaternion', index = -1)
 
 
-    def render(self, output_name,
-               resolution = (256, 256), camera_rot = None):
+    def render(self, output_name, resolution , camera_rot = None):
         """ Renders a scene.
 
         Skips over existing frames
@@ -225,17 +220,16 @@ class Scene:
         :type camera_rot: float
 
         """
-        if not os.path.isdir(output_name):
-            os.mkdir(output_name)
-        self.set_rendering_params(resolution)
+        if not (resolution is None):
+            self.set_rendering_params(resolution)
 
-        bpy.context.scene.render.filepath = out
-        t_0 = time.time()
-        print('Rendering '.format(i))
+        bpy.context.scene.render.filepath = output_name
+        t0 = time.time()
+        print('Rendering ')
         sys.stdout.flush()
         with Suppressor():
             bpy.ops.render.render(write_still=True)
-        print('Rendering took {}s'.format(dur))
+        print('Rendering took {}s'.format(time.time() - t0))
         sys.stdout.flush()
 
 
@@ -286,11 +280,11 @@ def parser(args):
                    help = 'Path to save rendering')
     p.add_argument('--save_world', action = 'store_true',
                    help = 'Save the resulting blend scene')
-    p.add_argument('--render_mode', type = str, default = 'none',
+    p.add_argument('--mode', type = str, default = 'none',
                    choices = ['full', 'none'],
                    help = 'mode to render')
     p.add_argument('--resolution', type = int, nargs = 2,
-                   default = (256,256),  help = 'Render resolution')
+                   help = 'Render resolution')
     p.add_argument('--gpu', action = 'store_true',
                    help = 'Use CUDA rendering')
     return p.parse_args(args)
@@ -319,8 +313,9 @@ def main():
         os.mkdir(path)
 
 
-    if args.render_mode == 'full':
-        scene.render(path, resolution = args.resolution,)
+    if args.mode == 'full':
+        p = os.path.join(path, 'render.png')
+        scene.render(p, resolution = args.resolution,)
 
     # if args.save_world:
     path = os.path.join(args.out, 'world.blend')

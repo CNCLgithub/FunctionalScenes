@@ -1,5 +1,4 @@
 
-Tile = Int64
 
 """
 Defines a room
@@ -63,21 +62,21 @@ function expand(r::Room, factor::Int64)::Room
     kern = CartesianIndices((0:factor-1, 0:factor-1))
 
     mp = @> g vertices reshape(steps(r)) repeat(inner=(factor,factor))
+    # display(@>> g vertices filter(v -> !has_prop(g, v, :type)))
     # copy over tile info
-    @>> new_g vertices foreach(v -> set_prop!(new_g, v, :type,  get_prop(g, mp[v], :type)))
+    sp = v -> set_prop!(new_g, v, :type,  get_prop(g, mp[v], :type))
+    @>> new_g vertices foreach(sp)
+    # display(@>> new_g vertices filter(v -> !has_prop(new_g, v, :type)))
     # consolidate objects
     @>> new_g edges collect filter(e -> !matched_type(new_g, e)) foreach(e -> rem_edge!(new_g, e))
     # update entrances and exits
-    ent = vec(c[a[entrance(r)] * factor .- kern])
-    exs = @>> r exits lazymap(v -> vec(c[collect(a[v] * factor .- kern)])) x -> vcat(x...)
+    ent = [first(c[a[entrance(r)] * factor .- kern])]
+    exs = @>> r exits lazymap(v -> first(c[collect(a[v] * factor .- kern)])) collect
 
     Room(s, bounds(r) .* factor, ent, exs, new_g)
 end
 
 
-function connected(g, v::Tile)::Vector{Tile}
-    @>> v bfs_tree(g) edges collect induced_subgraph(g) last
-end
 
 function shift_tile(r::Room, t::Tile, m::Symbol)::Tile
     rows = first(steps(r))
@@ -94,13 +93,15 @@ function shift_tile(r::Room, t::Tile, m::Symbol)::Tile
     return idx
 end
 
-function swap_tiles(g, p::Tuple{Tile, Tile})
+function swap_tiles!(g, p::Tuple{Tile, Tile})
     x,y = p
+    # new_g = copy(g)
     a = get_prop(g, y, :type)
     b = get_prop(g, x, :type)
     set_prop!(g, x, :type, a)
     set_prop!(g, y, :type, b)
-    return g
+    # return new_g
+    return nothing
 end
 
 type_map = Dict{Symbol, Char}(

@@ -1,5 +1,4 @@
-
-Furniture = Vector{Tile}
+Furniture = Set{Tile}
 
 function add(r::Room, f::Furniture)::Room
     g = copy(pathgraph(r))
@@ -14,19 +13,46 @@ function add(r::Room, f::Furniture)::Room
 end
 
 
+function patch!(r::Room, t::Tile, move::Symbol)
+    g = pathgraph(r)
+    spots = setdiff(move_map, [move])
+    @>> spots begin
+        lazymap(m -> shift_tile(r, t, m))
+        flatten
+        filter(v -> has_vertex(g, v))
+        lazymap(v -> Edge(t, v))
+        filter(e -> matched_type(g, e))
+        foreach(e -> add_edge!(g, e))
+    end
+    return nothing
+end
+
 function shift_furniture(r::Room, f::Furniture, move::Symbol)
-    f = sort(f, rev = in(move, [:down, :right]))
-    g = copy(pathgraph(r))
+    f = sort(collect(f), rev = in(move, [:down, :right]))
+    g = pathgraph(r)
+    new_g = copy(g)
     # shift tiles
-    new_tiles = @>> f lazymap(v -> shift_tile(r, v, move)) zip(f)
-    new_g = @>> new_tiles foldl((x,y) -> swap_tiles(x,y); init=g)
-    # shift edges
-    es = @>> f lazymap(v -> @>> v neighbors(g) lazymap(n -> Edge(v, n))) flatten
-    new_edges = @>> es lazymap(e -> Edge(shift_tile(r, src(e), move),
-                                         shift_tile(r, dst(e), move)))
-    @>> es foreach(e -> rem_edge!(g, e))
-    @>> new_edges foreach(e -> add_edge!(g, e))
-    Room(r.steps, r.bounds, r.entrance, r.exits, g)
+    new_tiles = @>> f begin
+        lazymap(v -> shift_tile(r, v, move))
+        zip(f)
+        foreach(xy -> swap_tiles!(new_g, xy))
+    end
+    # edges
+    es = @>> f begin
+        lazymap(v -> @>> v neighbors(g) lazymap(n -> Edge(v, n)))
+        flatten
+    end
+    # remove old edges
+    foreach(e -> rem_edge!(new_g, e), es)
+    # add shifted edges
+    shifted = @>> es lazymap(e -> Edge(shift_tile(r, src(e), move),
+                                       shift_tile(r, dst(e), move)))
+    foreach(e -> add_edge!(new_g, e), shifted)
+
+    new_r = Room(r.steps, r.bounds, r.entrance, r.exits, new_g)
+    # patch edges to tiles that are now empty
+    foreach(t -> patch!(new_r, t, move), f)
+    return new_r
 end
 
 function valid_spaces(r::Room)
@@ -43,11 +69,17 @@ function valid_spaces(r::Room)
     (vs, ns, nns)
 end
 
+function furniture(r::Room)::Array{Furniture}
+    g = pathgraph(r)
+    vs = @>> g vertices filter(v -> istype(g, v, :furniture))
+    @>> vs map(v -> connected(g, v)) unique
+end
+
 
 """
 Randomly samples a new piece of furniture
 """
-@gen function furniture(r::Room)::Furniture
+@gen function furnish(r::Room)
 
     # first sample a vertex to add furniture to
     # - baking in a prior about number of immediate neighbors
@@ -62,7 +94,7 @@ Randomly samples a new piece of furniture
     mbrfs = map(n -> BernoulliElement{Any}(p, id, (n,)), ns[vi])
     mbrfs = RFSElements{Any}(mbrfs)
     others = @trace(rfs(mbrfs), :neighbors)
-    f = [vs[vi], others...]
+    f = Set([vs[vi], others...])
     return f
 end
 
@@ -70,7 +102,7 @@ end
 Adds a randomly generated piece of furniture
 """
 @gen (static) function furniture_step(t::Int, r::Room)
-    f = @trace(furniture(r), :furniture)
+    f = @trace(furnish(r), :furniture)
     new_r = add(r, f)
     return new_r
 end
@@ -89,8 +121,11 @@ function valid_moves(r::Room, f::Furniture)
     moves[:, 2] = f .+ 1
     moves[:, 3] = f .- rows
     moves[:, 4] = f .+ rows
-    valid = @>> moves eachcol lazymap(m -> @>> setdiff(m, f) filter(v -> !isfloor(g, v, )))
-    valid = @>> valid lazymap(isempty)
+    valid = @>> moves begin
+        eachcol
+        lazymap(m -> @>> setdiff(m, f) filter(v -> has_vertex(g, v)) filter(v -> !isfloor(g, v)))
+        lazymap(isempty)
+    end
     collect(Float64, valid)
 end
 
@@ -120,4 +155,4 @@ Move a piece of furniture
 end
 
 
-export add, Furniture, furniture, furniture_step, furniture_chain, reorganize
+export add, Furniture, furniture, furnish, furniture_step, furniture_chain, reorganize
