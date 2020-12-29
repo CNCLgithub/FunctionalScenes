@@ -1,22 +1,40 @@
 using JSON
 
+
+function light(pos)
+    Dict(:position => [pos..., 5.0],
+         :orientation => [0., 0., 0.5 * pi],
+         :intensity => 300.0)
+end
+
+function lights(r::Room)
+    space, transform = lattice_to_coord(bounds(r), (2, 3))
+    cis = CartesianIndices((2,3))
+    @>> Tuple.(cis) map(transform) map(light) vec
+end
+
+
 function camera(r::Room)
     # camera is placed over entrance
     space, transform = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
     pos = @>> Tuple.(cis[entrance(r)]) lazymap(transform) first
-    pos = [pos..., 2.0]
+    pos = [pos..., 2.5]
     # exts = @>> Tuple.(cis[exits(r)]) lazymap(transform) mean(dims = 2)
+    orientation = [0.5 * pi, 0., 0.]
+    # pos = [0,0,60]
+    # orientation = [0, 0, 0.5 * pi]
     Dict(:position => pos,
-         :orientation => [0.5 * pi, 0., 0.])
+         :orientation => orientation)
 end
 
-function floor(r::Room)
+function floor(r::Room; ceiling = false)
     dx,dy = bounds(r)
+    z = ceiling ? 3.0 : 0.
     Dict(:position => [0,0,0],
          :orientation => [0,0,0],
          :shape => :Plane,
-         :dims => [dx, dy, 0],
+         :dims => [dx, dy, z],
          :appearance => :white)
 end
 
@@ -29,8 +47,7 @@ function tile(t, coords, space)
          :orientation => [0,0,0],
          :shape => :Block,
          :dims => [dx,dy,dz],
-         # :appearance => t == :wall ? :blue : :white)
-         :appearance => :blue)
+         :appearance => t == :wall ? :white : :blue)
 end
 
 
@@ -45,10 +62,14 @@ function spot(coords, space; exit::Bool=false)
          :appearance => exit ? :red : :green)
 end
 
-function lattice_to_coord(r::Room)
-    space = bounds(r) ./ steps(r)
-    offset = 0.5 .* steps(r) .* space .+ (0.5 .* space)
+function lattice_to_coord(bounds::Tuple, steps::Tuple)
+    space = bounds ./ steps
+    offset = 0.5 .* steps .* space .+ (0.5 .* space)
     (space, c -> c .* space .- offset)
+end
+
+function lattice_to_coord(r::Room)
+    lattice_to_coord(bounds(r), steps(r))
 end
 
 function tiles(r::Room)
@@ -88,6 +109,8 @@ end
 function translate(r::Room, paths::Bool)::String
     ps = paths ? plot_path(r) : []
     Dict(:floor => floor(r),
+         :ceiling => floor(r, ceiling = true),
+         :lights => lights(r),
          :camera => camera(r),
          :objects => vcat(tiles(r), task(r), ps),
          ) |> json

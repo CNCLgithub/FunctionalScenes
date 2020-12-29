@@ -4,7 +4,9 @@ authors = ["belledon <mbelledonne@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataFramesMeta = "1313f7d8-7da2-5740-9ea0-a2ca25f37964"
 Gen = "ea4f424c-a589-11e8-07c0-fd5c91b9da4a"
 GenRFS = "56ab6c88-a2ab-44ec-99ca-7b9069b439c2"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"

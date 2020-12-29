@@ -168,8 +168,10 @@ class Scene:
         """
         # Setup floor
         self.create_obj('floor', scene_dict['floor'])
+        self.create_obj('ceiling', scene_dict['ceiling'])
         # Camera
         self.set_camera(scene_dict['camera'])
+        self.set_lights(scene_dict['lights'])
         # Load Objects / Tiles
         obj_data = scene_dict['objects']
         obj_names = list(map(str, range(len(obj_data))))
@@ -186,7 +188,7 @@ class Scene:
         bpy.context.scene.render.resolution_y = resolution[1]
         bpy.context.scene.render.resolution_percentage = 100
         # bpy.context.scene.render.engine = 'CYCLES'
-        # bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+        bpy.context.scene.render.engine = 'BLENDER_EEVEE'
         # bpy.context.scene.cycles.samples = 128
         # bpy.context.scene.render.tile_x = 16
         # bpy.context.scene.render.tile_y = 16
@@ -203,6 +205,28 @@ class Scene:
         bpy.context.view_layer.update()
         camera.keyframe_insert(data_path='location', index = -1)
         camera.keyframe_insert(data_path='rotation_quaternion', index = -1)
+
+    def set_lights(self, lights):
+        for (i, l) in enumerate(lights):
+
+            name = 'light_{0:d}'.format(i)
+            # create light datablock, set attributes
+            light_data = bpy.data.lights.new(name=name, type='AREA')
+            light_data.energy = l['intensity']
+
+            # create new object with our light datablock
+            light_object = bpy.data.objects.new(name=name, object_data=light_data)
+
+            # link light object
+            bpy.context.collection.objects.link(light_object)
+
+            # make it active
+            bpy.context.view_layer.objects.active = light_object
+
+            #change location
+            light_object.location = l['position']
+            self.rotate_obj(light_object, l['orientation'])
+            bpy.context.view_layer.update()
 
 
     def render(self, output_name, resolution , camera_rot = None):
@@ -314,7 +338,7 @@ def main():
 
 
     if args.mode == 'full':
-        p = os.path.join(path, 'render.png')
+        p = args.out + '.png'
         scene.render(p, resolution = args.resolution,)
 
     # if args.save_world:
