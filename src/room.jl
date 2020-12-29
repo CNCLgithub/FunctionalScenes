@@ -6,9 +6,9 @@ Defines a room
 struct Room
     steps::Tuple{Int64, Int64}
     bounds::Tuple{Float64, Float64}
-    entrance::Vector{Int64}
-    exits::Vector{Int64}
-    graph::MetaGraph{Tile, Float64}
+    entrance::Vector{Tile}
+    exits::Vector{Tile}
+    graph::PathGraph
 end
 
 pathgraph(r::Room) = r.graph
@@ -31,7 +31,7 @@ Builds a room given ...
 function Room(steps::Tuple{T,T}, bounds::Tuple{G,G},
               ent::Vector{T}, exits::Vector{T}) where {T<:Int, G<:Real}
     # initialize grid
-    g = MetaGraph(grid(steps))
+    g = PathGraph(grid(steps))
 
     # distinguish between walls and floor
     @>> g vertices foreach(v -> set_prop!(g, v, :type,
@@ -43,9 +43,8 @@ function Room(steps::Tuple{T,T}, bounds::Tuple{G,G},
     @>> exits foreach(v -> set_prop!(g, v, :type, :floor))
 
     # walls and non-walls cannot be connected
-    @>> g edges foreach(e -> set_prop!(g, e, :matched,
-                                       matched_type(g, e)))
-    @>> filter_edges(g, :matched, false) foreach(e -> rem_edge!(g, e))
+    togo = @>> g edges collect filter(e -> !matched_type(g, e))
+    foreach(e -> rem_edge!(g, e), togo)
 
     return Room(steps, bounds, ent, exits, g)
 end
@@ -91,17 +90,6 @@ function shift_tile(r::Room, t::Tile, m::Symbol)::Tile
         idx += rows
     end
     return idx
-end
-
-function swap_tiles!(g, p::Tuple{Tile, Tile})
-    x,y = p
-    # new_g = copy(g)
-    a = get_prop(g, y, :type)
-    b = get_prop(g, x, :type)
-    set_prop!(g, x, :type, a)
-    set_prop!(g, y, :type, b)
-    # return new_g
-    return nothing
 end
 
 type_map = Dict{Symbol, Char}(
