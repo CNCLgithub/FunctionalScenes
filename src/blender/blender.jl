@@ -19,6 +19,7 @@ function camera(r::Room)
     space, transform = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
     pos = @>> Tuple.(cis[entrance(r)]) lazymap(transform) first
+    pos = pos .- ((0.5, 1.0) .* space)
     pos = [pos..., 2.5]
     # exts = @>> Tuple.(cis[exits(r)]) lazymap(transform) mean(dims = 2)
     orientation = [0.5 * pi, 0., 0.]

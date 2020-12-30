@@ -103,7 +103,7 @@ r2 = last(rooms);
 x = sort_search(df, true)
 y = sort_search(df, false)
 xy = vcat(x,y)
-
+sort!(xy, [:id, :furniture, :move])
 CSV.write("/scenes/pilot.csv", xy)
 render_base(seeds)
 render_stims(seeds, xy)

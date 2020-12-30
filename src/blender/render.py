@@ -209,6 +209,7 @@ class Scene:
     def set_lights(self, lights):
         for (i, l) in enumerate(lights):
 
+            # cribbed from https://stackoverflow.com/a/57310198
             name = 'light_{0:d}'.format(i)
             # create light datablock, set attributes
             light_data = bpy.data.lights.new(name=name, type='AREA')
