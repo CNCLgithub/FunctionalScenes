@@ -1,8 +1,9 @@
 using JSON
 
+const tile_height = 5.0
 
 function light(pos)
-    Dict(:position => [pos..., 5.0],
+    Dict(:position => [pos..., 0.99 * tile_height],
          :orientation => [0., 0., 0.5 * pi],
          :intensity => 300.0)
 end
@@ -20,9 +21,9 @@ function camera(r::Room)
     cis = CartesianIndices(steps(r))
     pos = @>> Tuple.(cis[entrance(r)]) lazymap(transform) first
     pos = pos .- ((0.5, 1.0) .* space)
-    pos = [pos..., 2.5]
+    pos = [pos..., 0.9 * tile_height]
     # exts = @>> Tuple.(cis[exits(r)]) lazymap(transform) mean(dims = 2)
-    orientation = [0.5 * pi, 0., 0.]
+    orientation = [0.45 * pi, 0., 0.]
     # pos = [0,0,60]
     # orientation = [0, 0, 0.5 * pi]
     Dict(:position => pos,
@@ -31,18 +32,18 @@ end
 
 function floor(r::Room; ceiling = false)
     dx,dy = bounds(r)
-    z = ceiling ? 3.0 : 0.
-    Dict(:position => [0,0,0],
-         :orientation => [0,0,0],
+    z = ceiling ? tile_height : 0.0
+    rx = ceiling ? pi : 0.0
+    Dict(:position => [0,0,z],
+         :orientation => [rx,0,0],
          :shape => :Plane,
-         :dims => [dx, dy, z],
+         :dims => [dx, dy, 0],
          :appearance => :white)
 end
 
 function tile(t, coords, space)
     dx,dy = space
-    dz = sqrt(dx^2 + dy^2)
-    dz *= t == :wall ? 3.0 : 1.0
+    dz = t == :wall ? tile_height : sqrt(dx^2 + dy^2)
     pos = [coords..., dz / 2.0]
     Dict(:position => pos,
          :orientation => [0,0,0],

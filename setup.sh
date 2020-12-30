@@ -10,7 +10,7 @@ supported targets:
 "
 
 cont_pull_url="todo"
-SING="${ENV['path']} exec "
+SING="${ENV['path']}"
 
 [ $# -eq 0 ] || [[ "${@}" =~ "help" ]] && echo "$usage"
 

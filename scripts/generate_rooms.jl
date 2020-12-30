@@ -6,10 +6,27 @@ using FunctionalScenes
 
 using DataFrames
 
-import FunctionalScenes: expand, furniture, valid_moves, shift_furniture, move_map
+import FunctionalScenes: expand, furniture, valid_moves,
+    shift_furniture, move_map, labelled_categorical
+
+
+function predicate(x)
+    any(iszero.(x.d)) && any((!iszero).(x.d))
+end
+
+function digest(df::DataFrame)
+    @>> DataFrames.groupby(df, :furniture) begin
+        filter(g -> nrow(g) >= 2)
+        map(g -> g[1:2, :])
+        filter(predicate)
+        x -> isempty(x) ? x : labelled_categorical(x)
+        DataFrame
+    end
+end
 
 function search(r::Room)
-    fs = furniture(r)
+    # avoid furniture close to camera
+    fs = furniture(r)[3:end]
     data = []
     for (i,f) in enumerate(fs)
         moves = collect(Bool, valid_moves(r, f))
@@ -17,18 +34,18 @@ function search(r::Room)
         for m in moves
             shifted = shift_furniture(r,f,m)
             d = mean(compare(r, shifted))
-            push!(data, DataFrame(furniture = i,
+            push!(data, DataFrame(furniture = i+2,
                                   move = m,
                                   d = d))
         end
     end
-    vcat(data...)
+    @> vcat(data...) sort([:furniture, :d]) digest
 end
 
 function build(r::Room; steps = 10, factor = 1)
     new_r = last(furniture_chain(steps, r))
     new_r = FunctionalScenes.expand(new_r, factor)
-    dist = @time search(new_r)
+    dist = search(new_r)
     (new_r, dist)
 end
 
@@ -36,18 +53,11 @@ function saver(id::Int64, r::Room, out::String)
     @save "$(out)/$(id).jld2" r
 end
 
-function predicate(df::DataFrame)
-    @> df begin
-        DataFrames.groupby(:furniture)
-        @>> filter(r -> (!isempty)(r) && any(iszero.(r.d)) && any((!iszero).(r.d)))
-        isempty; !
-    end
-end
 
-function foo(base::Room; n::Int64 = 10)
+function create(base::Room; n::Int64 = 10)
     steps = @>> begin
         repeatedly(() -> build(base, factor = 2))
-        filter(x -> @>> x last predicate)
+        filter(x -> @>> x last isempty !)
         take(n)
     end
     seeds, dfs = zip(steps...)
@@ -61,15 +71,6 @@ function foo(base::Room; n::Int64 = 10)
     return collect(seeds), df
 end
 
-sort_search(df, rev) = @> df begin
-    sort([:id, :furniture, :d], rev = rev)
-    DataFrames.groupby([:id, :furniture])
-    @>> filter(r -> (!isempty)(r) && any(iszero.(r.d)) && any((!iszero).(r.d)))
-    @>> map(first)
-    DataFrame
-end
-
-
 function render_base(bases::Vector{Room})
     out = "/renders/pilot"
     isdir(out) || mkdir(out)
@@ -82,7 +83,7 @@ end
 function render_stims(bases::Vector{Room}, df::DataFrame)
     out = "/renders/pilot"
     isdir(out) || mkdir(out)
-    for r in eachrow(xy)
+    for r in eachrow(df)
         base = bases[r.id]
         p = "$(out)/$(r.id)_$(r.furniture)_$(r.move)"
         room = shift_furniture(base,
@@ -92,18 +93,14 @@ function render_stims(bases::Vector{Room}, df::DataFrame)
     end
 end
 
-r = Room((11,20), (11,20), [6], [213, 217])
-rooms = furniture_chain(10, r);
-r2 = last(rooms);
-# f = first(furniture(r2))
-# shift_furniture(r2, f, :right)
+function main()
+    r = Room((11,20), (11,20), [6], [213, 217])
+    @time seeds, df = create(r, n = 15)
+    CSV.write("/scenes/pilot.csv", df)
+    render_base(seeds)
+    render_stims(seeds, df)
+    return r, df
+end
 
 
-@time seeds, df = foo(r)
-x = sort_search(df, true)
-y = sort_search(df, false)
-xy = vcat(x,y)
-sort!(xy, [:id, :furniture, :move])
-CSV.write("/scenes/pilot.csv", xy)
-render_base(seeds)
-render_stims(seeds, xy)
+r, xy = main();
