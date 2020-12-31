@@ -50,9 +50,10 @@ def main():
     aa_movies = []
     for i in bases:
         src = os.path.join(renders, '{0:d}.png'.format(i))
-        out = os.path.join(movies, '{0:d}_{0:d}'.format(i))
+        suffix = '{0:d}_{0:d}'.format(i)
+        out = os.path.join(movies, suffix)
         # stimuli(src, src, args.fps, args.stim_dur, args.mask_dur, out)
-        aa_movies.append(out + '.mp4')
+        aa_movies.append(suffix + '.mp4')
 
     # then proceed to make `a -> b` trials
     ab_movies = []
@@ -61,8 +62,8 @@ def main():
         suffix = '{0:d}_{1:d}_{2!s}'.format(row.id, row.furniture, row.move)
         src = os.path.join(renders, suffix + '.png')
         out = os.path.join(movies, suffix)
-        stimuli(base, src, args.fps, args.stim_dur, args.mask_dur, out)
-        ab_movies.append(out + '.mp4')
+        # stimuli(base, src, args.fps, args.stim_dur, args.mask_dur, out)
+        ab_movies.append(suffix + '.mp4')
 
     # repeate aa trials to have a 50/50 split
     naa = len(aa_movies)
