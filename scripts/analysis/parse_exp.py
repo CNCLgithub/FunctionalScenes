@@ -125,7 +125,7 @@ def main():
     trs, qs = read_db(args.subject_data, args.table_name,
                       args.exp_flag, args.mode)
 
-    qs = qs.rename(index=str, columns={'uniqueid': 'WID'})
+    cl_qs = qs.rename(index=str, columns={'uniqueid': 'WID'})
 
     trs = trs.dropna()
     trs = trs.rename(index=str,
@@ -140,9 +140,9 @@ def main():
                     left_index=True, right_index=True)
 
     # Make sure we have required responses per participant
-    trialsbyp = trs.groupby('WID').aggregate({"TrialName" : lambda x : len(x)})
+    trialsbyp = trs.groupby('WID').aggregate({"TrialOrder" : lambda x : max(x) + 1})
     print(trialsbyp)
-    trialsbyp = trialsbyp[trialsbyp.TrialName  == args.trialsbyp]
+    trialsbyp = trialsbyp[trialsbyp.TrialOrder  == args.trialsbyp]
     good_wids = trialsbyp.index
     trs = trs[trs.WID.isin(good_wids)]
 
@@ -156,9 +156,9 @@ def main():
 
     trs.to_csv(args.trialdata, index=False)
 
-    # cl_qs = qs[qs.WID.isin(good_wids)].copy()
-    # cl_qs["ID"] = cl_qs.WID.apply(lambda x: wid_translate[x])
-    # cl_qs[["ID", "instructionloops", "comments"]].to_csv(args.questiondata, index=False)
+    cl_qs = cl_qs[cl_qs.WID.isin(good_wids)]
+    cl_qs["ID"] = cl_qs.WID.apply(lambda x: wid_translate[x])
+    cl_qs[["ID", "instructionloops", "comments"]].to_csv(args.questiondata, index=False)
 
 if __name__ == '__main__':
     main()
