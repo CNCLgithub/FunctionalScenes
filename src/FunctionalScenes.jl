@@ -13,9 +13,9 @@ function __init__()
     @load_generated_functions
 end
 
-include("utils.jl")
 include("dists.jl")
 include("room.jl")
+include("utils.jl")
 include("furniture.jl")
 include("gen.jl")
 include("blender/blender.jl")

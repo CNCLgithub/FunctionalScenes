@@ -91,6 +91,7 @@ function main()
 
         push!(new_df, (r.id, r.furniture, r.move, pixeld, lvd))
     end
+    isdir("/experiments/1exit") || mkdir("/experiments/1exit")
     CSV.write("/experiments/1exit/covariates.csv", new_df)
 end
 

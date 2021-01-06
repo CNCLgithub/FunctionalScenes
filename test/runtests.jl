@@ -42,7 +42,8 @@ end;
     r = add(r, Set([7]))
     g = pathgraph(r)
     @test valid_spaces(r) ==  [8, 9];
-    @test furnish(r) == Set([8, 9]);
+    ws = ones(steps(r));
+    @test furnish(r, ws) == Set([8, 9]);
 end;
 
 @testset "Reorganizing" begin

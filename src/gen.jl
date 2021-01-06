@@ -1,5 +1,22 @@
 
 """
+Take a room and place a random set of objects in an xy plane
+"""
+@gen function furniture_prior(r::Room, rate::Float64)
+    n = @trace(poisson(rate), :cardinality)
+    dx, dy = bounds(r) .* 0.8 # size of x and y dimensions
+    positions = Matrix{Float64}(undef, n , 2)
+    for i = 1:n
+        # sample the position within (-dx, +dx) and (-dy, +dy)
+        # TODO: fill in `nothing` with uniform sample
+        # position[i, 1] = @trace(..., i => :x) # x value
+        # position[i, 2] = @trace(..., i => :y) # y value
+    end
+    return positions
+end
+
+
+"""
 Randomly samples a new piece of furniture
 """
 @gen function furnish(r::Room, weights::Matrix{Float64})

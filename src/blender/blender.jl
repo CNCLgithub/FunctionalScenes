@@ -115,7 +115,7 @@ function translate(r::Room, paths::Bool)::String
          :lights => lights(r),
          :camera => camera(r),
          :objects => vcat(tiles(r), task(r), ps),
-         ) |> json
+         )
 end
 
 default_script = joinpath(@__DIR__, "render.py")
@@ -129,7 +129,7 @@ function render(r::Room, out::String;
     isdir(out) || mkpath(out)
     scene_out = joinpath(out, "scene.json")
 
-    scene = translate(r, navigation)
+    scene = translate(r, navigation) |> json
     open(scene_out, "w") do f
         write(f, scene)
     end

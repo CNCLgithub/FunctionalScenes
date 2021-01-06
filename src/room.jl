@@ -1,4 +1,6 @@
 
+const Tile = Int64
+const PathGraph = MetaGraphs.MetaGraph{Int64, Float64}
 
 """
 Defines a room
