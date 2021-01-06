@@ -17,9 +17,13 @@ function add(r::Room, f::Furniture)::Room
     foreach(v -> set_prop!(g, v, :type, :furniture), f)
     # ensure that furniture is only connected to itself
     # returns a list of edges connected each furniture vertex
-    es = @>> f lazymap(v -> @>> v neighbors(g) lazymap(n -> Edge(v, n))) flatten
+    es = @>> f begin
+        collect
+        map(v -> @>> v neighbors(g) map(n -> Edge(v, n)))
+        x -> vcat(x...)
+    end
     # removes any edge that is no longer valid in the neighborhood (ie :furniture <-> :floor)
-    @>> es filter(e -> !matched_type(g, e)) foreach(e -> rem_edge!(g, e))
+    foreach(e -> !matched_type(g, e) && rem_edge!(g, e), es)
     Room(r.steps, r.bounds, r.entrance, r.exits, g)
 end
 
@@ -71,46 +75,6 @@ end
 
 
 
-"""
-Randomly samples a new piece of furniture
-"""
-@gen function furnish(r::Room)
-
-    # first sample a vertex to add furniture to
-    # - baking in a prior about number of immediate neighbors
-    g = pathgraph(r)
-    candidates = valid_spaces(r)
-    nc = length(candidates)
-    if isempty(candidates)
-        return Set([])
-    end
-    # ws = nns ./ sum(nns)
-    ws = fill(1.0 / nc, nc)
-    vi = @trace(categorical(ws), :vertex)
-    v = candidates[vi]
-    ns = neighbors(g, v)
-    nns = length(ns)
-    # then pick a subset of neighbors if any
-    # defined as a mbrfs
-    p = 1.0 / nns
-    mbrfs = map(n -> BernoulliElement{Any}(p, id, (n,)), ns)
-    mbrfs = RFSElements{Any}(mbrfs)
-    others = @trace(rfs(mbrfs), :neighbors)
-    f = Set{Tile}(vcat(v, others))
-    return f
-end
-
-"""
-Adds a randomly generated piece of furniture
-"""
-@gen (static) function furniture_step(t::Int, r::Room)
-    f = @trace(furnish(r), :furniture)
-    new_r = add(r, f)
-    return new_r
-end
-
-furniture_chain = Gen.Unfold(furniture_step)
-
 
 const move_map = [:up, :down, :left, :right]
 
@@ -133,28 +97,4 @@ function valid_moves(r::Room, f::Furniture)
     @>> moves eachcol lazymap(m -> valid_move(g,f,m)) collect(Float64)
 end
 
-"""
-Move a piece of furniture
-"""
-@gen function reorganize(r::Room)
-    # pick a random furniture block, this will prefer larger pieces
-    g = pathgraph(r)
-    vs = @>> g vertices filter(v -> istype(g, v, :furniture))
-    n = length(vs)
-    ps = fill(1.0/n, n)
-    vi = @trace(categorical(ps), :block)
-    v = vs[vi]
-    f = connected(g, v)
-    # find the valid moves and pick one at random
-    # each move will be one unit
-    moves = valid_moves(r, f)
-
-    inds = CartesianIndices(steps(r))
-    move_probs = moves ./ sum(moves)
-    move_id = @trace(categorical(move_probs), :move)
-    move = move_map[move_id]
-    new_r = shift_furniture(r, f, move)
-end
-
-
-export add, Furniture, furniture, furnish, furniture_step, furniture_chain, reorganize
+export add, Furniture, furniture

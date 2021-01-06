@@ -17,6 +17,7 @@ include("utils.jl")
 include("dists.jl")
 include("room.jl")
 include("furniture.jl")
+include("gen.jl")
 include("blender/blender.jl")
 include("paths.jl")
 

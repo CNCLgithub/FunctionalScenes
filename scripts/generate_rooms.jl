@@ -11,7 +11,8 @@ import FunctionalScenes: expand, furniture, valid_moves,
 
 
 function predicate(x)
-    any(iszero.(x.d)) && any((!iszero).(x.d))
+    any((!iszero).(x.d))
+    # any(iszero.(x.d)) && any((!iszero).(x.d))
 end
 
 function digest(df::DataFrame)
@@ -26,24 +27,27 @@ end
 
 function search(r::Room)
     # avoid furniture close to camera
-    fs = furniture(r)[3:end]
-    data = []
+    fs = furniture(r)
+    data = DataFrame()
     for (i,f) in enumerate(fs)
         moves = collect(Bool, valid_moves(r, f))
-        moves = move_map[moves]
+        moves = intersect(move_map[moves], [:up, :down])
         for m in moves
             shifted = shift_furniture(r,f,m)
             d = mean(compare(r, shifted))
-            push!(data, DataFrame(furniture = i+2,
-                                  move = m,
-                                  d = d))
+            append!(data, DataFrame(furniture = i,
+                                    move = m,
+                                    d = d))
         end
     end
-    @> vcat(data...) sort([:furniture, :d]) digest
+    isempty(data) ? DataFrame() : @> data sort([:furniture, :d]) digest
 end
 
-function build(r::Room; steps = 10, factor = 1)
-    new_r = last(furniture_chain(steps, r))
+function build(r::Room; k = 7, factor = 1)
+    strt = Int(last(steps(r)) / 2.0)
+    weights = zeros(steps(r))
+    weights[:, strt:end] .= 1.0
+    new_r = last(furniture_chain(k, r, weights))
     new_r = FunctionalScenes.expand(new_r, factor)
     dist = search(new_r)
     (new_r, dist)
@@ -55,24 +59,23 @@ end
 
 
 function create(base::Room; n::Int64 = 10)
-    steps = @>> begin
-        repeatedly(() -> build(base, factor = 2))
-        filter(x -> @>> x last isempty !)
-        take(n)
+    seeds = Vector{Room}(undef, n)
+    df = DataFrame()
+    i = 1
+    while i <= n
+        seed, _df = build(base, factor = 2)
+        if !isempty(_df)
+            seeds[i] = seed
+            _df[!, :id] .= i
+            append!(df, _df)
+            i += 1
+        end
     end
-    seeds, dfs = zip(steps...)
-    out = "/scenes/pilot"
-    isdir(out) || mkdir(out)
-    @>> seeds enumerate foreach(x -> saver(x..., out))
-    for (i,d) in enumerate(dfs)
-        d[!, :id] .= i
-    end
-    df = vcat(dfs...)
     return collect(seeds), df
 end
 
 function render_base(bases::Vector{Room})
-    out = "/renders/pilot"
+    out = "/renders/1exit"
     isdir(out) || mkdir(out)
     for (id,r) in enumerate(bases)
         p = "$(out)/$(id)"
@@ -81,7 +84,7 @@ function render_base(bases::Vector{Room})
 end
 
 function render_stims(bases::Vector{Room}, df::DataFrame)
-    out = "/renders/pilot"
+    out = "/renders/1exit"
     isdir(out) || mkdir(out)
     for r in eachrow(df)
         base = bases[r.id]
@@ -94,13 +97,26 @@ function render_stims(bases::Vector{Room}, df::DataFrame)
 end
 
 function main()
-    r = Room((11,20), (11,20), [6], [213, 217])
-    @time seeds, df = create(r, n = 15)
-    CSV.write("/scenes/pilot.csv", df)
+    room_dims = (8,16)
+    entrance = [4]
+    seeds = Room[]
+    df = DataFrame()
+    exits = collect(((8*15+1):8*16))
+    for ex = 2:7
+        r = Room(room_dims, room_dims, entrance, exits[ex:ex])
+        display(r)
+        @time _seeds, _df = create(r, n = 5)
+        append!(seeds, _seeds)
+        _df[!, :id] = _df.id .+ (ex - 2)*5
+        append!(df, _df)
+    end
+    CSV.write("/scenes/1exit.csv", df)
+    out = "/scenes/1exit"
+    isdir(out) || mkdir(out)
+    @>> seeds enumerate foreach(x -> saver(x..., out))
     render_base(seeds)
     render_stims(seeds, df)
-    return r, df
+    return seeds, df
 end
 
-
-r, xy = main();
+main();

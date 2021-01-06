@@ -76,22 +76,22 @@ function compare_rooms(base_p::String, fid, move)
 end
 
 function main()
-    df = DataFrame(CSV.File("/scenes/pilot.csv"))
+    df = DataFrame(CSV.File("/scenes/1exit.csv"))
     new_df = DataFrame(id = Int64[], furniture = Int64[],
                        move = String[], pixeld = Float64[],
                        lvd = Float64[])
 
     for r in eachrow(df)
-        base = "/renders/pilot/$(r.id).png"
-        img = "/renders/pilot/$(r.id)_$(r.furniture)_$(r.move).png"
+        base = "/renders/1exit/$(r.id).png"
+        img = "/renders/1exit/$(r.id)_$(r.furniture)_$(r.move).png"
         pixeld = compare_pixels(base, img)
 
-        base = "/scenes/pilot/$(r.id).jld2"
+        base = "/scenes/1exit/$(r.id).jld2"
         lvd = compare_rooms(base, r.furniture, r.move)
 
         push!(new_df, (r.id, r.furniture, r.move, pixeld, lvd))
     end
-    CSV.write("/experiments/pilot/covariates.csv", new_df)
+    CSV.write("/experiments/1exit/covariates.csv", new_df)
 end
 
 
