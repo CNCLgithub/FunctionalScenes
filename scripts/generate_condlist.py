@@ -23,13 +23,13 @@ def stimuli(a, b, fps, im_dur, mk_dur, out):
     cmd.append('rm ' + p2 + '.mp4')
     run_cmd(cmd)
 
-# stimuli('/renders/pilot/1.png', '/renders/pilot/2.png', 24, 0.5, 0.25, '/renders/test')
+# stimuli('/renders/1exit/1.png', '/renders/1exit/2.png', 24, 0.5, 0.25, '/renders/test')
 
 
 def main():
 
     parser = argparse.ArgumentParser(
-        description = 'Generates condlist for pilot',
+        description = 'Generates condlist for 1exit',
         formatter_class = argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('--fps', type = int,
@@ -40,10 +40,10 @@ def main():
                         default = 0.25)
     args = parser.parse_args()
 
-    renders = '/renders/pilot'
-    movies = '/movies/pilot'
+    renders = '/renders/1exit'
+    movies = '/movies/1exit'
     os.path.isdir(movies) or os.mkdir(movies)
-    df = pd.read_csv('/scenes/pilot.csv')
+    df = pd.read_csv('/scenes/1exit.csv')
     bases = np.unique(df.id)
 
     # first create each `a->a` trial
@@ -52,7 +52,7 @@ def main():
         src = os.path.join(renders, '{0:d}.png'.format(i))
         suffix = '{0:d}_{0:d}'.format(i)
         out = os.path.join(movies, suffix)
-        # stimuli(src, src, args.fps, args.stim_dur, args.mask_dur, out)
+        stimuli(src, src, args.fps, args.stim_dur, args.mask_dur, out)
         aa_movies.append(suffix + '.mp4')
 
     # then proceed to make `a -> b` trials
@@ -62,7 +62,7 @@ def main():
         suffix = '{0:d}_{1:d}_{2!s}'.format(row.id, row.furniture, row.move)
         src = os.path.join(renders, suffix + '.png')
         out = os.path.join(movies, suffix)
-        # stimuli(base, src, args.fps, args.stim_dur, args.mask_dur, out)
+        stimuli(base, src, args.fps, args.stim_dur, args.mask_dur, out)
         ab_movies.append(suffix + '.mp4')
 
     # repeate aa trials to have a 50/50 split
@@ -72,7 +72,7 @@ def main():
     aa_movies = np.repeat(aa_movies, reps).tolist()
 
     trials = [aa_movies + ab_movies]
-    with open(os.path.join(movies, 'pilot.json'), 'w') as f:
+    with open(os.path.join(movies, '1exit.json'), 'w') as f:
        json.dump(trials, f)
 
 

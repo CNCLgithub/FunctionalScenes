@@ -37,6 +37,16 @@ end;
     @test Set(neighbors(g, 9)) == Set([])
 end;
 
+
+@testset "Removing" begin
+    x = Room((4,10), (4, 10), [2], [38]);
+    y = add(x, Set([14,15]));
+    z = remove(y, Set([14,15]));
+    @test navigability(x) != navigability(y);
+    @test navigability(y) != navigability(z);
+    @test navigability(x) == navigability(z);
+end;
+
 @testset "Furnishing" begin
     r = Room((5,3), (5,3), [2], [12]);
     r = add(r, Set([7]))
