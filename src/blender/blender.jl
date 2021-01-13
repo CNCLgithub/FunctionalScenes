@@ -108,7 +108,7 @@ function plot_path(r::Room)
     @>> vs lazymap(x -> spot(x, space)) collect
 end
 
-function translate(r::Room, paths::Bool)::String
+function translate(r::Room, paths::Bool)
     ps = paths ? plot_path(r) : []
     Dict(:floor => floor(r),
          :ceiling => floor(r, ceiling = true),

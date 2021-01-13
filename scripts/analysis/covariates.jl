@@ -5,7 +5,7 @@ using DataFrames
 using LinearAlgebra:norm
 
 import FunctionalScenes: Room, furniture, shift_furniture, navigability,
-    occupancy_grid, diffuse_og
+    occupancy_grid, diffuse_og, safe_shortest_path
 
 function compare_pixels(a::String, b::String)
     x = load(a)
@@ -64,31 +64,28 @@ function lv_distance(a, b)
 end
 
 function compare_og(a,b)
-    paths_a = navigability(a) # paths to each exit
-    paths_b = navigability(b)
-    d = 0
-    for i = 1:length(paths_a) # for each exit
-        d += norm(occupancy_grid(a, paths_a[i], decay = -1.0) .-
-                  occupancy_grid(a, paths_b[i], decay = -1.0))
-        d += norm(occupancy_grid(b, paths_b[i], decay = -1.0) .-
-                  occupancy_grid(b, paths_a[i], decay = -1.0))
-        d += norm(occupancy_grid(a, reverse(paths_a[i]), decay = -1.0) .-
-                  occupancy_grid(a, reverse(paths_b[i]), decay = -1.0))
-        d += norm(occupancy_grid(b, reverse(paths_b[i]), decay = -1.0) .-
-                  occupancy_grid(b, reverse(paths_a[i]), decay = -1.0))
-    end
-    0.5 * d
+    es = exits(a)
+    paths_a = @>> es map(e -> safe_shortest_path(a,e))
+    paths_b = @>> es map(e -> safe_shortest_path(b,e))
+    # perhaps look at rooms wholistically
+    # decay 0 seemed to help
+    g = (r,p) -> occupancy_grid(r,p, decay = 0.0001, sigma = 0.0)
+    f = (x,y) -> norm(g(a, x) .- g(b,y))
+    map(f, paths_a, paths_b) |> sum
 end
 
 function compare_rooms(base_p::String, fid, move)
     base = load(base_p)["r"]
     f = furniture(base)[fid]
     room = shift_furniture(base, f, Symbol(move))
-    paths_a = @>> navigability(base) map(p -> relative_path(p))
-    paths_b = @>> navigability(room) map(p -> relative_path(p))
+    es = exits(base)
+    paths_a = @>> es map(e -> safe_shortest_path(base,e)) map(relative_path)
+    paths_b = @>> es map(e -> safe_shortest_path(room,e)) map(relative_path)
+    # paths_a = @>> navigability(base) map(p -> relative_path(p))
+    # paths_b = @>> navigability(room) map(p -> relative_path(p))
     lvd = sum(map(lv_distance, paths_a, paths_b))
-    ogd = norm(diffuse_og(base) .- diffuse_og(room))
-    # ogd = compare_og(base, room)
+    # ogd = norm(diffuse_og(base) .- diffuse_og(room))
+    ogd = compare_og(base, room)
     (lvd, ogd)
 end
 
@@ -102,16 +99,18 @@ function main(exp::String)
         base = "/renders/$(exp)/$(r.id).png"
         img = "/renders/$(exp)/$(r.id)_$(r.furniture)_$(r.move).png"
         pixeld = compare_pixels(base, img)
+        # pixeld = 0
 
         base = "/scenes/$(exp)/$(r.id).jld2"
         lvd, ovd = compare_rooms(base, r.furniture, r.move)
 
         push!(new_df, (r.id, r.furniture, r.move, pixeld, lvd, ovd))
     end
-    isdir("/experiments/$(exp)") || mkdir("/experiments/1exit")
+    isdir("/experiments/$(exp)") || mkdir("/experiments/$(exp)")
     CSV.write("/experiments/$(exp)/covariates.csv", new_df)
 end
 
 
 # main("pilot");
-main("1exit");
+# main("1exit");
+main("2e_1p_30s");

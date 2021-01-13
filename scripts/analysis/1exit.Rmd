@@ -1,0 +1,302 @@
+---
+title: "1exit"
+output:
+  pdf_document: default
+  html_document:
+df_print: paged
+header-includes:
+ \usepackage{booktabs}
+ \usepackage{longtable}
+ \usepackage{array}
+ \usepackage{multirow}
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+
+---
+
+# Pilot
+
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'H', 
+                      echo=TRUE, warning=FALSE, message=FALSE)
+knitr::opts_knit$set(root.dir = '~/output/experiments/1exit')
+
+```
+
+
+
+```{r includes}
+library(tidyverse)
+library(estimatr)
+library(ggplot2)
+library(readr)
+
+
+th <- theme_classic()
+theme_set(th)
+```
+
+```{r load}
+
+parsed_trials <- read_csv("~/output/experiments/1exit/parsed_trials.csv")
+exp_data <- read_csv("~/output/scenes/1exit.csv") %>%
+  rename(scene = id)
+
+covariates <- read_csv("~/output/experiments/1exit/covariates.csv")  %>%
+  rename(scene = id)
+
+
+```
+
+```{r analysis}
+
+
+ate_data <- parsed_trials %>%
+  left_join(exp_data, by = c("scene", "furniture", "move")) %>%
+  left_join(covariates, by = c("scene", "furniture", "move")) %>%
+  mutate(resp_same = Response == "j",
+         correct = !xor(base, resp_same))
+
+```
+
+
+```{r}
+
+exp_data %>%
+  left_join(covariates) %>%
+  ggplot() +
+  geom_histogram(aes(d))
+exp_data %>%
+  left_join(covariates) %>%
+  ggplot() +
+  geom_histogram(aes(ogd))
+
+exp_data %>%
+  left_join(covariates) %>%
+  ggplot() +
+  geom_histogram(aes(pixeld))
+
+
+```
+
+```{r}
+
+by_subj <- ate_data %>%
+  group_by(ID)
+
+hr_by_subj <- by_subj %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct))
+
+fp_by_subj <- by_subj %>%
+  filter(base) %>%
+  summarise(fp = 1.0 - mean(correct))
+
+subject_performance <- hr_by_subj %>%
+  left_join(fp_by_subj, by = "ID")
+
+passed_subjects <- subject_performance %>%
+  filter(hr > 0*fp)
+
+good_data <- passed_subjects %>%
+  left_join(ate_data)
+  
+
+```
+
+
+
+```{r}
+
+by_trial <- good_data %>%
+  group_by(scene, furniture, move)
+
+hr_by_trial <- by_trial %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct),
+            d = mean(d),
+            pixeld = mean(pixeld),
+            lvd = mean(lvd),
+            ogd = mean(ogd))
+
+
+```
+
+```{r}
+
+good_data %>%
+  ggplot(aes(x = ogd)) +
+  geom_histogram()
+good_data %>%
+  filter(!base & correct) %>%
+  ggplot(aes(x = ogd)) +
+  geom_histogram()
+
+
+good_data %>%
+  filter(!base) %>%
+  ggplot(aes(x = ogd > 0)) +
+  geom_bar()
+
+good_data %>%
+  filter(!base & correct) %>%
+  ggplot(aes(x = ogd > 0)) +
+  geom_bar()
+
+good_data %>%
+  filter(!base) %>%
+  ggplot(aes(x = d)) +
+  geom_histogram()
+
+
+good_data %>%
+  filter(!base) %>%
+  ggplot(aes(x = d > 0)) +
+  geom_bar()
+
+good_data %>%
+  filter(!base & correct) %>%
+  ggplot(aes(x = d > 0)) +
+  geom_bar()
+
+
+```
+
+```{r}
+
+hr_by_trial %>%
+  with(lm(hr ~ d + pixeld)) %>% 
+  summary()
+
+hr_by_trial %>%
+  with(lm(hr ~ ogd + pixeld)) %>% 
+  summary()
+
+hr_by_trial %>%
+  ggplot(aes(d)) +
+  geom_density()
+
+hr_by_trial %>%
+  filter(hr > 0) %>%
+  ggplot(aes(d)) +
+  geom_density()
+
+hr_by_trial %>%
+  filter(hr > 0) %>%
+  ggplot(aes(lvd)) +
+  geom_density()
+
+hr_by_trial %>%
+  ggplot(aes(ogd)) +
+  geom_density()
+
+hr_by_trial %>%
+  filter(hr > 0) %>%
+  ggplot(aes(ogd)) +
+  geom_density()
+
+
+```
+
+```{r}
+
+
+delta_hr_by_scene <- hr_by_trial %>%
+  arrange(d) %>%
+  group_by(scene) %>%
+  summarise(dhr = diff(hr),
+            dd = diff(d),
+            dogd = diff(ogd))
+
+
+delta_hr_by_scene %>%
+  with(lm(dhr ~ dogd)) %>% 
+  summary()
+
+delta_hr_by_scene %>%
+  ggplot(aes(dhr)) +
+  geom_histogram() +
+  ggtitle("Distribution of difference in hr (high - low)")
+
+
+```
+
+```{r dprime}
+
+fp_by_scene <- good_data %>%
+  group_by(scene) %>%
+  filter(base) %>%
+  summarise(fp = 1 - mean(correct))
+
+dprime_by_trial <- hr_by_trial %>%
+  left_join(fp_by_scene, by = "scene") %>%
+  mutate(d.prime = qnorm(hr) - qnorm(fp))
+
+dprime_by_trial %>%
+  with(lm(d.prime ~ lvd + pixeld)) %>%
+  summary()
+
+
+dprime_by_trial %>%
+  ggplot(aes(x = d, y = d.prime, color = zpixeld)) + 
+  geom_jitter() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of path difference")
+
+dprime_by_trial %>%
+  ggplot(aes(x = lvd, y = d.prime, color = zpixeld)) + 
+  geom_jitter() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of path difference")
+
+dprime_by_trial %>%
+  ggplot(aes(x = pixeld, y = d.prime)) + 
+  geom_jitter() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of path difference")
+
+
+dprime_by_trial %>%
+  ggplot(aes(x = lvd, y = d, color = zpixeld)) + 
+  geom_jitter() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of path difference")
+
+```
+
+```{r delta dprime}
+
+
+delta_dprime_by_scene <- dprime_by_trial %>%
+  arrange(d) %>%
+  group_by(scene) %>%
+  summarise(dd.prime = abs(diff(d.prime)),
+          dd = diff(d),
+            dpixeld = diff(pixeld))
+
+
+delta_dprime_by_scene %>%
+  with(lm(dd.prime ~ dd + dpixeld)) %>% 
+  summary()
+
+delta_dprime_by_scene %>%
+ggplot(aes(y = dd.prime, x = dd, color = dpixeld)) +
+geom_jitter() +
+geom_smooth(method = "lm") +
+ggtitle("Change in D' as a function of counterfactual shifts")
+
+
+delta_dprime_by_scene %>%
+  ggplot(aes(y = dd.prime, x = dpixeld)) +
+  geom_jitter() +
+  geom_smooth(method = "lm") +
+  ggtitle("Change in D' as a function of counterfactual shifts")
+
+delta_dprime_by_scene %>%
+  ggplot(aes(x = dd.prime)) +
+  geom_histogram(binwidth = 0.1) +
+  ggtitle("Distribution of change in dprime")
+
+
+```

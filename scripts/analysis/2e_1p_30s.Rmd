@@ -1,0 +1,269 @@
+---
+title: "pilot"
+output:
+  pdf_document: default
+  html_document:
+df_print: paged
+header-includes:
+ \usepackage{booktabs}
+ \usepackage{longtable}
+ \usepackage{array}
+ \usepackage{multirow}
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+
+---
+
+# Pilot
+
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'H', 
+                      echo=TRUE, warning=FALSE, message=FALSE)
+knitr::opts_knit$set(root.dir = '~/output/experiments/')
+
+```
+
+
+
+```{r includes}
+library(tidyverse)
+library(estimatr)
+library(ggplot2)
+library(readr)
+
+
+th <- theme_classic()
+theme_set(th)
+```
+
+```{r load}
+
+parsed_trials <- read_csv("~/output/experiments/2e_1p_30s/parsed_trials.csv") %>%
+    mutate(resp_same = Response == "j",
+         correct = !xor(base, resp_same))
+
+exp_data <- read_csv("~/output/scenes/2e_1p_30s.csv") %>%
+  rename(scene = id)
+
+covariates <- read_csv("~/output/experiments/2e_1p_30s/covariates.csv")  %>%
+  rename(scene = id) %>%
+  mutate(zogd = scale(ogd),
+         zpixeld = scale(pixeld))
+
+
+```
+
+
+```{r}
+
+by_subj <- parsed_trials %>%
+  group_by(ID)
+
+hr_by_subj <- by_subj %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct),
+            n = n())
+
+fp_by_subj <- by_subj %>%
+  filter(base) %>%
+  summarise(fp = 1.0 - mean(correct))
+
+subject_performance <- hr_by_subj %>%
+  left_join(fp_by_subj, by = "ID")
+
+# passed_subjects <- subject_performance
+passed_subjects <- subject_performance %>%
+  filter(hr > 1.5*fp, n == 60)
+
+good_data <- passed_subjects %>%
+  left_join(parsed_trials)
+  
+
+```
+
+```{r}
+
+good_data %>%
+  filter(!base) %>%
+  left_join(exp_data, by = c("scene", "furniture", "move")) %>%
+  left_join(covariates, by = c("scene", "furniture", "move")) %>%
+  ggplot(aes(x = ogd)) +
+  geom_histogram()
+
+good_data %>%
+  filter(!base & correct) %>%
+  left_join(exp_data, by = c("scene", "furniture", "move")) %>%
+  left_join(covariates, by = c("scene", "furniture", "move")) %>%
+  ggplot(aes(x = ogd)) +
+  geom_histogram()
+
+
+good_data %>%
+  filter(!base) %>%
+  left_join(exp_data, by = c("scene", "furniture", "move")) %>%
+  left_join(covariates, by = c("scene", "furniture", "move")) %>%
+  group_by(ogd > 0.05) %>%
+  count()
+
+good_data %>%
+  filter(!base & correct) %>%
+  left_join(exp_data, by = c("scene", "furniture", "move")) %>%
+  left_join(covariates, by = c("scene", "furniture", "move")) %>%
+  group_by(ogd > 0.05) %>%
+  count()
+
+good_data %>%
+  filter(!base) %>%
+  left_join(exp_data, by = c("scene", "furniture", "move")) %>%
+  left_join(covariates, by = c("scene", "furniture", "move")) %>%
+  ggplot(aes(x = d)) +
+  geom_histogram()
+
+
+good_data %>%
+  filter(!base) %>%
+  left_join(exp_data, by = c("scene", "furniture", "move")) %>%
+  left_join(covariates, by = c("scene", "furniture", "move")) %>%
+  ggplot(aes(x = d > 0)) +
+  geom_bar()
+
+good_data %>%
+  filter(!base & correct) %>%
+  left_join(exp_data, by = c("scene", "furniture", "move")) %>%
+  left_join(covariates, by = c("scene", "furniture", "move")) %>%
+  ggplot(aes(x = d > 0)) +
+  geom_bar()
+
+
+```
+
+
+```{r}
+
+by_trial <- good_data %>%
+  group_by(scene, furniture, move)
+
+hr_by_trial <- by_trial %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct),
+            n = n()) %>%
+  ungroup() %>%
+  left_join(exp_data, by = c("scene", "furniture", "move")) %>%
+  left_join(covariates, by = c("scene", "furniture", "move"))
+  
+hr_by_trial %>%
+  ggplot(aes(x = d, y = hr)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("Hit rate as a function of path difference")
+
+  
+hr_by_trial %>%
+  ggplot(aes(x = lvd, y = hr)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("Hit rate as a function of path difference")
+
+hr_by_trial %>%
+  ggplot(aes(x = ogd, y = hr)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("Hit rate as a function of oc grid difference")
+
+hr_by_trial %>%
+  ggplot(aes(x = pixeld, y = hr)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("Hit rate as a function of pixel difference")
+
+
+
+hr_by_trial %>%
+  with(lm(hr ~ d + pixeld)) %>% 
+  summary()
+
+hr_by_trial %>%
+  with(lm(hr ~ lvd + pixeld)) %>% 
+  summary()
+
+hr_by_trial %>%
+  with(lm(hr ~ ogd + pixeld)) %>% 
+  summary()
+
+```
+
+
+
+```{r dprime}
+
+fp_by_scene <- good_data %>%
+  group_by(scene) %>%
+  filter(base) %>%
+  summarise(fp = 1 - mean(correct))
+
+dprime_by_trial <- hr_by_trial %>%
+  left_join(fp_by_scene, by = "scene") %>%
+  # filter(between(hr, 0.0001, 0.999), between(fp, 0.001, 0.999)) %>%
+  mutate(d.prime = qnorm(hr) - qnorm(fp))
+  # mutate(d.prime = qnorm(hr*0.99 + 0.001) - qnorm(fp*0.99 + 0.001))
+
+
+dprime_by_trial %>%
+  with(lm(d.prime ~ d + pixeld)) %>%
+  summary()
+
+dprime_by_trial %>%
+  with(lm(d.prime ~ scale(lvd) + pixeld)) %>%
+  summary()
+
+dprime_by_trial %>%
+  with(lm(d.prime ~ scale(ogd) + pixeld)) %>%
+  summary()
+
+
+
+dprime_by_trial %>%
+  ggplot(aes(x = d, y = d.prime, color = pixeld)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of path difference")
+
+dprime_by_trial %>%
+  ggplot(aes(x = lvd, y = d.prime, color = pixeld)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of path difference")
+
+
+dprime_by_trial %>%
+  ggplot(aes(x = ogd, y = d.prime, color = pixeld)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of oc grid difference")
+
+dprime_by_trial %>%
+  ggplot(aes(x = ogd, y = fp, color = zpixeld)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("FP as a function of oc grid difference")
+
+dprime_by_trial %>%
+  ggplot(aes(x = pixeld, y = d.prime)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of pixel difference")
+
+
+dprime_by_trial %>%
+  ggplot(aes(x = d, y = ogd, color = pixeld)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("relationship between covariates")
+dprime_by_trial %>%
+  ggplot(aes(x = lvd, y = ogd, color = pixeld)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("relationship between covariates")
+
+```

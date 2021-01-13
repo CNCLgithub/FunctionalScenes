@@ -26,9 +26,9 @@ def concat(b, out, a, reverse = False):
         cmd = cmd.format(a, b, out)
     return cmd
 
-def still(src, out, dur):
-    cmd = 'ffmpeg -loop 1 -i {0!s} -c:v libx264 -t {1:f} -pix_fmt yuv420p {2!s}'
-    cmd = cmd.format(src,dur, out)
+def still(src, out, dur, fps):
+    cmd = 'ffmpeg -loop 1 -r {0:d} -i {1!s} -c:v libx264 -t {2:f} -pix_fmt yuv420p {3!s}'
+    cmd = cmd.format(fps,src,dur,out)
     return cmd
 
 def blank(src, out, dur, fps):

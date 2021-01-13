@@ -18,12 +18,11 @@ function safe_shortest_path(r::Room, e::Tile)
     g = pathgraph(r)
     ent = entrance(r) |> first
     _, coords = lattice_to_coord(r)
-    ec = coords(e)
-    vs = connected(g, ent)
-    vi = @>> vs begin
-        map(v -> norm(ec .- coords(v)))
-        argmin
-    end
+    cis = CartesianIndices(steps(r))
+    ec = coords(Tuple(cis[e]))
+    vs = connected(g, ent) |> collect |> sort
+    vcis = Tuple.(cis[vs])
+    vi = @>> vcis map(v -> norm(ec .- coords(v))) argmin
     ds = desopo_pape_shortest_paths(g, ent)
     enumerate_paths(ds, vs[vi])
 end
@@ -72,7 +71,9 @@ function occupancy_grid(r::Room, p::Vector{Tile};
     iszero(lp) && return m
     for (i,v) in enumerate(p)
         isfloor(g, v) || break
-        m[v] = exp(decay * (i - 1)) + exp(decay * (lp - i))
+        m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
+        # m[v] = exp(decay * (i - 1))
+        # m[v] = exp(decay * (lp - i))
     end
     gf = Kernel.gaussian(sigma)
     m = imfilter(m, gf, "symmetric")

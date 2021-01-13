@@ -85,6 +85,45 @@ good_data <- passed_subjects %>%
 
 ```
 
+```{r}
+
+good_data %>%
+  ggplot(aes(x = ogd)) +
+  geom_histogram()
+good_data %>%
+  filter(!base & correct) %>%
+  ggplot(aes(x = ogd)) +
+  geom_histogram()
+
+
+good_data %>%
+  filter(!base) %>%
+  ggplot(aes(x = ogd > 0)) +
+  geom_bar()
+
+good_data %>%
+  filter(!base & correct) %>%
+  ggplot(aes(x = ogd > 0)) +
+  geom_bar()
+
+good_data %>%
+  filter(!base) %>%
+  ggplot(aes(x = d)) +
+  geom_histogram()
+
+
+good_data %>%
+  filter(!base) %>%
+  ggplot(aes(x = d > 0)) +
+  geom_bar()
+
+good_data %>%
+  filter(!base & correct) %>%
+  ggplot(aes(x = d > 0)) +
+  geom_bar()
+
+
+```
 
 
 ```{r}
@@ -101,8 +140,14 @@ hr_by_trial <- by_trial %>%
             ogd = mean(ogd))
 
 hr_by_trial %>%
+  ggplot(aes(x = d, y = hr)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("Hit rate as a function of path difference")
+
+hr_by_trial %>%
   ggplot(aes(x = ogd, y = hr)) + 
-  geom_jitter() + 
+  geom_point() + 
   geom_smooth(method = "lm") + 
   ggtitle("Hit rate as a function of path difference")
 
@@ -116,6 +161,10 @@ hr_by_trial %>%
   with(lm(hr ~ d + pixeld)) %>% 
   summary()
 
+
+hr_by_trial %>%
+  with(lm(hr ~ ogd + pixeld)) %>% 
+  summary()
 
 hr_by_trial %>%
   ggplot(aes(x = factor(d > 0), y = hr)) + 
@@ -161,39 +210,39 @@ dprime_by_trial %>%
   summary()
 
 dprime_by_trial %>%
-  with(lm(d.prime ~ ogd + pixeld)) %>%
+  with(lm(d.prime ~ scale(ogd) + pixeld)) %>%
   summary()
 
 
 
 dprime_by_trial %>%
   ggplot(aes(x = d, y = d.prime, color = pixeld)) + 
-  geom_jitter() + 
+  geom_point() + 
   geom_smooth(method = "lm") + 
   ggtitle("D-prime as a function of path difference")
 
 dprime_by_trial %>%
   ggplot(aes(x = lvd, y = d.prime, color = pixeld)) + 
-  geom_jitter() + 
+  geom_point() + 
   geom_smooth(method = "lm") + 
   ggtitle("D-prime as a function of path difference")
 
 dprime_by_trial %>%
   ggplot(aes(x = ogd, y = d.prime, color = pixeld)) + 
-  geom_jitter() + 
+  geom_point() + 
   geom_smooth(method = "lm") + 
   ggtitle("D-prime as a function of path difference")
 
 dprime_by_trial %>%
   ggplot(aes(x = pixeld, y = d.prime)) + 
-  geom_jitter() + 
+  geom_point() + 
   geom_smooth(method = "lm") + 
   ggtitle("D-prime as a function of path difference")
 
 
 dprime_by_trial %>%
   ggplot(aes(x = lvd, y = ogd, color = pixeld)) + 
-  geom_jitter() + 
+  geom_point() + 
   geom_smooth(method = "lm") + 
   ggtitle("relationship between covariates")
 
@@ -210,39 +259,36 @@ delta_dprime_by_scene <- dprime_by_trial %>%
             dd = diff(d),
             dogd = diff(ogd),
             dpixeld = diff(pixeld),
-            max.d.prime = max(d.prime)) %>%
+            max.d.prime = max(d.prime),
+            prop.dd.prime = abs.dd.dprime / max.d.prime) %>%
   ungroup() %>%
   mutate(zdogd = scale(dogd))
 
 
 delta_dprime_by_scene %>%
-ggplot(aes(y = abs.dd.dprime, x = dd, color = max.d.prime)) +
-geom_jitter() +
-geom_smooth(method = "lm") +
-ggtitle("Change in D' as a function of counterfactual shifts")
-
-
-delta_dprime_by_scene %>%
-  ggplot(aes(y = abs.dd.dprime, x = dpixeld)) +
+  ggplot(aes(y = prop.dd.prime, x = dd, color = max.d.prime)) +
   geom_jitter() +
   geom_smooth(method = "lm") +
   ggtitle("Change in D' as a function of counterfactual shifts")
 
 delta_dprime_by_scene %>%
-  ggplot(aes(y = abs.dd.dprime, x = max.d.prime, color = dd)) +
+  ggplot(aes(y = prop.dd.prime, x = dogd, color = max.d.prime)) +
   geom_jitter() +
   geom_smooth(method = "lm") +
   ggtitle("Change in D' as a function of counterfactual shifts")
 
 
+
 delta_dprime_by_scene %>%
-  ggplot(aes(y = abs.dd.dprime, x = dogd, color = max.d.prime)) +
+  ggplot(aes(y = prop.dd.prime, x = dpixeld)) +
   geom_jitter() +
   geom_smooth(method = "lm") +
   ggtitle("Change in D' as a function of counterfactual shifts")
 
+
+
 delta_dprime_by_scene %>%
-  ggplot(aes(x = dd.prime)) +
+  ggplot(aes(x = prop.dd.prime)) +
   geom_histogram(binwidth = 0.1) +
   ggtitle("Distribution of change in dprime")
 
@@ -250,17 +296,71 @@ delta_dprime_by_scene %>%
 ```
 
 
-```{r delta dprime cont}
+# ```{r delta dprime cont}
+# 
+# delta_dprime_by_scene %>%
+#   filter(max.d.prime > 1.0) %>%
+#   ggplot(aes(y = prop.dd.prime, x = dd)) +
+#   geom_point(aes(color = max.d.prime)) +
+#   geom_smooth(method = "lm")
+# 
+# delta_dprime_by_scene %>%
+#   filter(max.d.prime > 1.0) %>%
+#   ggplot(aes(y = prop.dd.prime, x = dogd)) +
+#   geom_point(aes(color = max.d.prime)) +
+#   geom_smooth(method = "lm")
+# 
+# delta_dprime_by_scene %>%
+#   with(lm(prop.dd.prime ~ dd + dpixeld)) %>% 
+#   summary()
+# 
+# delta_dprime_by_scene %>%
+#   with(lm(prop.dd.prime ~ ogd + dpixeld)) %>% 
+#   summary()
+# 
+# ```
+```{r only up/down}
 
-delta_dprime_by_scene %>%
-  with(lm(abs.dd.dprime ~ dd + max.d.prime)) %>% 
+onlyud <- dprime_by_trial %>%
+  # group_by(scene) %>%
+  filter(move %in% c("up", "down")) %>%
+  # filter(!any(move %in% c("left", "right"))) %>%
+  select(scene) %>%
+  left_join(dprime_by_trial)
+
+
+onlyud %>%
+  ggplot(aes(x = ogd, y = d.prime, color = pixeld)) + 
+  geom_jitter() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of path difference")
+
+
+onlyud %>%
+  with(lm(d.prime ~ scale(ogd) + pixeld)) %>%
   summary()
 
-delta_dprime_by_scene %>%
-  with(lm(dd.prime ~ dd + max.d.prime)) %>% 
+```
+
+```{r only left/right}
+
+onlyud <- dprime_by_trial %>%
+  # group_by(scene) %>%
+  filter(move %in% c("left", "right")) %>%
+  # filter(!any(move %in% c("left", "right"))) %>%
+  select(scene) %>%
+  left_join(dprime_by_trial)
+
+
+onlyud %>%
+  ggplot(aes(x = ogd, y = d.prime, color = pixeld)) + 
+  geom_jitter() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("D-prime as a function of path difference")
+
+
+onlyud %>%
+  with(lm(d.prime ~ scale(ogd) + pixeld)) %>%
   summary()
 
-delta_dprime_by_scene %>%
-  with(lm(abs.dd.dprime ~ dogd + max.d.prime)) %>% 
-  summary()
 ```

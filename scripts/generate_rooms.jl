@@ -6,13 +6,33 @@ using FunctionalScenes
 
 using DataFrames
 
+import Random:shuffle
+
 import FunctionalScenes: expand, furniture, valid_moves,
     shift_furniture, move_map, labelled_categorical
 
 
+# Use if we don't get a strong effect with 1pair
+# function predicate(x)
+#     all(iszero.(x.d)) || all((!iszero).(x.d))
+# end
+# function digest(df::DataFrame)
+#     nochng = @>> DataFrames.groupby(df, :furniture) begin
+#         filter(x -> all(iszero.(x.d)) && nrow(x) >= 2)
+#         x-> isempty(x) ? DataFrame() : labelled_categorical(x)
+#         DataFrame
+#     end
+
+#     somechng = @>> DataFrames.groupby(df, :furniture) begin
+#         filter(x -> !any(iszero.(x.d)) && nrow(x) >= 2)
+#         x-> isempty(x) ? DataFrame() : labelled_categorical(x)
+#         DataFrame
+#     end
+#     isempty(nochng) || isempty(somechng) return DataFrame()
+#     rand(Bool) ? somechng : nochng
+# end
 function predicate(x)
-    any((!iszero).(x.d))
-    # any(iszero.(x.d)) && any((!iszero).(x.d))
+    any(iszero.(x.d)) && any((!iszero).(x.d))
 end
 
 function digest(df::DataFrame)
@@ -27,26 +47,28 @@ end
 
 function search(r::Room)
     # avoid furniture close to camera
-    fs = furniture(r)
+    fs = furniture(r)[3:end]
     data = DataFrame()
     for (i,f) in enumerate(fs)
         moves = collect(Bool, valid_moves(r, f))
-        moves = intersect(move_map[moves], [:up, :down])
+        moves = move_map[moves]
+        # moves = intersect(move_map[moves], [:up, :down])
         for m in moves
             shifted = shift_furniture(r,f,m)
             d = mean(compare(r, shifted))
-            append!(data, DataFrame(furniture = i,
+            append!(data, DataFrame(furniture = i+2,
                                     move = m,
                                     d = d))
         end
     end
+    # isempty(data) ? DataFrame() : @> data sort([:furniture, :d])
     isempty(data) ? DataFrame() : @> data sort([:furniture, :d]) digest
 end
 
-function build(r::Room; k = 7, factor = 1)
-    strt = Int(last(steps(r)) / 2.0)
-    weights = zeros(steps(r))
-    weights[:, strt:end] .= 1.0
+function build(r::Room; k = 10, factor = 1)
+    weights = ones(steps(r))
+    # strt = Int(last(steps(r)) * 0.4)
+    # weights[:, strt:end] .= 1.0
     new_r = last(furniture_chain(k, r, weights))
     new_r = FunctionalScenes.expand(new_r, factor)
     dist = search(new_r)
@@ -58,7 +80,7 @@ function saver(id::Int64, r::Room, out::String)
 end
 
 
-function create(base::Room; n::Int64 = 10)
+function create(base::Room; n::Int64 = 15)
     seeds = Vector{Room}(undef, n)
     df = DataFrame()
     i = 1
@@ -71,20 +93,21 @@ function create(base::Room; n::Int64 = 10)
             i += 1
         end
     end
-    return collect(seeds), df
+    return seeds, df
 end
 
-function render_base(bases::Vector{Room})
-    out = "/renders/1exit"
+function render_base(bases::Vector{Room}, name::String)
+    out = "/renders/$(name)"
     isdir(out) || mkdir(out)
     for (id,r) in enumerate(bases)
         p = "$(out)/$(id)"
+        display(r)
         render(r, p, mode = "full")
     end
 end
 
-function render_stims(bases::Vector{Room}, df::DataFrame)
-    out = "/renders/1exit"
+function render_stims(bases::Vector{Room}, df::DataFrame, name::String)
+    out = "/renders/$(name)"
     isdir(out) || mkdir(out)
     for r in eachrow(df)
         base = bases[r.id]
@@ -97,25 +120,20 @@ function render_stims(bases::Vector{Room}, df::DataFrame)
 end
 
 function main()
-    room_dims = (8,16)
-    entrance = [4]
-    seeds = Room[]
-    df = DataFrame()
-    exits = collect(((8*15+1):8*16))
-    for ex = 2:7
-        r = Room(room_dims, room_dims, entrance, exits[ex:ex])
-        display(r)
-        @time _seeds, _df = create(r, n = 5)
-        append!(seeds, _seeds)
-        _df[!, :id] = _df.id .+ (ex - 2)*5
-        append!(df, _df)
-    end
-    CSV.write("/scenes/1exit.csv", df)
-    out = "/scenes/1exit"
+    name = "2e_1p_30s"
+    n = 30
+    room_dims = (11,20)
+    entrance = [6]
+    exits = [213, 217]
+    r = Room(room_dims, room_dims, entrance, exits)
+    display(r)
+    @time seeds, df = create(r, n = n)
+    out = "/scenes/$(name)"
+    CSV.write("$(out).csv", df)
     isdir(out) || mkdir(out)
     @>> seeds enumerate foreach(x -> saver(x..., out))
-    render_base(seeds)
-    render_stims(seeds, df)
+    render_base(seeds, name)
+    render_stims(seeds, df, name)
     return seeds, df
 end
 

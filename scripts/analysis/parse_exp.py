@@ -61,19 +61,6 @@ def read_db(db_path, table_name, codeversions, mode):
 
     return trialdata, questiondata
 
-def parse_rawname(trialname):
-    fullname = os.path.splitext(trialname[0])[0]
-    rot_angle = int(trialname[1])
-
-    trial_params = {'rot_angle': rot_angle}
-    return trial_params
-
-
-def classify(probe_timing, spacebar):
-    PROBE_WINDOW = 900
-    ds = spacebar - probe_timing
-    return np.logical_and(ds >= 0, ds <= PROBE_WINDOW)
-
 def parse_row(tname):
 
     # scene data
@@ -102,7 +89,7 @@ def main():
         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("--exp", type = str, help = "Path to trial dataset",
-                        default = '/experiments/1exit')
+                        default = '/experiments/2e_1p_30s')
     parser.add_argument("--table_name", type = str, default = "pilot",
                         help = 'Table name')
     parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["2.0"],
@@ -126,6 +113,7 @@ def main():
     trs, qs = read_db(db, args.table_name,
                       args.exp_flag, args.mode)
 
+
     cl_qs = qs.rename(index=str, columns={'uniqueid': 'WID'})
 
     trs = trs.dropna()
@@ -143,11 +131,11 @@ def main():
     # Make sure we have required responses per participant
     trialsbyp = trs.groupby('WID').aggregate({"TrialOrder" : lambda x : max(x) + 1})
     print(trialsbyp)
-    trialsbyp = trialsbyp[trialsbyp.TrialOrder  == args.trialsbyp]
-    good_wids = trialsbyp.index
+    good_wids = trialsbyp[trialsbyp.TrialOrder  == args.trialsbyp].index
     trs = trs[trs.WID.isin(good_wids)]
 
-    """Assign random identifiers to each participant"""
+
+    # Assign random identifiers to each participant
     wid_translate = {}
     for i, wid in enumerate(good_wids):
         wid_translate[wid] = i
