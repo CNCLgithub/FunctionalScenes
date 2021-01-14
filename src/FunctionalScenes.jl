@@ -7,6 +7,7 @@ using Statistics
 using LightGraphs
 using MetaGraphs
 using LinearAlgebra
+using Luxor
 
 function __init__()
     # needed to deal with Gen static functions

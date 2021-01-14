@@ -9,8 +9,8 @@ Take a room and place a random set of objects in an xy plane
     for i = 1:n
         # sample the position within (-dx, +dx) and (-dy, +dy)
         # TODO: fill in `nothing` with uniform sample
-        # position[i, 1] = @trace(..., i => :x) # x value
-        # position[i, 2] = @trace(..., i => :y) # y value
+        positions[i, 1] = @trace(uniform(-dx, +dx), i => :x) # x value
+        positions[i, 2] = @trace(uniform(-dy,+dy), i => :y) # y value
     end
     return positions
 end
