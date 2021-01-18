@@ -60,14 +60,14 @@ function bitmap_render(r::Room)::Matrix{Bool}
         lower_right_image_1 = coordinates_to_pixels(f,lower_right_camera_1,image_size,pixels_size)
       
         f_bm = fill(false, pixels_size)
-		vs = [upper_left_image, upper_right_image,lower_left_image,lower_right_image,upper_left_image_1, upper_right_image_1,lower_left_image_1,lower_right_image_1]
-		vs_x = [upper_left_image[1], upper_right_image[1],lower_left_image[1],lower_right_image[1],upper_left_image_1[1], upper_right_image_1[1],lower_left_image_1[1],lower_right_image_1[1]]
-		vs_z = [upper_left_image[2], upper_right_image[2],lower_left_image[2],lower_right_image[2],upper_left_image_1[2], upper_right_image_1[2],lower_left_image_1[2],lower_right_image_1[2]]
+	vs = [upper_left_image, upper_right_image,lower_left_image,lower_right_image,upper_left_image_1, upper_right_image_1,lower_left_image_1,lower_right_image_1]
+	vs_x = [upper_left_image[1], upper_right_image[1],lower_left_image[1],lower_right_image[1],upper_left_image_1[1], upper_right_image_1[1],lower_left_image_1[1],lower_right_image_1[1]]
+	vs_z = [upper_left_image[2], upper_right_image[2],lower_left_image[2],lower_right_image[2],upper_left_image_1[2], upper_right_image_1[2],lower_left_image_1[2],lower_right_image_1[2]]
         polys = Point[]
-	    notpolys = Point[]
-		left_point = Point[]
-		right_point = Point[]
-		upper_point = Point[]
+	notpolys = Point[]
+	left_point = Point[]
+	right_point = Point[]
+	upper_point = Point[]
     	lower_point = Point[] 
 		for ps in vs
 			if ps[1] == minimum(vs_x)
@@ -124,16 +124,16 @@ function bitmap_render(r::Room)::Matrix{Bool}
 		#		push!(polys,ps)
 		#	end
 		#end
-	#end
-#	println([min_x,max_x, round(Int,upper_left_image[2]),lower_left_image[2]])
-#	for i in round(Int, min_x):round(Int,max_x)
-#		for j in round(Int,upper_left_image[2]):round(Int,lower_left_image[2])
-#   			point = Point(i,j)
-#			if i < pixels_size[1] && j < pixels_size[2] && isinside(point,vs)
-#      				f_bm[i,j] = true
-		#	end
-	  #	end
-	#end
+	# end
+	#	println([min_x,max_x, round(Int,upper_left_image[2]),lower_left_image[2]])
+	#	for i in round(Int, min_x):round(Int,max_x)
+	#		for j in round(Int,upper_left_image[2]):round(Int,lower_left_image[2])
+	#   			point = Point(i,j)
+	#			if i < pixels_size[1] && j < pixels_size[2] && isinside(point,vs)
+	#      				f_bm[i,j] = true
+	#			end
+	#		end
+	# end
 	polys = unique(polys)
 	#println(polys)
 	#println(vs)
