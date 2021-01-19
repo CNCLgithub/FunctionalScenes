@@ -3,6 +3,7 @@ using LightGraphs, MetaGraphs
 import FunctionalScenes: expand, furniture, valid_moves, shift_furniture, move_map, valid_spaces, furniture_prior,bitmap_render,coordinates_to_camera,coordinates_to_pixels
 using Luxor
 using Test
+using Images
 
 r = Room((4,10), (4, 10), [2], [38]);
 r = add(r, Set([18]));
@@ -29,7 +30,8 @@ r2g = pathgraph(r2);
     q = coordinates_to_camera([20,20,20],[0,0,30],[pi/4,0,0])
     @test q[1] == 20.0
     j = bitmap_render(r)
-    #println(sum(j))
+    imgg = Gray.(j)
+    #save("test1.png",colorview(Gray,j))
     
 end;
 
@@ -39,11 +41,17 @@ end;
     @test Set(neighbors(g, 8)) == Set([7, 9])
     r = add(r, Set([7]))
     g = pathgraph(r)
+    j = bitmap_render(r)
+    save("test1.png",colorview(Gray,j))
     @test Set(neighbors(g, 8)) == Set([9])
     r = add(r, Set([8]))
-    j = bitmap_render(r)
-    println(sum(j))
     g = pathgraph(r)
+    j = bitmap_render(r)
+    #println(sum(j))
+    save("test2.png",colorview(Gray,j))
+    r = add(r,Set([1]))
+    j = bitmap_render(r)
+    save("test3.png",colorview(Gray,j))
     @test Set(neighbors(g, 9)) == Set([])
 end;
 
