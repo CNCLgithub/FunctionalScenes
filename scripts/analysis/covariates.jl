@@ -3,6 +3,7 @@ using Lazy
 using Images, FileIO
 using DataFrames
 using LinearAlgebra:norm
+using OptimalTransport
 
 import FunctionalScenes: Room, furniture, shift_furniture, navigability,
     occupancy_grid, diffuse_og, safe_shortest_path
@@ -69,9 +70,23 @@ function compare_og(a,b)
     paths_b = @>> es map(e -> safe_shortest_path(b,e))
     # perhaps look at rooms wholistically
     # decay 0 seemed to help
-    g = (r,p) -> occupancy_grid(r,p, decay = 0.0001, sigma = 0.0)
-    f = (x,y) -> norm(g(a, x) .- g(b,y))
+    # f = (x,y) -> norm(g(a, x) .- g(b,y))
+    g = (r,p) -> occupancy_grid(r,p, decay = 0.0, sigma = 1.0)
+    f = (x,y) -> wsd(g(a, x), g(b,y))
     map(f, paths_a, paths_b) |> sum
+end
+
+function _wsd(a,b)
+    v = rand(size(a, 2))
+    v = v ./ norm(v)
+    OptimalTransport.pot.wasserstein_1d(a * v, b * v)
+end
+function wsd(a::Matrix{Float64}, b::Matrix{Float64}; n::Int64 = 100)::Float64
+    d = 0.
+    for _ in 1:n
+        d += _wsd(a,b)
+    end
+    d / n
 end
 
 function compare_rooms(base_p::String, fid, move)
@@ -88,6 +103,7 @@ function compare_rooms(base_p::String, fid, move)
     ogd = compare_og(base, room)
     (lvd, ogd)
 end
+
 
 function main(exp::String)
     df = DataFrame(CSV.File("/scenes/$(exp).csv"))

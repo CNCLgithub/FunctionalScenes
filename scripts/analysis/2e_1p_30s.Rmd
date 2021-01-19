@@ -267,3 +267,60 @@ dprime_by_trial %>%
   ggtitle("relationship between covariates")
 
 ```
+
+```{r delta dprime}
+
+
+delta_dprime_by_scene <- dprime_by_trial %>%
+  arrange(d) %>%
+  group_by(scene) %>%
+  summarise(dd.prime = diff(d.prime),
+            abs.dd.prime = abs(dd.prime),
+            dd = diff(d),
+            dlvd = diff(lvd),
+            dogd = diff(ogd),
+            dpixeld = diff(pixeld),
+            first.d.prime = first(d.prime),
+            max.d.prime = max(d.prime),
+            prop.dd.prime = dd.prime / abs(first.d.prime)) %>%
+  ungroup() %>%
+  mutate(zdogd = scale(dogd))
+
+
+delta_dprime_by_scene %>%
+  ggplot(aes(y = prop.dd.prime, x = dlvd, color = max.d.prime)) +
+  geom_jitter() +
+  geom_smooth(method = "lm") +
+  ggtitle("Change in D' as a function of counterfactual shifts")
+
+delta_dprime_by_scene %>%
+  ggplot(aes(y = prop.dd.prime, x = dogd, color = max.d.prime)) +
+  geom_jitter() +
+  geom_smooth(method = "lm") +
+  ggtitle("Change in D' as a function of counterfactual shifts")
+
+
+
+delta_dprime_by_scene %>%
+  ggplot(aes(y = prop.dd.prime, x = dpixeld)) +
+  geom_jitter() +
+  geom_smooth(method = "lm") +
+  ggtitle("Change in D' as a function of counterfactual shifts")
+
+
+
+delta_dprime_by_scene %>%
+  ggplot(aes(x = dd.prime)) +
+  geom_histogram() +
+  # geom_histogram(aes(x = dd.prime, color = "raw")) +
+  ggtitle("Distribution of change in dprime")
+
+delta_dprime_by_scene %>%
+  with(lm(prop.dd.prime ~ dd + dpixeld)) %>%
+  summary()
+
+delta_dprime_by_scene %>%
+  with(lm(prop.dd.prime ~ dogd + dpixeld)) %>%
+  summary()
+
+```
