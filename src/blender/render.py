@@ -187,8 +187,8 @@ class Scene:
         bpy.context.scene.render.resolution_x = resolution[0]
         bpy.context.scene.render.resolution_y = resolution[1]
         bpy.context.scene.render.resolution_percentage = 100
-        # bpy.context.scene.render.engine = 'CYCLES'
-        bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+        bpy.context.scene.render.engine = 'CYCLES'
+        # bpy.context.scene.render.engine = 'BLENDER_EEVEE'
         # bpy.context.scene.cycles.samples = 128
         # bpy.context.scene.render.tile_x = 16
         # bpy.context.scene.render.tile_y = 16

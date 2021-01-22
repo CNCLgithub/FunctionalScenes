@@ -1,3 +1,5 @@
+import numpy as np
+from PIL import Image
 from . utils import create_cuboid, create_cuboids
 from abc import ABC, abstractmethod
 from pytorch3d.structures import join_meshes_as_scene
@@ -36,3 +38,9 @@ def render_scene(scene, graphics:AbstractGraphics):
     mesh = join_meshes_as_scene([mesh, floor])
     result = graphics.render(mesh)
     return result[0, ..., :3].cpu().numpy(), mesh
+
+def render_scene_pil(scene, graphics:AbstractGraphics):
+    r, _ = render_scene(scene, graphics)
+    r =  Image.fromarray((r * 255).astype(np.uint8),
+                         mode = 'RGB')
+    return r

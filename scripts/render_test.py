@@ -2,6 +2,7 @@
 
 import os
 import json
+import time
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,11 +23,14 @@ src = '/renders/2e_1p_30s/1/scene.json'
 with open(src, 'r') as f:
     scene = json.load(f)
 
-# graphics = SimpleGraphics((480, 720), device)
-graphics = SimpleGraphics((240, 360), device)
+graphics = SimpleGraphics((480, 720), device)
+# graphics = SimpleGraphics((240, 360), device)
 graphics.set_from_scene(scene)
 
+beg_ts = time.time()
 img, mesh = render_scene(scene, graphics)
+end_ts = time.time()  
+print(end_ts - beg_ts)
 save_obj( '/renders/test.obj', mesh.verts_packed(), mesh.faces_packed(),)
 
 print(img.shape)
