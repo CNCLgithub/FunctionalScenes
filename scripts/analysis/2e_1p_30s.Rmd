@@ -345,6 +345,83 @@ dprime_by_trial %>%
   geom_text_repel(size=3.5) +
   scale_color_gradient(low = "red", high = "blue") +
   geom_smooth(method = "lm")
+
+dprime_by_trial %>% 
+  mutate(zc3 = scale(c3)) %>%
+  filter(zc3 < 0.0) %>%
+  with(lm(d.prime ~ zogd)) %>%
+  summary()
+```
+
+```{r verifying pytorch3d}
+
+ds_cor <- dprime_by_trial %>%
+  select(lvd,pixeld,c3,r3,c3_3d, r3_3d,d.prime) %>% 
+  as.matrix() %>%
+  rcorr(type = "spearman")
+print(ds_cor)
+
+c3_lvd <- dprime_by_trial %>%
+  with(lm(lvd ~ c3_3d)) 
+
+c3_dprime <- dprime_by_trial %>%
+  with(lm(d.prime ~ c3_3d))
+
+dprime_by_trial$res_lvd = c3_lvd$residuals
+dprime_by_trial$res_d.prime = c3_dprime$residuals
+
+dprime_by_trial %>%
+  with(lm(res_d.prime ~ res_lvd)) %>%
+  summary()
+
+dprime_by_trial %>% 
+  ggplot(aes(x = res_lvd, y = res_d.prime)) +
+  geom_point() + 
+  geom_smooth(method = "lm")
+
+
+dprime_by_trial %>% 
+  mutate(name = paste(scene, move)) %>%
+  ggplot(aes(x = c3_3d, y = d.prime, label =name, color = scale(lvd))) +
+  geom_point() + 
+  geom_text_repel(size=3.5) +
+  geom_smooth(method = "lm")
+
+dprime_by_trial %>% 
+  mutate(zc3 = scale(c3_3d)) %>%
+  mutate(name = paste(scene, move)) %>%
+  ggplot(aes(x = zogd, y = d.prime, label =name, color = zc3)) +
+  geom_point() + 
+  geom_text_repel(size=3.5) +
+  scale_color_gradient(low = "red", high = "blue") +
+  geom_smooth(method = "lm")
+
+dprime_by_trial %>% 
+  mutate(zc3 = scale(c3)) %>%
+  filter(zc3 < 0.0) %>%
+  mutate(name = paste(scene, move)) %>%
+  ggplot(aes(x = zogd, y = d.prime, label =name, color = zc3)) +
+  geom_point() + 
+  geom_text_repel(size=3.5) +
+  scale_color_gradient(low = "red", high = "blue") +
+  geom_smooth(method = "lm")
+
+dprime_by_trial %>% 
+  mutate(zc3 = scale(c3_3d)) %>%
+  filter(zc3 < 0.0) %>%
+  mutate(name = paste(scene, move)) %>%
+  ggplot(aes(x = zc3, y = d.prime, label =name, color = zc3)) +
+  geom_point() + 
+  geom_text_repel(size=3.5) +
+  scale_color_gradient(low = "red", high = "blue") +
+  geom_smooth(method = "lm")
+
+dprime_by_trial %>% 
+  mutate(zc3_3d = scale(c3_3d)) %>%
+  filter(zc3_3d < 0.0) %>%
+  with(lm(d.prime ~ zogd)) %>%
+  summary()
+```
 ```
 
 ```{r split-half correlation, message=FALSE}

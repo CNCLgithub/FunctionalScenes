@@ -13,10 +13,9 @@ centre_crop = trn.Compose([
         trn.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-def run_model(model, features, img_name):
+def run_model(model, features, img_mat):
 
-    img = Image.open(img_name).convert('RGB')
-    input_img = V(centre_crop(img).unsqueeze(0))
+    input_img = V(centre_crop(img_mat).unsqueeze(0))
 
     with torch.no_grad():
         mid_getter = MidGetter(model, return_layers=features, keep_output=True)
