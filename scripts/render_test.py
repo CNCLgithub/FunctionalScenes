@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
 import os
-import numpy as np
 import json
 import torch
+import numpy as np
 import matplotlib.pyplot as plt
-from PIL import Image
 from functional_scenes.render import render_scene, SimpleGraphics
 from pytorch3d.io import save_obj
-from pytorch3d.vis.plotly_vis import AxisArgs, plot_batch_individually, plot_scene
 
 # device = 'cpu'
 
