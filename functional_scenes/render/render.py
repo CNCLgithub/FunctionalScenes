@@ -31,7 +31,7 @@ def render_scene(scene, graphics:AbstractGraphics):
     # ceiling = create_ceiling(scenedict['ceiling'])
     # meshes = [floor, ceiling] + list(map(create_cuboid2, scene['objects']))
 
-    floor = create_cuboid(scene['floor'])
+    floor = create_cuboid(scene['floor']).to(graphics.device)
     mesh = create_cuboids(scene['objects']).to(graphics.device)
     mesh = join_meshes_as_scene([mesh, floor])
     result = graphics.render(mesh)

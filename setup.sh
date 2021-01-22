@@ -9,7 +9,7 @@ supported targets:
     julia : build julia environment
 "
 
-cont_pull_url="todo"
+cont_pull_url="https://yale.box.com/shared/static/934sa3kkcl63aj0nwzmqwxtw25efgpj8.sif"
 SING="${ENV['path']}"
 
 [ $# -eq 0 ] || [[ "${@}" =~ "help" ]] && echo "$usage"
