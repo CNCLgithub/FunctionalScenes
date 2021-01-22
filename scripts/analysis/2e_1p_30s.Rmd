@@ -31,6 +31,9 @@ library(tidyverse)
 library(estimatr)
 library(ggplot2)
 library(readr)
+library(Hmisc)
+library(ggrepel)
+
 
 
 th <- theme_classic()
@@ -51,6 +54,8 @@ covariates <- read_csv("~/output/experiments/2e_1p_30s/covariates.csv")  %>%
   mutate(zogd = scale(ogd),
          zpixeld = scale(pixeld))
 
+features <- read_csv("~/output/experiments/2e_1p_30s/features.csv")  %>%
+  rename(scene = id)
 
 ```
 
@@ -150,7 +155,8 @@ hr_by_trial <- by_trial %>%
             n = n()) %>%
   ungroup() %>%
   left_join(exp_data, by = c("scene", "furniture", "move")) %>%
-  left_join(covariates, by = c("scene", "furniture", "move"))
+  left_join(covariates, by = c("scene", "furniture", "move")) %>%
+  left_join(features, by =  c("scene", "furniture", "move"))
   
 hr_by_trial %>%
   ggplot(aes(x = d, y = hr)) + 
@@ -177,6 +183,12 @@ hr_by_trial %>%
   geom_smooth(method = "lm") + 
   ggtitle("Hit rate as a function of pixel difference")
 
+hr_by_trial %>%
+  ggplot(aes(x = c3, y = hr)) + 
+  geom_point() + 
+  geom_smooth(method = "lm") + 
+  ggtitle("Hit rate as a function of pixel difference")
+
 
 
 hr_by_trial %>%
@@ -184,7 +196,7 @@ hr_by_trial %>%
   summary()
 
 hr_by_trial %>%
-  with(lm(hr ~ lvd + pixeld)) %>% 
+  with(lm(hr ~ lvd + pixeld + c5)) %>% 
   summary()
 
 hr_by_trial %>%
@@ -214,11 +226,11 @@ dprime_by_trial %>%
   summary()
 
 dprime_by_trial %>%
-  with(lm(d.prime ~ scale(lvd) + pixeld)) %>%
+  with(lm(d.prime ~ scale(lvd) + c5 + pixeld)) %>%
   summary()
 
 dprime_by_trial %>%
-  with(lm(d.prime ~ scale(ogd) + pixeld)) %>%
+  with(lm(d.prime ~ scale(ogd) + c5 + pixeld)) %>%
   summary()
 
 
@@ -249,7 +261,7 @@ dprime_by_trial %>%
   ggtitle("FP as a function of oc grid difference")
 
 dprime_by_trial %>%
-  ggplot(aes(x = pixeld, y = d.prime)) + 
+  ggplot(aes(x = c3, y = d.prime)) + 
   geom_point() + 
   geom_smooth(method = "lm") + 
   ggtitle("D-prime as a function of pixel difference")
@@ -267,6 +279,142 @@ dprime_by_trial %>%
   ggtitle("relationship between covariates")
 
 ```
+```{r features}
+
+dprime_by_trial %>%
+  with(lm(pixeld ~ c5)) %>%
+  summary()
+
+ds_cor <- dprime_by_trial %>%
+  select(lvd,pixeld,c1,r1,c2,r2,c3,r3,c4,c5,fc1,fc2,d.prime) %>% 
+  as.matrix() %>%
+  rcorr(type = "spearman")
+print(ds_cor)
+
+c3_lvd <- dprime_by_trial %>%
+  with(lm(lvd ~ c3)) 
+
+c3_dprime <- dprime_by_trial %>%
+  with(lm(d.prime ~ c3))
+
+dprime_by_trial$res_lvd = c3_lvd$residuals
+dprime_by_trial$res_d.prime = c3_dprime$residuals
+
+dprime_by_trial %>%
+  with(lm(res_d.prime ~ res_lvd)) %>%
+  summary()
+
+dprime_by_trial %>% 
+  ggplot(aes(x = res_lvd, y = res_d.prime)) +
+  geom_point() + 
+  geom_smooth(method = "lm")
+
+
+dprime_by_trial %>% 
+  mutate(name = paste(scene, move)) %>%
+  ggplot(aes(x = c3, y = d.prime, label =name, color = scale(lvd))) +
+  geom_point() + 
+  geom_text_repel(size=3.5) +
+  geom_smooth(method = "lm")
+
+dprime_by_trial %>% 
+  mutate(zc3 = scale(c3)) %>%
+  mutate(name = paste(scene, move)) %>%
+  ggplot(aes(x = zogd, y = d.prime, label =name, color = zc3)) +
+  geom_point() + 
+  geom_text_repel(size=3.5) +
+  scale_color_gradient(low = "red", high = "blue") +
+  geom_smooth(method = "lm")
+
+dprime_by_trial %>% 
+  mutate(zc3 = scale(c3)) %>%
+  filter(zc3 < 0.0) %>%
+  mutate(name = paste(scene, move)) %>%
+  ggplot(aes(x = zogd, y = d.prime, label =name, color = zc3)) +
+  geom_point() + 
+  geom_text_repel(size=3.5) +
+  scale_color_gradient(low = "red", high = "blue") +
+  geom_smooth(method = "lm")
+
+dprime_by_trial %>% 
+  mutate(zc3 = scale(c3)) %>%
+  filter(zc3 < 0.0) %>%
+  mutate(name = paste(scene, move)) %>%
+  ggplot(aes(x = zc3, y = d.prime, label =name, color = zc3)) +
+  geom_point() + 
+  geom_text_repel(size=3.5) +
+  scale_color_gradient(low = "red", high = "blue") +
+  geom_smooth(method = "lm")
+```
+
+```{r split-half correlation, message=FALSE}
+test <- function() {
+  group_a_names <- good_data %>%
+  select(ID) %>%
+  distinct %>%
+  sample_n(length(ID) / 2)
+
+group_a <- group_a_names %>%
+  left_join(good_data, by = 'ID')
+
+group_b <- good_data %>%
+  filter(!(ID %in% group_a_names$ID))
+
+a_hr <- group_a %>%
+  group_by(scene, furniture, move) %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct),
+            n = n()) %>%
+  ungroup() 
+  
+b_hr <- group_b %>%
+  group_by(scene, furniture, move) %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct),
+            n = n()) %>%
+  ungroup()
+
+a_fp <- group_a %>%
+  group_by(scene) %>%
+  filter(base) %>%
+  summarise(fp = 1 - mean(correct)) %>%
+  ungroup
+
+b_fp <- group_b %>%
+  group_by(scene) %>%
+  filter(base) %>%
+  summarise(fp = 1 - mean(correct)) %>%
+  ungroup
+
+a_dprime <- a_hr %>%
+  left_join(a_fp, by = "scene") %>%
+  # filter(between(hr, 0.0001, 0.999), between(fp, 0.001, 0.999)) %>%
+  mutate(ad.prime = qnorm(hr*0.99 + 0.001) - qnorm(fp*0.99 + 0.001)) %>%
+  select(scene, furniture, move, ad.prime)
+
+
+ab_dprime <- b_hr %>%
+  left_join(b_fp, by = "scene") %>%
+  # filter(between(hr, 0.0001, 0.999), between(fp, 0.001, 0.999)) %>%
+  mutate(bd.prime = qnorm(hr*0.99 + 0.001) - qnorm(fp*0.99 + 0.001)) %>%
+  select(scene, furniture, move, bd.prime) %>%
+  left_join(a_dprime, by = c("scene", "furniture", "move"))
+
+# ab_dprime %>%
+#   ggplot(aes(x = ad.prime, y = bd.prime)) + 
+#   geom_point() + 
+#   geom_smooth(method="lm")
+
+  m <- ab_dprime %>%
+    with(lm(bd.prime ~ ad.prime)) %>%
+    summary()
+  result = m$r.squared
+}
+
+replicate(100, test()) %>%
+  mean %>%
+  print()
+```
 
 ```{r delta dprime}
 
@@ -277,8 +425,9 @@ delta_dprime_by_scene <- dprime_by_trial %>%
   summarise(dd.prime = diff(d.prime),
             abs.dd.prime = abs(dd.prime),
             dd = diff(d),
-            dlvd = diff(lvd),
-            dogd = diff(ogd),
+            dlvd = max(lvd),
+            dogd = max(ogd),
+            dc3 = max(c3),
             dpixeld = diff(pixeld),
             first.d.prime = first(d.prime),
             max.d.prime = max(d.prime),
@@ -288,13 +437,13 @@ delta_dprime_by_scene <- dprime_by_trial %>%
 
 
 delta_dprime_by_scene %>%
-  ggplot(aes(y = prop.dd.prime, x = dlvd, color = max.d.prime)) +
+  ggplot(aes(y = prop.dd.prime, x = dlvd, color = dc3)) +
   geom_jitter() +
   geom_smooth(method = "lm") +
   ggtitle("Change in D' as a function of counterfactual shifts")
 
 delta_dprime_by_scene %>%
-  ggplot(aes(y = prop.dd.prime, x = dogd, color = max.d.prime)) +
+  ggplot(aes(y = prop.dd.prime, x = dogd, color = dc3)) +
   geom_jitter() +
   geom_smooth(method = "lm") +
   ggtitle("Change in D' as a function of counterfactual shifts")
@@ -302,7 +451,7 @@ delta_dprime_by_scene %>%
 
 
 delta_dprime_by_scene %>%
-  ggplot(aes(y = prop.dd.prime, x = dpixeld)) +
+  ggplot(aes(y = prop.dd.prime, x = dc3)) +
   geom_jitter() +
   geom_smooth(method = "lm") +
   ggtitle("Change in D' as a function of counterfactual shifts")
@@ -316,11 +465,11 @@ delta_dprime_by_scene %>%
   ggtitle("Distribution of change in dprime")
 
 delta_dprime_by_scene %>%
-  with(lm(prop.dd.prime ~ dd + dpixeld)) %>%
+  with(lm(prop.dd.prime ~ dd + dc3)) %>%
   summary()
 
 delta_dprime_by_scene %>%
-  with(lm(prop.dd.prime ~ dogd + dpixeld)) %>%
+  with(lm(prop.dd.prime ~ dogd + dc3)) %>%
   summary()
 
 ```

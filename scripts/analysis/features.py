@@ -3,15 +3,25 @@
 import os
 import argparse
 from pandas import read_csv, DataFrame
-from functional_scenes import init_alexnet, compare_features
+from functional_scenes import init_alexnet, init_alexnet_objects, compare_features
 
 
 features = {
+    'features.0' : 'c1',
+    'features.1' : 'r1',
+    'features.3' : 'c2',
+    'features.4' : 'r2',
+    'features.6' : 'c3',
+    'features.7' : 'r3',
+    'features.8' : 'c4',
     'features.10'  : 'c5',
     'classifier.1' : 'fc1',
     'classifier.4' : 'fc2'
 }
-model = init_alexnet('/datasets/alexnet_places365.pth.tar')
+# places
+# model = init_alexnet('/datasets/alexnet_places365.pth.tar')
+# objects
+model = init_alexnet_objects('pytorch/vision:v0.6.0')
 
 def foo(r, renders):
     base = os.path.join(renders, '{0:d}.png'.format(r.id))
@@ -38,13 +48,6 @@ def main():
                        args = (renders,),
                        axis = 1,
                        result_type = 'expand')).drop(['d'], axis =1)
-    # for r in df.rows():
-    #     results.append({
-    #         'scene': r.id,
-    #         'furniture': r.furniture,
-    #         'move': r.move,
-    #         **fs
-    #     })
     print(df)
 
     df.to_csv(os.path.join('/experiments', args.exp, 'features.csv'))

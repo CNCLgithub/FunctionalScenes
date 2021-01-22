@@ -28,7 +28,9 @@ SING="${ENV['path']}"
     $SING exec ${ENV[cont]} bash -c "virtualenv ${ENV[pyenv]} && \
     source ${ENV[pyenv]}/bin/activate && \
     python -m pip install --upgrade pip && \
-    cd functional_scenes && poetry install"
+    cd functional_scenes && poetry install && \
+    python -m pip install  torch==1.7.1+cu110 torchvision==0.8.2+cu110  -f https://download.pytorch.org/whl/torch_stable.html && \
+    python -m pip install git+https://github.com/facebookresearch/pytorch3d.git"
 
 # julia setup
 [[ "${@}" =~ "julia" ]] || echo "Not touching julia"

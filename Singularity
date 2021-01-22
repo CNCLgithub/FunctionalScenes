@@ -1,5 +1,5 @@
 bootstrap: docker
-from: ubuntu:20.10
+from: nvidia/cuda:11.0.3-devel-ubuntu20.04
 
 
 %environment

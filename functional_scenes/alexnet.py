@@ -10,3 +10,8 @@ def init_alexnet(weights):
     model.load_state_dict(state_dict)
     model.eval()
     return model
+
+def init_alexnet_objects(weights):
+    model = torch.hub.load(weights, 'alexnet', pretrained=True)
+    model.eval()
+    return model
