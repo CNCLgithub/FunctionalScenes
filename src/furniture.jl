@@ -27,11 +27,17 @@ function add(r::Room, f::Furniture)::Room
     Room(r.steps, r.bounds, r.entrance, r.exits, g)
 end
 
+function remove(r::Room, f::Furniture)::Room
+    g = copy(pathgraph(r))
+    foreach(v -> set_prop!(g, v, :type, :floor), f)
+    new_r = Room(r.steps, r.bounds, r.entrance, r.exits, g)
+    foreach(t -> patch!(new_r, t, move_map), f)
+    return new_r
+end
 
-function patch!(r::Room, t::Tile, move::Symbol)
+function patch!(r::Room, t::Tile, moves::Vector{Symbol})
     g = pathgraph(r)
-    spots = setdiff(move_map, [move])
-    @>> spots begin
+    @>> moves begin
         lazymap(m -> shift_tile(r, t, m))
         flatten
         filter(v -> has_vertex(g, v))
@@ -40,6 +46,10 @@ function patch!(r::Room, t::Tile, move::Symbol)
         foreach(e -> add_edge!(g, e))
     end
     return nothing
+end
+
+function shift_furniture(r::Room, f::Furniture, move::Int64)
+    shift_furniture(r, f, move_map[move])
 end
 
 function shift_furniture(r::Room, f::Furniture, move::Symbol)
@@ -52,7 +62,8 @@ function shift_furniture(r::Room, f::Furniture, move::Symbol)
     # clear newly empty tiles
     @>> setdiff(f, shifted) foreach(v -> set_prop!(new_g, v, :type, :floor))
     # patch edges to tiles that are now empty
-    foreach(t -> patch!(new_r, t, move), f)
+    spots = setdiff(move_map, [move])
+    foreach(t -> patch!(new_r, t, spots), f)
     return new_r
 end
 
@@ -97,4 +108,4 @@ function valid_moves(r::Room, f::Furniture)
     @>> moves eachcol lazymap(m -> valid_move(g,f,m)) collect(Float64)
 end
 
-export add, Furniture, furniture
+export add, remove, Furniture, furniture

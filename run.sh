@@ -30,6 +30,8 @@ done
 BS="${BS} -B ${PWD}:/project"
 
 
+export CUB_HOME="${PWD}/${ENV[pyenv]}/cub-1.10.0"
+export LD_PRELOAD="/lib/x86_64-linux-gnu/libstdc++.so.6"
 $SING $BS $CONT bash -c "source /project/${ENV[pyenv]}/bin/activate \
         && export JULIA_PROJECT=${PWD} \
         && export TMPDIR=${PATHS[tmp]} \

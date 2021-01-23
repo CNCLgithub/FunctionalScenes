@@ -9,7 +9,7 @@ supported targets:
     julia : build julia environment
 "
 
-cont_pull_url="todo"
+cont_pull_url="https://yale.box.com/shared/static/934sa3kkcl63aj0nwzmqwxtw25efgpj8.sif"
 SING="${ENV['path']}"
 
 [ $# -eq 0 ] || [[ "${@}" =~ "help" ]] && echo "$usage"
@@ -27,8 +27,10 @@ SING="${ENV['path']}"
 [[ "${@}" =~ "python" ]] && echo "building python env" && \
     $SING exec ${ENV[cont]} bash -c "virtualenv ${ENV[pyenv]} && \
     source ${ENV[pyenv]}/bin/activate && \
-    python -m pip install --upgrade pip && \
-    cd functional_scenes && poetry install"
+    python3.8 -m pip install --upgrade pip && \
+    cd functional_scenes && poetry install" && \
+    ./run.sh python3.8 -m pip install  torch==1.7.1+cu101 torchvision==0.8.2+cu101  -f https://download.pytorch.org/whl/torch_stable.html && \
+    ./run.sh python3.8 -m pip install git+https://github.com/facebookresearch/pytorch3d.git
 
 # julia setup
 [[ "${@}" =~ "julia" ]] || echo "Not touching julia"

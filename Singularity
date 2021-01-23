@@ -1,5 +1,5 @@
 bootstrap: docker
-from: ubuntu:20.10
+from: nvidia/cuda:10.1-cudnn8-devel-ubuntu18.04
 
 
 %environment
@@ -26,18 +26,21 @@ from: ubuntu:20.10
                         wget \
                         ffmpeg \
                         cmake \
-                        pipenv
+                        python3.8-dev \
+                        python3-pip \
+                        software-properties-common
+
     apt-get clean
 
-    /usr/bin/python3 -m pip install --upgrade pip
-    /usr/bin/python3 -m pip install virtualenv
+    /usr/bin/python3.8 -m pip install --upgrade pip
+    /usr/bin/python3.8 -m pip install pipenv virtualenv
 
     # build context
     mkdir /build-ctx && cd /build-ctx
 
     # set up poetry (package manager for python)
     export POETRY_HOME=/poetry
-    curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3
+    curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python3.8
     chmod +x /poetry/bin/*
 
 

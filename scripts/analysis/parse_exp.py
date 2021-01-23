@@ -61,19 +61,6 @@ def read_db(db_path, table_name, codeversions, mode):
 
     return trialdata, questiondata
 
-def parse_rawname(trialname):
-    fullname = os.path.splitext(trialname[0])[0]
-    rot_angle = int(trialname[1])
-
-    trial_params = {'rot_angle': rot_angle}
-    return trial_params
-
-
-def classify(probe_timing, spacebar):
-    PROBE_WINDOW = 900
-    ds = spacebar - probe_timing
-    return np.logical_and(ds >= 0, ds <= PROBE_WINDOW)
-
 def parse_row(tname):
 
     # scene data
@@ -101,16 +88,16 @@ def main():
     parser = argparse.ArgumentParser(description = "Parses MOT Exp:1 data",
         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument("--subject_data", type = str, help = "Path to trial dataset",
-                        default = '/experiments/pilot/participants.db')
+    parser.add_argument("--exp", type = str, help = "Path to trial dataset",
+                        default = '/experiments/2e_1p_30s')
     parser.add_argument("--table_name", type = str, default = "pilot",
                         help = 'Table name')
-    parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["0.1"],
+    parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["2.0"],
                         help = 'Experiment version flag')
     parser.add_argument("--mode", type = str, default = "debug",
                         choices = ['debug', 'sandbox', 'live'],
                         help = 'Experiment mode')
-    parser.add_argument("--trialsbyp", type = int, default = 60,
+    parser.add_argument("--trialsbyp", type = int, default = 120,
                         help = 'Number of trials expected per subject')
     parser.add_argument("--trialdata", type = str,
                         default = '/experiments/pilot/parsed_trials.csv',
@@ -120,10 +107,12 @@ def main():
                         help = 'Filename to dump parsed trial data')
     args = parser.parse_args()
 
-    os.path.isdir('/experiments/pilot') or os.mkdir('/experiments/pilot')
+    os.path.isdir(args.exp) or os.mkdir(args.exp)
 
-    trs, qs = read_db(args.subject_data, args.table_name,
+    db = os.path.join(args.exp, 'participants.db')
+    trs, qs = read_db(db, args.table_name,
                       args.exp_flag, args.mode)
+
 
     cl_qs = qs.rename(index=str, columns={'uniqueid': 'WID'})
 
@@ -142,11 +131,11 @@ def main():
     # Make sure we have required responses per participant
     trialsbyp = trs.groupby('WID').aggregate({"TrialOrder" : lambda x : max(x) + 1})
     print(trialsbyp)
-    trialsbyp = trialsbyp[trialsbyp.TrialOrder  == args.trialsbyp]
-    good_wids = trialsbyp.index
+    good_wids = trialsbyp[trialsbyp.TrialOrder  == args.trialsbyp].index
     trs = trs[trs.WID.isin(good_wids)]
 
-    """Assign random identifiers to each participant"""
+
+    # Assign random identifiers to each participant
     wid_translate = {}
     for i, wid in enumerate(good_wids):
         wid_translate[wid] = i
@@ -154,11 +143,14 @@ def main():
     trs["ID"] = trs.WID.apply(lambda x: wid_translate[x])
 
 
-    trs.to_csv(args.trialdata, index=False)
+    out = os.path.join(args.exp, 'parsed_trials.csv')
+    trs.to_csv(out, index=False)
 
     cl_qs = cl_qs[cl_qs.WID.isin(good_wids)]
     cl_qs["ID"] = cl_qs.WID.apply(lambda x: wid_translate[x])
-    cl_qs[["ID", "instructionloops", "comments"]].to_csv(args.questiondata, index=False)
+
+    out = os.path.join(args.exp, 'parsed_questions.csv')
+    cl_qs[["ID", "instructionloops", "comments"]].to_csv(out, index=False)
 
 if __name__ == '__main__':
     main()
