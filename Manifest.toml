@@ -516,7 +516,7 @@ version = "0.4.1"
 deps = ["Cassette", "Combinatorics", "Gen", "LRUCache", "ProfileView", "Revise", "StatProfilerHTML", "Test"]
 git-tree-sha1 = "992a7ad09e7bbda3e2a03a8c4a754354b741f7a9"
 repo-rev = "master"
-repo-url = "https://github.com/CNCLgithub/GenRFS"
+repo-url = "deps/GenRFS"
 uuid = "56ab6c88-a2ab-44ec-99ca-7b9069b439c2"
 version = "0.1.0"
 

@@ -1,19 +1,31 @@
 
-"""
-Take a room and place a random set of objects in an xy plane
-"""
-@gen function furniture_prior(r::Room, rate::Float64)
-    n = @trace(poisson(rate), :cardinality)
-    dx, dy = bounds(r) .* 0.8 # size of x and y dimensions
-    positions = Matrix{Float64}(undef, n , 2)
-    for i = 1:n
-        # sample the position within (-dx, +dx) and (-dy, +dy)
-        # TODO: fill in `nothing` with uniform sample
-        positions[i, 1] = @trace(uniform(-dx, +dx), i => :x) # x value
-        positions[i, 2] = @trace(uniform(-dy,+dy), i => :y) # y value
-    end
-    return positions
-end
+# @gen (static) function occupancy_flip(p::Float64)
+#     f = @trace(bernoulli(p), :flip)
+#     return f
+# end
+
+# occupancy_map = Gen.Map(occupancy_flip)
+
+# """
+# Take a room and place a random set of objects in an xy plane
+# """
+# @gen (static) function furniture_prior(r::Room, rate::Float64)
+#     floor_tiles = valid_spaces(r)
+#     ps = fill(rate, length(floor_tiles))
+#     occupied = @trace(occupancy_map(ps),  :occupancy)
+#     result = add_from_grid(r, floor_tiles, occupied)
+#     return result
+# end
+
+# @gen (static) function model(params::ModelParams)
+#     #prior
+#     room = @trace(furniture_prior(params.template, params.rate),
+#                   :prior)
+#     c3_means = c3_prediction(room, params.features, params.graphics)
+#     @trace(broadcasted_normal(c3_means, params.obs_noise), :c3)
+
+#     return c3_means
+# end
 
 
 """

@@ -104,7 +104,9 @@ def main():
                        result_type = 'expand')).drop(['d'], axis =1)
     print(df)
 
-    df.to_csv(os.path.join('/experiments', args.exp, 'features.csv'))
+    out = '/experiments/' + args.exp
+    os.path.isdir(out) or os.mkdir(out)
+    df.to_csv(os.path.join(out, 'features.csv'))
 
 if __name__ == '__main__':
     main()

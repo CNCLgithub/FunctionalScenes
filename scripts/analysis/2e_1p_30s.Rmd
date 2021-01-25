@@ -54,9 +54,12 @@ covariates <- read_csv("~/output/experiments/2e_1p_30s/covariates.csv")  %>%
   mutate(zogd = scale(ogd),
          zpixeld = scale(pixeld))
 
-features <- read_csv("~/output/experiments/2e_1p_30s/features.csv")  %>%
+features <- read_csv("~/output/experiments/2e_1p_30s_matchedc3/features.csv")  %>%
   rename(scene = id)
 
+features %>%
+  ggplot(aes(c3)) +
+  geom_histogram()
 ```
 
 
