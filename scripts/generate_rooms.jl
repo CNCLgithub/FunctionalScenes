@@ -65,6 +65,7 @@ function search(r::Room)
     for (i,f) in enumerate(fs)
         moves = collect(Bool, valid_moves(r, f))
         moves = move_map[moves]
+        # moves = intersect(moves, [:up, :down])
         for m in moves
             shifted = shift_furniture(r,f,m)
             d = mean(compare(r, shifted))
@@ -80,10 +81,13 @@ function search(r::Room)
     select(result, [:furniture, :move, :d])
 end
 
-function build(r::Room; k = 10, factor = 1)
-    weights = ones(steps(r))
-    # strt = Int(last(steps(r)) * 0.4)
-    # weights[:, strt:end] .= 1.0
+function build(r::Room; k = 12, factor = 1)
+    weights = zeros(steps(r))
+    start_x = Int(last(steps(r)) * 0.4)
+    stop_x = last(steps(r)) - 2
+    start_y = 2
+    stop_y = first(steps(r)) - 1
+    weights[start_y:stop_y, start_x:stop_x] .= 1.0
     new_r = last(furniture_chain(k, r, weights))
     new_r = FunctionalScenes.expand(new_r, factor)
     dist = search(new_r)

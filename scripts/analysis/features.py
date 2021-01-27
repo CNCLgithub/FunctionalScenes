@@ -37,7 +37,8 @@ model = init_alexnet('/datasets/alexnet_places365.pth.tar')
 # model = init_alexnet_objects('pytorch/vision:v0.6.0')
 
 
-src = '/renders/2e_1p_30s/1/scene.json'
+# TODO: just make a new room here
+src = '/renders/2e_1p_30s_matchedc3/1/scene.json'
 with open(src, 'r') as f:
     template = json.load(f)
 
