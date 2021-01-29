@@ -1,6 +1,103 @@
-function add_from_grid(r::Room, ts::Vector{Tile}, test)
-    passed = ts[findall(test)]
-    add(r, passed)
+using Parameters: @with_kw
+
+@with_kw struct ModelParams
+
+    template::Room
+
+    # tracker parameters
+    dims::Tuple{Int64, Int64} = (6, 6)
+    inner_ref::CartesianIndices = CartesianIndices(dims)
+    # tracker_verts::Matrix{Int64} = _tracker_verts(template)
+    tracker_ref::CartesianIndices = _tracker_ref(template, dims)
+    default_tracker_p::Float64 = 0.5
+    tracker_ps::Vector{Float64} = fill(default_tracker_p,
+                                       length(tracker_ref))
+    tracker_size::Int64 = prod(dims)
+    active::Tuple{Float64, Float64} = (0.1, 0.1)
+    inactive::Tuple{Float64, Float64} = (10.0, 10.0)
+
+    # simulation
+    instances::Int64 = 10
+
+    # graphics
+    feature_weights::String
+    device = _load_device()
+    img_size::Tuple{Int64, Int64} = (480, 720)
+    graphics = _init_graphics(template, img_size, device)
+    model = functional_scenes.init_alexnet(feature_weights, device)
+    base_sigma::Float64 = 0.1
+end
+
+function _init_graphics(r, img_size, device)
+    graphics = functional_scenes.SimpleGraphics(img_size, device)
+    base_d = translate(r, false)
+    graphics.set_from_scene(base_d)
+    return graphics
+end
+
+function _load_device()
+    if torch.cuda.is_available()
+        device = torch.device("cuda:0")
+        torch.cuda.set_device(device)
+    else
+        device = torch.device("cpu")
+    end
+    return device
+end
+
+function _tracker_ref(r::Room, dims)
+    space = (steps(r) .- (4, 4)) ./ dims
+    space = Int64.(space)
+    CartesianIndices(space)
+end
+
+function _tracker_verts(r::Room)
+    space = steps(r) .- (4, 4)
+    reshape(collect(Int64, 1:prod(space)), space)
+end
+
+
+# TODO something better than vcat?
+function consolidate_local_states(states)
+    vcat(states...)
+end
+
+
+function define_trackers(params::ModelParams, active)
+    n = length(active)
+    f = x -> x ? params.active : params.inactive
+    @>> active map(f) map(w -> fill(w, params.dims))
+end
+
+function add_from_state_flip(params::ModelParams, occupied)::Room
+    r = params.template
+    vs = findall(occupied)
+    fs = Vector{Int64}(undef, length(vs))
+    for (i,j) in enumerate(vs)
+        tracker_idx = ceil(j / params.tracker_size) |> Int64
+        inner_idx = j % params.tracker_size + 1 |> Int64
+        (or,oc) = Tuple(params.tracker_ref[tracker_idx])
+        (ir,ic) = Tuple(params.inner_ref[inner_idx])
+        fs[i] = (oc-1) * size(params.tracker_ref, 1) * params.tracker_size +
+            (or - 1) * params.dims[1] +
+            (ic - 1) * params.tracker_size +
+            ir
+    end
+    add(r, Set{Int64}(fs))
+end
+
+
+# or pass average image to alexnet
+function graphics_from_instances(instances, params)
+    g = params.graphics
+    instances = map(r -> translate(r, false, cubes=true), instances)
+    batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
+    features = @pycall functional_scenes.nn_features.single_feature(params.model,
+                                                                    "features.6",
+                                                                    batch)::Array{Float32, 4}
+    mu = mean(features, dims = 1)
+    sigma = std(features, mean = mu, dims = 1) .+ params.base_sigma
+    (mu[1, :, :, :], sigma[1, :, :, :])
 end
 
 
@@ -192,4 +289,4 @@ function coordinates_to_pixels(f,coordinates_to_camera_pos,image_size,pixels_siz
     return p
 end
 
-
+export ModelParams

@@ -32,7 +32,8 @@ features = {
 }
 
 # places
-model = init_alexnet('/datasets/alexnet_places365.pth.tar')
+model = init_alexnet('/datasets/alexnet_places365.pth.tar',
+                     device)
 # objects
 # model = init_alexnet_objects('pytorch/vision:v0.6.0')
 
@@ -70,11 +71,12 @@ def foo(src, exp: str):
     name = '{0:d}_{1!s}_{2!s}'.format(src.id, src.furniture,
                                       src.move)
 
-    base_scene = '/renders/{0!s}/{1!s}/scene.json'.format(exp, base)
-    row_scene = '/renders/{0!s}/{1!s}/scene.json'.format(exp, name)
-    base_pd = render_p3d(base_scene)
-    row_pd = render_p3d(row_scene)
-    feats = compare_features(model, features, base_pd, row_pd)
+    base_torch = '/renders/{0!s}/{1!s}_torch.png'.format(exp, base)
+    base_torch = Image.open(base_torch).convert('RGB')
+    row_torch = '/renders/{0!s}/{1!s}_torch.png'.format(exp, name)
+    row_torch = Image.open(row_torch).convert('RGB')
+    feats = compare_features(model, features, base_torch,
+                             row_torch)
     feats = {(k+'_3d'):v for (k,v) in feats.items()}
 
     base_blend = '/renders/{0!s}/{1!s}.png'.format(exp, base)
@@ -82,7 +84,8 @@ def foo(src, exp: str):
     row_blend = '/renders/{0!s}/{1!s}.png'.format(exp, name)
     row_blend = Image.open(row_blend).convert('RGB')
 
-    feats.update(compare_features(model, features, base_blend, row_blend))
+    feats.update(compare_features(model, features, base_blend,
+                                  row_blend))
     return feats
 
 
@@ -93,7 +96,7 @@ def main():
     )
     parser.add_argument('--exp', type = str,
                         help = "Which scene dataset to use",
-                        default = '2e_1p_30s')
+                        default = '2e_1p_30s_matchedc3')
     args = parser.parse_args()
     df = read_csv("/scenes/{0!s}.csv".format(args.exp))
     results = DataFrame(columns = ['scene', 'furniture', 'move',

@@ -1,31 +1,61 @@
 
-# @gen (static) function occupancy_flip(p::Float64)
-#     f = @trace(bernoulli(p), :flip)
-#     return f
-# end
+@gen (static) function flip(p::Float64)::Bool
+    f = @trace(bernoulli(p), :flip)
+    return f
+end
 
-# occupancy_map = Gen.Map(occupancy_flip)
+flip_map = Gen.Map(flip)
 
-# """
-# Take a room and place a random set of objects in an xy plane
-# """
-# @gen (static) function furniture_prior(r::Room, rate::Float64)
-#     floor_tiles = valid_spaces(r)
-#     ps = fill(rate, length(floor_tiles))
-#     occupied = @trace(occupancy_map(ps),  :occupancy)
-#     result = add_from_grid(r, floor_tiles, occupied)
-#     return result
-# end
+@gen (static) function beta_flip(ab::Tuple{Float64, Float64})
+    a, b = ab
+    result = @trace(beta(a, b), :bflip)
+    return result
+end
 
-# @gen (static) function model(params::ModelParams)
-#     #prior
-#     room = @trace(furniture_prior(params.template, params.rate),
-#                   :prior)
-#     c3_means = c3_prediction(room, params.features, params.graphics)
-#     @trace(broadcasted_normal(c3_means, params.obs_noise), :c3)
+beta_map = Gen.Map(beta_flip)
 
-#     return c3_means
-# end
+@gen (static) function tracker_state(beta_weights)
+    bws = @trace(beta_map(beta_weights), :state)
+    return bws
+end
+
+tracker_state_map = Gen.Map(tracker_state)
+
+"""
+Take a room and place a random set of objects in an xy plane
+"""
+@gen (static) function room_from_state(state::Vector{Float64},
+                                       params::ModelParams)::Room
+    occupied = @trace(flip_map(state),  :furniture)
+    result = add_from_state_flip(params, occupied)
+    return result
+end
+
+room_map = Gen.Map(room_from_state)
+
+@gen (static) function model(params::ModelParams)
+    # sampler trackers
+    active = @trace(flip_map(params.tracker_ps), :active)
+    trackers = define_trackers(params, active)
+    # a collection of local states
+    states = @trace(tracker_state_map(trackers), :trackers)
+    # a global room matrix
+    global_state = consolidate_local_states(states)
+    gs = fill(global_state, params.instances)
+    ps = fill(params, params.instances)
+
+    room_instances = @trace(room_map(gs, ps), :instances)
+
+    # mean and variance of observation
+    viz = graphics_from_instances(room_instances, params)
+    # viz = (mean, cov diagonal)
+    @trace(broadcasted_normal(viz[1], viz[2]), :viz)
+
+    # compute in sensitivity for effeciency
+    # affordances = map(afforandace, room_instances, ps)
+
+    return room_instances
+end
 
 
 """
@@ -94,4 +124,4 @@ Move a piece of furniture
 end
 
 
-export furnish, furniture_step, furniture_chain, reorganize
+export furnish, furniture_step, furniture_chain, reorganize, model

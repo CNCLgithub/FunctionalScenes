@@ -1,4 +1,7 @@
+import time
 import torch
+from pytorch3d.io import save_obj
+from pytorch3d.ops import cubify
 from pytorch3d.structures import Meshes
 from pytorch3d.renderer import TexturesVertex
 from pytorch3d.structures import join_meshes_as_scene
@@ -46,21 +49,62 @@ def create_cuboid_verts(dims, rotation, loc):
 
 
 def create_cuboid(obj_data):
-    dims  = torch.tensor(obj_data['dims'], dtype=torch.float32)
+    beg_ts = time.time()
+    dims  = torch.tensor(obj_data['dims'],
+                         dtype=torch.float32)
     rotation = obj_data['orientation']
-    loc = torch.tensor(obj_data['position'], dtype=torch.float32)
+    loc = torch.tensor(obj_data['position'],
+                       dtype=torch.float32)
     verts_features = torch.ones_like(c_verts)
     if obj_data['appearance'] == 'blue':
         verts_features[:, :2] *= 0.0  # blue
 
     textures = TexturesVertex(
         verts_features = verts_features[None])
+
+
     vs = c_verts * dims
     vs += loc
-    m = Meshes(verts = [vs], faces = [c_faces],textures =textures)
+    m = Meshes(verts = [vs], faces = [c_faces],
+               textures =textures)
+    end_ts = time.time()
+    # print('create_cuboid {}'.format(end_ts - beg_ts))
     return m
 
 def create_cuboids(objects):
     mesh = list(map(create_cuboid, objects))
     mesh = join_meshes_as_scene(mesh)
+    return mesh
+
+def from_voxels(voxels, color):
+    device = torch.cuda.current_device()
+    voxels = torch.from_numpy(voxels).to(device)
+    voxels = voxels.unsqueeze(0)
+    m = cubify(voxels, 0.5, align = 'center')
+    vs = m.verts_packed() * torch.Tensor([11, 20, 3.0]).to(device)
+    vs += torch.Tensor([0.0, 0.0, 3.5]).to(device)
+    verts_features = torch.ones_like(vs)
+    faces  = m.faces_packed()
+    if color == 'blue':
+        verts_features[:, :2] *= 0.0  # blue
+
+    textures = TexturesVertex(
+        verts_features = verts_features[None])
+    return Meshes(verts = [vs], faces = [faces],
+                  textures = textures)
+
+def scene_to_mesh(scene, device):
+    beg_ts = time.time()
+    floor = create_cuboid(scene['floor']).to(device)
+    if 'objects' in scene:
+        mesh = create_cuboids(scene['objects']).to(device)
+    else:
+        walls = from_voxels(scene['walls'], '')
+        furn = from_voxels(scene['furniture'], 'blue')
+        mesh = join_meshes_as_scene([walls, furn])
+    end_ts = time.time()
+    # print('scene to mesh {}'.format(end_ts - beg_ts))
+    mesh = join_meshes_as_scene([mesh, floor])
+    # save_obj('/renders/test.obj', mesh.verts_packed(),
+    #          mesh.faces_packed())
     return mesh
