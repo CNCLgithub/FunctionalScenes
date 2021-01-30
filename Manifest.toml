@@ -24,6 +24,12 @@ git-tree-sha1 = "87491f7d03ae1b423a353aff99cf61a45e3c993a"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 version = "3.1.0"
 
+[[ArgParse]]
+deps = ["Logging", "TextWrap"]
+git-tree-sha1 = "4a8f4df432fd8e8a96a142c53f9432b9022a92e6"
+uuid = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+version = "1.1.1"
+
 [[ArnoldiMethod]]
 deps = ["LinearAlgebra", "Random", "StaticArrays"]
 git-tree-sha1 = "f87e559f87a45bece9c9ed97458d3afe98b1ebb9"
@@ -435,6 +441,12 @@ git-tree-sha1 = "99c43a8765095efa6ef76233d44a89e68073bd10"
 uuid = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
 version = "0.2.5"
 
+[[Fontconfig]]
+deps = ["Fontconfig_jll", "Libdl", "Printf"]
+git-tree-sha1 = "beef89322ccf3b80062f522ed6f82089a254491e"
+uuid = "186bb1d3-e1f7-5a2c-a377-96d770f13627"
+version = "0.4.0"
+
 [[Fontconfig_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Expat_jll", "FreeType2_jll", "JLLWrappers", "Libdl", "Libuuid_jll", "Pkg", "Zlib_jll"]
 git-tree-sha1 = "35895cf184ceaab11fd778b4590144034a167a2f"
@@ -518,6 +530,12 @@ git-tree-sha1 = "992a7ad09e7bbda3e2a03a8c4a754354b741f7a9"
 repo-rev = "master"
 repo-url = "deps/GenRFS"
 uuid = "56ab6c88-a2ab-44ec-99ca-7b9069b439c2"
+version = "0.1.0"
+
+[[Gen_Compose]]
+deps = ["DataFrames", "Distributions", "FileIO", "Fontconfig", "Gen", "JLD2", "ProfileView", "Revise"]
+path = "/project/.julia/dev/Gen_Compose"
+uuid = "c1ef4dca-b0a6-4a35-b24b-46cbf3979a16"
 version = "0.1.0"
 
 [[GenericSVD]]
@@ -1519,6 +1537,11 @@ version = "0.1.3"
 [[Test]]
 deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[[TextWrap]]
+git-tree-sha1 = "9250ef9b01b66667380cf3275b3f7488d0e25faf"
+uuid = "b718987f-49a8-5099-9789-dcd902bef87d"
+version = "1.0.1"
 
 [[ThreadTools]]
 git-tree-sha1 = "e335e40d393ccc1e1aa8087632989e856db988e0"

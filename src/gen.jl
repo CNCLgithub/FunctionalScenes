@@ -6,17 +6,17 @@ end
 
 flip_map = Gen.Map(flip)
 
-@gen (static) function beta_flip(ab::Tuple{Float64, Float64})
-    a, b = ab
-    result = @trace(beta(a, b), :bflip)
-    return result
+@gen (static) function stability(ab::Tuple)
+    bounds, probs = ab
+    bw = @trace(piecewise_uniform(bounds, probs), :sflip)
+    return bw
 end
 
-beta_map = Gen.Map(beta_flip)
+stability_map = Gen.Map(stability)
 
-@gen (static) function tracker_state(beta_weights)
-    bws = @trace(beta_map(beta_weights), :state)
-    return bws
+@gen (static) function tracker_state(weights)
+    result = @trace(stability_map(weights), :state)
+    return result
 end
 
 tracker_state_map = Gen.Map(tracker_state)
@@ -49,7 +49,8 @@ room_map = Gen.Map(room_from_state)
     # mean and variance of observation
     viz = graphics_from_instances(room_instances, params)
     # viz = (mean, cov diagonal)
-    @trace(broadcasted_normal(viz[1], viz[2]), :viz)
+    pred = @trace(broadcasted_normal(viz[1], viz[2]), :viz)
+    # pred = @trace(mybroadcast(viz[1], viz[2]), :viz)
 
     # compute in sensitivity for effeciency
     # affordances = map(afforandace, room_instances, ps)

@@ -1,20 +1,26 @@
 using Parameters: @with_kw
 
+export ModelParams
+
 @with_kw struct ModelParams
 
     template::Room
+    # thickness of walls
+    thickness::Tuple{Int64, Int64} = (2,2)
 
     # tracker parameters
     dims::Tuple{Int64, Int64} = (6, 6)
     inner_ref::CartesianIndices = CartesianIndices(dims)
     # tracker_verts::Matrix{Int64} = _tracker_verts(template)
-    tracker_ref::CartesianIndices = _tracker_ref(template, dims)
+    tracker_ref::CartesianIndices = _tracker_ref(template, dims, thickness)
+    linear_ref::LinearIndices = _linear_ref(template)
     default_tracker_p::Float64 = 0.5
     tracker_ps::Vector{Float64} = fill(default_tracker_p,
                                        length(tracker_ref))
     tracker_size::Int64 = prod(dims)
-    active::Tuple{Float64, Float64} = (0.1, 0.1)
-    inactive::Tuple{Float64, Float64} = (10.0, 10.0)
+    bounds::Vector{Float64} = [0.01, 0.45, 0.65, 0.99]
+    active::Vector{Float64} = [0.5, 0.0, 0.5]
+    inactive::Vector{Float64} = [0.0, 1.0, 0.0]
 
     # simulation
     instances::Int64 = 10
@@ -45,28 +51,43 @@ function _load_device()
     return device
 end
 
-function _tracker_ref(r::Room, dims)
-    space = (steps(r) .- (4, 4)) ./ dims
+function _tracker_ref(r::Room, dims, thickness)
+    thickness = thickness .* 2
+    space = (steps(r) .- thickness) ./ dims
     space = Int64.(space)
     CartesianIndices(space)
 end
 
-function _tracker_verts(r::Room)
-    space = steps(r) .- (4, 4)
-    reshape(collect(Int64, 1:prod(space)), space)
+function _linear_ref(room)
+    LinearIndices(steps(room))
+end
+
+function load(::Type{ModelParams}, path::String; kwargs...)
+    ModelParams(;read_json(path)..., kwargs...)
+end
+
+function create_obs(params::ModelParams, r::Room)
+    mu, _ = graphics_from_instances([r], params)
+    display(size(mu))
+    constraints = Gen.choicemap()
+    constraints[:viz] = mu
+    return constraints
 end
 
 
 # TODO something better than vcat?
 function consolidate_local_states(states)
-    vcat(states...)
+    states = vcat(states...)
+    states = clamp.(states, 0.1, 0.9)
+    display(states)
+    return states
 end
 
-
 function define_trackers(params::ModelParams, active)
-    n = length(active)
-    f = x -> x ? params.active : params.inactive
-    @>> active map(f) map(w -> fill(w, params.dims))
+    f = x -> x ? (params.bounds, params.active) : (params.bounds, params.inactive)
+    ws = @>> active map(f) map(w -> fill(w, params.tracker_size))
+    display(ws)
+    return ws
 end
 
 function add_from_state_flip(params::ModelParams, occupied)::Room
@@ -76,14 +97,29 @@ function add_from_state_flip(params::ModelParams, occupied)::Room
     for (i,j) in enumerate(vs)
         tracker_idx = ceil(j / params.tracker_size) |> Int64
         inner_idx = j % params.tracker_size + 1 |> Int64
-        (or,oc) = Tuple(params.tracker_ref[tracker_idx])
-        (ir,ic) = Tuple(params.inner_ref[inner_idx])
-        fs[i] = (oc-1) * size(params.tracker_ref, 1) * params.tracker_size +
-            (or - 1) * params.dims[1] +
-            (ic - 1) * params.tracker_size +
-            ir
+
+        outer = Tuple(params.tracker_ref[tracker_idx]) .- (1,1)
+        outer = Tuple(outer) .* params.dims
+        cart = Tuple(params.inner_ref[inner_idx]) .+ outer .+ params.thickness
+        cart = CartesianIndex(cart)
+        fs[i] = params.linear_ref[cart]
+        # (or,oc) = Tuple(params.tracker_ref[tracker_idx])
+        # (ir,ic) = Tuple(params.inner_ref[inner_idx])
+        # fs[i] = (oc-1) * size(params.tracker_ref, 1) * params.tracker_size +
+        #     (or - 1) * params.dims[1] +
+        #     (ic - 1) * params.tracker_size +
+        #     ir
     end
     add(r, Set{Int64}(fs))
+end
+
+function tracker_to_state(params::ModelParams, tracker::Int64)
+    start = (tracker - 1) * params.tracker_size + 1
+    @>> (start:(start + params.tracker_size - 1)) collect(Int64) vec
+    # outer = Tuple(params.tracker_ref[tracker]) .- (1,1)
+    # outer = Tuple(outer) .* params.dims
+    # cart = params.inner_ref .+ CartesianIndex(outer)
+    # @>> params.linear_ref[cart] collect(Int64) vec
 end
 
 
@@ -94,10 +130,41 @@ function graphics_from_instances(instances, params)
     batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
     features = @pycall functional_scenes.nn_features.single_feature(params.model,
                                                                     "features.6",
-                                                                    batch)::Array{Float32, 4}
+                                                                    batch)::Array{Float64, 4}
     mu = mean(features, dims = 1)
-    sigma = std(features, mean = mu, dims = 1) .+ params.base_sigma
+    if length(instances) > 1
+        sigma = std(features, mean = mu, dims = 1) .+ params.base_sigma
+    else
+        sigma = fill(params.base_sigma, size(mu))
+    end
+    display(any(isnan.(mu)))
+    display(any(isnan.(sigma)))
     (mu[1, :, :, :], sigma[1, :, :, :])
+end
+
+function select_from_model(params::ModelParams, tracker::Int64)
+    s = select(:active => tracker => :flip)
+    # # tracker state
+    for i = 1:params.tracker_size
+        push!(s, :trackers => tracker => :state => i => :bflip)
+    end
+    # # associated rooms samples
+    # idxs = tracker_to_state(params, tracker)
+    # display(idxs)
+    # for i = 1:params.instances, j in idxs
+    #     push!(s, :instances => i => :furniture => j => :flip)
+    # end
+    StaticSelection(s)
+end
+
+function selections(params::ModelParams)
+    n = length(params.tracker_ps)
+    idxs = collect(Int64, 1:n)
+    nodes = map(Symbol, idxs)
+    ks = Tuple(nodes)
+    vals = map(x -> select_from_model(params, x), idxs)
+    vals = Tuple(vals)
+    LittleDict(ks, vals)
 end
 
 
@@ -115,178 +182,43 @@ function connected(g::PathGraph, v::Tile)::Set{Tile}
     isempty(s) ? Set([v]) : s
 end
 
-# TODO: implement me!
-function bitmap_render(r::Room)::Matrix{Bool}
-    # ratio = [33, 40] # rows by columns (y, x)
-    image_size = (36,24) # vertical horizonal
-    f = 50 # focal length
-    pixels_size = (720,480)
-    bm = fill(false, pixels_size)
-    serialized = translate(r,false)
-    camera = serialized[:camera]
-    camera_pos = camera[:position] # xyz of camera
-    camera_rot = camera[:orientation] # xyz rot in radians
-    objects = serialized[:objects] # both walls and furniture
-    s_x = sin(camera_rot[1])
-    c_x = cos(camera_rot[1])
-    furniture = filter(x -> x[:appearance] == :blue, objects)
-    for fur in furniture
-        pos = fur[:position] # x,y,z
-        dims = fur[:dims]
-        upper_left_1 = [pos[1]+dims[1]/2,pos[2]-dims[2]/2, pos[3]+dims[3]/2]
-        upper_right_1 = [pos[1]-dims[1]/2,pos[2]-dims[2]/2, pos[3]+dims[3]/2]
-        lower_left_1 = [pos[1]+dims[1]/2,pos[2]+dims[2]/2, pos[3]-dims[3]/2]
-        lower_right_1 = [pos[1]-dims[1]/2,pos[2]+dims[2]/2, pos[3]-dims[3]/2]
-        upper_left = [pos[1]-dims[1]/2,pos[2]+dims[2]/2, pos[3]+dims[3]/2]
-        upper_right= [pos[1]+dims[1]/2,pos[2]+dims[2]/2, pos[3]+dims[3]/2]
-        lower_left = [pos[1]-dims[1]/2,pos[2]-dims[2]/2, pos[3]-dims[3]/2]
-        lower_right =  [pos[1]+dims[1]/2,pos[2]-dims[2]/2, pos[3]-dims[3]/2]
-        
-        # first, put furnitures position into camera coordinates
-        upper_left_camera = coordinates_to_camera(upper_left,camera_pos,camera_rot)
-        upper_right_camera = coordinates_to_camera(upper_right,camera_pos,camera_rot)
-        lower_left_camera = coordinates_to_camera(lower_left,camera_pos,camera_rot)
-        lower_right_camera = coordinates_to_camera(lower_right,camera_pos,camera_rot)
-        upper_left_camera_1 = coordinates_to_camera(upper_left_1,camera_pos,camera_rot)
-        upper_right_camera_1 = coordinates_to_camera(upper_right_1,camera_pos,camera_rot)
-        lower_left_camera_1 = coordinates_to_camera(lower_left_1,camera_pos,camera_rot)
-        lower_right_camera_1 = coordinates_to_camera(lower_right_1,camera_pos,camera_rot)
-     
-        # second, perspective project to pixel space
-        upper_left_image = coordinates_to_pixels(f,upper_left_camera,image_size,pixels_size)
-        upper_right_image = coordinates_to_pixels(f,upper_right_camera,image_size,pixels_size)
-        lower_left_image = coordinates_to_pixels(f,lower_left_camera,image_size,pixels_size)
-        lower_right_image = coordinates_to_pixels(f,lower_right_camera,image_size,pixels_size)
-        upper_left_image_1 = coordinates_to_pixels(f,upper_left_camera_1,image_size,pixels_size)
-        upper_right_image_1 = coordinates_to_pixels(f,upper_right_camera_1,image_size,pixels_size)
-        lower_left_image_1 = coordinates_to_pixels(f,lower_left_camera_1,image_size,pixels_size)
-        lower_right_image_1 = coordinates_to_pixels(f,lower_right_camera_1,image_size,pixels_size)
-      
-        f_bm = fill(false, pixels_size)
-    vs = [upper_left_image, upper_right_image,lower_left_image,lower_right_image,upper_left_image_1, upper_right_image_1,lower_left_image_1,lower_right_image_1]
-    vs_x = [upper_left_image[1], upper_right_image[1],lower_left_image[1],lower_right_image[1],upper_left_image_1[1], upper_right_image_1[1],lower_left_image_1[1],lower_right_image_1[1]]
-    vs_z = [upper_left_image[2], upper_right_image[2],lower_left_image[2],lower_right_image[2],upper_left_image_1[2], upper_right_image_1[2],lower_left_image_1[2],lower_right_image_1[2]]
-        polys = Point[]
-    notpolys = Point[]
-    left_point = Point[]
-    right_point = Point[]
-    upper_point = Point[]
-        lower_point = Point[]
-        for ps in vs
-            if ps[1] == minimum(vs_x)
-                push!(left_point,ps)
-                if length(left_point)>1
-                    left_upper = Point(minimum(vs_x),maximum(getindex.(left_point,2)))
-                    left_lower = Point(minimum(vs_x),minimum(getindex.(left_point,2)))
-                    left_point = Point[left_upper,left_lower]
-                end
-            end
-            if  ps[2] == minimum(vs_z)
-                push!(lower_point,ps)
-                if length(lower_point)>1
-                    lower_right = Point(maximum(getindex.(upper_point,1)),minimum(vs_z))
-                    lower_left = Point(minimum(getindex.(upper_point,1)),minimum(vs_z))
-                    lower_point = Point[lower_left,lower_right]
-                end
-            end
-            if  ps[1] == maximum(vs_x)
-                push!(right_point,ps)
-                if length(right_point)>1
-                    right_lower = Point(maximum(vs_x),minimum(getindex.(right_point,2)))
-                    right_upper = Point(maximum(vs_x),maximum(getindex.(right_point,2)))
-                    right_point = Point[right_lower,right_upper]
-                end
-            end
-            if  ps[2] == maximum(vs_z)
-                push!(upper_point,ps)
-                if length(upper_point)>1
-                    upper_right = Point(maximum(getindex.(upper_point,1)),maximum(vs_z))
-                    upper_left = Point(minimum(getindex.(upper_point,1)),maximum(vs_z))
-                    upper_point = Point[upper_right,upper_left]
-                end
-            end
-        #   else
-        #       push!(notpolys,ps)
-        #   end
-        end
-        #polys = Point[left_point,lower_point,right_point,upper_point]
-        for ps in left_point
-            push!(polys,ps)
-        end
-        for ps in lower_point
-            push!(polys,ps)
-        end
-        for ps in right_point
-            push!(polys,ps)
-        end
-        for ps in upper_point
-            push!(polys,ps)
-        end
-        #for ps in notpolys
-        #   if !isinside(ps,polys)
-        #       push!(polys,ps)
-        #   end
-        #end
-    # end
-    #   println([min_x,max_x, round(Int,upper_left_image[2]),lower_left_image[2]])
-    #   for i in round(Int, min_x):round(Int,max_x)
-    #       for j in round(Int,upper_left_image[2]):round(Int,lower_left_image[2])
-    #               point = Point(i,j)
-    #           if i < pixels_size[1] && j < pixels_size[2] && isinside(point,vs)
-    #                       f_bm[i,j] = true
-    #           end
-    #       end
-    # end
-    polys = unique(polys)
-    #println(polys)
-    #println(vs)
-    for i in 1:720
-        for j in 1: 480
-            point = Point(i,j)
-            if isinside(point,polys)
-                f_bm[i,j] = true
-            end
-        end
+
+function template_from_room(r::Room)
+    clear_room(r)
+end
+
+
+function batch_og(tr::Gen.Trace)
+    @>> get_retval(tr) begin
+        collect(Room)
+        map(occupancy_grid)
+        mean
     end
-    bm = bm .| f_bm
-  end
-return bm
 end
 
-
-function coordinates_to_camera(pos,camera_pos,camera_rot)::Array{Float64, 1}
-    # first, put furnitures position into camera coordinates
-    s_x = sin(camera_rot[1])
-    c_x = cos(camera_rot[1])
-    s_y = sin(camera_rot[2])
-    c_y = cos(camera_rot[2])
-    s_z = sin(camera_rot[3])
-    c_z = cos(camera_rot[3])
-    # x,y,z in camera coordinates after translation
-    camera_x= pos[1] - camera_pos[1]
-    camera_y= pos[2] - camera_pos[2]
-    camera_z= pos[3] - camera_pos[3]
-    # apply a rotation of camera with respect to x-axis
-    d_x = c_y*(-s_z*camera_y+c_z*camera_x) + s_y*camera_z
-    d_y = -s_x*(c_y*camera_z-s_y*(-s_z*camera_y+c_z*camera_x))+c_x*(c_z*camera_y+s_z*camera_x)
-    d_z = c_x*(c_y*camera_z-s_y*(-s_z*camera_y+c_z*camera_x))+s_x*(c_z*camera_y+s_z*camera_x)
-    d = [d_x,d_y,d_z]
-    return d
+function softmax(x)
+    x = x .- maximum(x)
+    exs = exp.(x)
+    sxs = sum(exs)
+    n = length(x)
+    iszero(sxs) ? fill(1.0/n, n) : exs ./ sxs
 end
 
-function coordinates_to_pixels(f,coordinates_to_camera_pos,image_size,pixels_size)::Point
-    k_x = pixels_size[1]/image_size[1]
-    k_z = pixels_size[2]/image_size[2]
-    # first convert to image space coordinates
-    i_x = f/coordinates_to_camera_pos[2]*coordinates_to_camera_pos[1]
-    i_y = f
-    i_z = f/coordinates_to_camera_pos[2]*coordinates_to_camera_pos[3]
-    #println([i_x,i_z])
-    # then convert to pixels coordinates
-    p_x = k_x*i_x+pixels_size[1]/2
-    p_z = k_z*i_z+pixels_size[2]/2
-    p = Point(p_x,p_z)
-    return p
-end
+"""
+    read_json(path)
+    opens the file at path, parses as JSON and returns a dictionary
+"""
+function read_json(path)
+    open(path, "r") do f
+        global data
+        data = JSON.parse(f)
+    end
 
-export ModelParams
+    # converting strings to symbols
+    sym_data = Dict()
+    for (k, v) in data
+        sym_data[Symbol(k)] = v
+    end
+
+    return sym_data
+end

@@ -1,14 +1,17 @@
 module FunctionalScenes
 
 using Gen
+using JSON
 using Lazy
 using GenRFS
 using PyCall
 using Statistics
-using LightGraphs
 using MetaGraphs
+using Gen_Compose
+using LightGraphs
 using LinearAlgebra
-using Luxor
+using OptimalTransport
+using OrderedCollections
 
 const torch = PyNULL()
 const functional_scenes = PyNULL()
@@ -26,5 +29,6 @@ include("furniture.jl")
 include("gen.jl")
 include("blender/blender.jl")
 include("paths.jl")
+include("inference/inference.jl")
 
 end # module

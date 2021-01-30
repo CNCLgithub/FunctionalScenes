@@ -35,6 +35,16 @@ function remove(r::Room, f::Furniture)::Room
     return new_r
 end
 
+function clear_room(r::Room)::Room
+    g = pathgraph(r)
+    @>> g begin
+        vertices
+        Base.filter(v -> istype(g,v,:furniture))
+        x -> Furniture(x)
+        remove(r)
+    end
+end
+
 function patch!(r::Room, t::Tile, moves::Vector{Symbol})
     g = pathgraph(r)
     @>> moves begin

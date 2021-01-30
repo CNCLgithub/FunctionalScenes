@@ -58,29 +58,49 @@ function diffuse_og(r::Room, f::Furniture)::Matrix{Float64}
     end
 end
 
-function occupancy_grid(r::Room; decay = -1, sigma = 0)
-    f = p -> occupancy_grid(r, p, decay=decay, sigma=sigma)
-    @>> navigability(r) map(f) mean
+function _wsd(a,b)
+    v = rand(size(a, 2))
+    v = v ./ norm(v)
+    OptimalTransport.pot.wasserstein_1d(a * v, b * v)
 end
+
+function wsd(a::Matrix{Float64}, b::Matrix{Float64}; n::Int64 = 100)::Float64
+    d = 0.
+    for _ in 1:n
+        d += _wsd(a,b)
+    end
+    d / n
+end
+
+
+function occupancy_grid(r::Room; decay = 0.0, sigma = 1.0)::Matrix{Float64}
+    es = exits(r)
+    paths = @>> es map(e -> safe_shortest_path(r,e))
+    f = p -> occupancy_grid(r, p, decay=decay, sigma=sigma)
+    @>> paths map(f) mean
+end
+
 function occupancy_grid(r::Room, p::Vector{Tile};
                         decay = -1, sigma = 1)
+    display(r)
     g = pathgraph(r)
     m = zeros(steps(r))
     mask = zeros(steps(r))
     lp = length(p)
     iszero(lp) && return m
     for (i,v) in enumerate(p)
-        isfloor(g, v) || break
+        isfloor(g, v) || (println("hit something"); break)
         m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
         # m[v] = exp(decay * (i - 1))
         # m[v] = exp(decay * (lp - i))
     end
     gf = Kernel.gaussian(sigma)
     m = imfilter(m, gf, "symmetric")
-    floor = @>> g vertices filter(v -> isfloor(g, v)) collect
+    floor = @>> g vertices Base.filter(v -> isfloor(g, v)) collect
     mask[floor] .= 1
     og = m .* mask
-    og ./ sum(og)
+    sog = sum(og)
+    iszero(sog) ? og : og ./ sog
 end
 
 function navigability(r::Room)
