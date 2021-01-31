@@ -383,6 +383,9 @@ c3_ogd <- dprime_by_trial %>%
 c3_dprime <- dprime_by_trial %>%
   with(lm(d.prime ~ c3_3d))
 
+c3_dprime %>%
+  summary()
+
 dprime_by_trial$res_ogd = c3_ogd$residuals
 dprime_by_trial$res_d.prime = c3_dprime$residuals
 
@@ -435,7 +438,7 @@ dprime_by_trial %>%
 dprime_by_trial %>% 
   mutate(zc3_3d = scale(c3_3d)) %>%
   filter(zc3_3d < 0.0) %>%
-  with(lm(d.prime ~ zogd)) %>%
+  with(lm(d.prime ~ zc3_3d)) %>%
   summary()
 
 dprime_by_trial %>% 

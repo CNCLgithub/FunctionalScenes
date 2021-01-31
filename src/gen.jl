@@ -8,7 +8,7 @@ flip_map = Gen.Map(flip)
 
 @gen (static) function stability(ab::Tuple)
     bounds, probs = ab
-    bw = @trace(piecewise_uniform(bounds, probs), :sflip)
+    bw = @trace(uniform(bounds, probs), :sflip)
     return bw
 end
 
@@ -45,6 +45,7 @@ room_map = Gen.Map(room_from_state)
     ps = fill(params, params.instances)
 
     room_instances = @trace(room_map(gs, ps), :instances)
+    result = (global_state, room_instances)
 
     # mean and variance of observation
     viz = graphics_from_instances(room_instances, params)
@@ -55,7 +56,7 @@ room_map = Gen.Map(room_from_state)
     # compute in sensitivity for effeciency
     # affordances = map(afforandace, room_instances, ps)
 
-    return room_instances
+    return result
 end
 
 

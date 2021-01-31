@@ -12,19 +12,24 @@ function average_path_length(g, s, e; n = 5)
     isnan(l) ? Inf : l
 end
 
-
-function safe_shortest_path(r::Room, e::Tile)
+function safe_shortest_path(r::Room, start::Tile, stop::Tile)
     dx, dy = steps(r)
     g = pathgraph(r)
-    ent = entrance(r) |> first
     _, coords = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
-    ec = coords(Tuple(cis[e]))
-    vs = connected(g, ent) |> collect |> sort
+    ec = coords(Tuple(cis[stop]))
+    vs = connected(g, start) |> collect |> sort
     vcis = Tuple.(cis[vs])
     vi = @>> vcis map(v -> norm(ec .- coords(v))) argmin
-    ds = desopo_pape_shortest_paths(g, ent)
+    ds = desopo_pape_shortest_paths(g, start)
     enumerate_paths(ds, vs[vi])
+end
+
+function safe_shortest_path(r::Room, e::Tile)
+    ent = entrance(r) |> first
+    forward = safe_shortest_path(r, ent, e)
+    backward = safe_shortest_path(r, e, ent)
+    union(forward, backward)
 end
 
 function total_length(g::PathGraph)
@@ -82,7 +87,6 @@ end
 
 function occupancy_grid(r::Room, p::Vector{Tile};
                         decay = -1, sigma = 1)
-    display(r)
     g = pathgraph(r)
     m = zeros(steps(r))
     mask = zeros(steps(r))

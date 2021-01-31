@@ -1,0 +1,5 @@
+{
+    "samples" : 100,
+    "smoothness" : 0.5,
+    "explore" : 0.50
+}

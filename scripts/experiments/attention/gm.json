@@ -1,0 +1,5 @@
+{
+    "instances" : 5,
+    "feature_weights" : "/datasets/alexnet_places365.pth.tar",
+    "base_sigma" : 10.0
+}
