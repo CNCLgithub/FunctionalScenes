@@ -26,10 +26,10 @@ export ModelParams
     tracker_size::Int64 = prod(dims)
 
     # tracker prior
-    active_bias::Float64 = 0.1
+    active_bias::Float64 = 0.2
     inactive_mu::Float64 = 0.5
     tile_weights::Matrix{Float64} = biased_tile_prior(gt, active_bias)
-    tile_window::Float64 = 0.04
+    tile_window::Float64 = 0.05
     bounds::Vector{Float64} = [0.01, 0.02, 0.49, 0.51, 0.98, 0.99]
     active::Vector{Float64} = [0.8, 0.0, 0.0, 0.0, 0.2]
     inactive::Vector{Float64} = [0.0, 0.0, 1.0, 0.0, 0.0]
@@ -79,11 +79,15 @@ function load(::Type{ModelParams}, path::String; kwargs...)
     ModelParams(;read_json(path)..., kwargs...)
 end
 
-function biased_tile_prior(gt::Room, bias::Float64)
+function biased_tile_prior(gt::Room, sigma::Float64)
     g = pathgraph(gt)
-    grid = fill(bias, steps(gt))
+    grid = zeros(steps(gt))
     vs = @>> g vertices Base.filter(v -> istype(g, v, :furniture))
-    grid[vs] .= (1.0 - bias)
+    grid[vs] .= 1.0
+    gf = Kernel.gaussian(sigma)
+    grid = imfilter(grid, gf, "symmetric")
+    vs = @>> g vertices Base.filter(v -> istype(g, v, :wall))
+    grid[vs] .= 0.0
     return grid
 end
 
@@ -143,6 +147,21 @@ function state_to_room(params::ModelParams, vs::Vector{Int64})
         result[i] = params.linear_ref[cart]
     end
     return result
+end
+
+function room_to_tracker(params::ModelParams, fs)
+    fs = collect(Int64, fs)
+    ts = Vector{Int64}(undef, size(fs)...)
+    full_coords = CartesianIndices(steps(params.template))
+    tracker_linear = LinearIndices(size(params.tracker_ref))
+    for (i,j) in enumerate(fs)
+        full_cart = full_coords[j]
+        xy = Tuple(full_cart) .- params.thickness
+        xy = xy .- (params.dims .* params.offset)
+        xy = Int64.(ceil.(xy ./ params.dims))
+        ts[i] = tracker_linear[xy...]
+    end
+    return ts
 end
 
 function project_state_weights(params::ModelParams, state)
@@ -299,7 +318,7 @@ function batch_og(tr::Gen.Trace)
     @>> get_retval(tr) begin
         last
         collect(Room)
-        map(x -> occupancy_grid(x, sigma = 0.1))
+        map(x -> occupancy_grid(x, sigma = 1.0))
         mean
     end
 end

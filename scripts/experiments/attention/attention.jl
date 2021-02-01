@@ -2,7 +2,9 @@ using CSV
 using JLD2
 using FileIO
 using ArgParse
+using DataFrames
 using FunctionalScenes
+using FunctionalScenes: shift_furniture
 
 experiment = "2e_1p_30s_matchedc3"
 
@@ -28,20 +30,21 @@ function parse_commandline(vs)
         help = "Whether to render masks"
         action = :store_true
 
+        "--move", "-m"
+        help = "Which scene to run"
+        arg_type = Symbol
+        required = false
+
+        "--furniture", "-f"
+        help = "Which scene to run"
+        arg_type = Int64
+        required = false
+
         "scene"
         help = "Which scene to run"
         arg_type = Int64
         required = true
 
-        "--move"
-        help = "Which scene to run"
-        arg_type = Symbol
-        required = false
-
-        "--furniture"
-        help = "Which scene to run"
-        arg_type = Symbol
-        required = false
 
         "chain"
         help = "The number of chains to run"
@@ -103,6 +106,9 @@ function main(cmd)
         room = load_base_scene(base_p)
     else
         room = load_moved_scene(base_p, args)
+        move = args["move"]
+        furn = args["furniture"]
+        path = "$(path)_$(furniture)_$(move)"
     end
 
     # tracker_ps = zeros(12)
@@ -151,7 +157,20 @@ function main(cmd)
 end
 
 
+df = DataFrame(CSV.File("/scenes/$(experiment).csv"))
 for i = 1:30
     cmd = ["$(i)", "1", "A"]
     main(cmd);
+    for r in eachrow(df[df.id  .== i, :])
+        cmd = [
+            "-f=$(r.furniture)",
+            "-m=$(r.move)",
+            "$(i)", "1", "A",
+               # ("furniture", "$(r.furniture)"),
+               # ("move", "$(r.move)"),
+        ]
+
+        display(cmd)
+        main(cmd);
+    end
 end

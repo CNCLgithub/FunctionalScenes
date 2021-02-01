@@ -93,7 +93,16 @@ function occupancy_grid(r::Room, p::Vector{Tile};
     lp = length(p)
     iszero(lp) && return m
     for (i,v) in enumerate(p)
-        isfloor(g, v) || (println("hit something"); break)
+        if !isfloor(g, v)
+            println("$(v) => $(get_prop(g, v, :type))")
+            ns = connected(g, v)
+            new_r = clear_room(r)
+            new_r = add(new_r, ns)
+            display(new_r)
+
+            @>> ns collect filter(v -> istype(g, v, :floor)) println
+            error("invalid path")
+        end
         m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
         # m[v] = exp(decay * (i - 1))
         # m[v] = exp(decay * (lp - i))

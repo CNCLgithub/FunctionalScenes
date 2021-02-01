@@ -13,11 +13,18 @@ function run_inference(query::StaticQuery,
                                      path = path)
 end
 
+function ex_choicemap(tr::Gen.Trace)
+    s = Gen.complement(select(:viz))
+    choices = get_choices(tr)
+    get_selected(choices, s)
+end
 
 function query_from_params(room::Room, path::String; kwargs...)
 
     # TODO Extract attention stats
-    _lm = Dict{Symbol, Any}()
+    _lm = Dict{Symbol, Any}(
+        :trace => ex_choicemap
+    )
 
     latent_map = LatentMap(_lm)
 

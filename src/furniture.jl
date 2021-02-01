@@ -58,24 +58,40 @@ function patch!(r::Room, t::Tile, moves::Vector{Symbol})
     return nothing
 end
 
+
 function shift_furniture(r::Room, f::Furniture, move::Int64)
     shift_furniture(r, f, move_map[move])
 end
 
 function shift_furniture(r::Room, f::Furniture, move::Symbol)
     f = sort(collect(f), rev = in(move, [:down, :right]))
+    fs = furniture(r)
+
+    fid = findfirst(x -> !isempty(intersect(f, x)), fs)
+    return shift_furniture(r, fid, move)
+    # add shifted tiles to room
+    # new_r = add(r, shifted)
+    # new_g = pathgraph(new_r)
+    # # clear newly empty tiles
+    # @>> setdiff(f, shifted) foreach(v -> set_prop!(new_g, v, :type, :floor))
+    # # patch edges to tiles that are now empty
+    # spots = setdiff(move_map, [move])
+    # foreach(t -> patch!(new_r, t, spots), f)
+    # return new_r
+end
+
+
+function shift_furniture(r::Room, fid::Int64, move::Symbol)
+    fs = furniture(r)
+    f = fs[fid] |> collect
     # shift tiles
     shifted = @>> f map(v -> shift_tile(r, v, move)) collect(Tile) Set
-    # add shifted tiles to room
-    new_r = add(r, shifted)
-    new_g = pathgraph(new_r)
-    # clear newly empty tiles
-    @>> setdiff(f, shifted) foreach(v -> set_prop!(new_g, v, :type, :floor))
-    # patch edges to tiles that are now empty
-    spots = setdiff(move_map, [move])
-    foreach(t -> patch!(new_r, t, spots), f)
-    return new_r
+    fs[fid] = shifted
+
+    new_r = Room(r.steps, r.bounds, r.entrance, r.exits)
+    Base.reduce(add, fs; init = new_r)
 end
+
 
 function valid_spaces(r::Room)
     g = pathgraph(r)
