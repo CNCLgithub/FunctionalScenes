@@ -1,5 +1,6 @@
 {
-    "instances" : 10,
+    "tile_window" : 0.1,
+    "instances" : 1,
     "feature_weights" : "/datasets/alexnet_places365.pth.tar",
     "base_sigma" : 2.0,
     "active_bias" : 2.5

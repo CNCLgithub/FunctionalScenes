@@ -41,7 +41,8 @@ function Gen_Compose.initialize_procedure(proc::AttentionMH,
                            query.args,
                            query.observations)
     n = length(proc.nodes)
-    sensitivities = fill(-Inf, n)
+    # sensitivities = fill(-Inf, n)
+    sensitivities = zeros(n)
     sensitivities = LittleDict(proc.nodes,
                                sensitivities)
     weights = fill(1.0/n, n)
@@ -60,27 +61,18 @@ function Gen_Compose.mc_step!(state::AMHTrace,
 
     prev_objective = state.current_objective
     # draw proposal
-    (new_tr, ll, addr) = ancestral_kernel_move(proc, state)
-    # compare objectives and update sensitivity record
-    new_objective = proc.objective(new_tr)
-    dist = proc.distance(prev_objective, new_objective)
-    update_sensitivity!(state, addr, ll, dist)
+    addr = ancestral_kernel_move!(proc, state)
     update_weights!(state, proc)
 
-    accepted = log(rand()) < ll
-    if accepted
-        state.current_trace = new_tr
-        state.current_objective = new_objective
-    end
     # viz_render(state.current_trace)
-    # viz_compute_weights(state.weights)
+    viz_compute_weights(state.weights)
     viz_sensitivity(state.current_trace, state.sensitivities)
     viz_global_state(state.current_trace)
     viz_ocg(state.current_objective)
     println("current score $(get_score(state.current_trace))")
     # return packaged aux_state
     aux_state = Dict(
-        :objective => new_objective,
+        :objective => state.current_objective,
         :weights => state.weights,
         :sensitivities => state.sensitivities,
         :addr => addr)
@@ -111,35 +103,50 @@ function update_weights!(state::AMHTrace, proc::AttentionMH)
     return nothing
 end
 
+function sweep(proc::AttentionMH,
+               state::AMHTrace)
 
-function ancestral_kernel_move(proc::AttentionMH,
+end
+
+function ancestral_kernel_move!(proc::AttentionMH,
                                state::AMHTrace)
 
+
     trace = state.current_trace
+    prev_objective = state.current_objective
     weights = @>> values(state.weights) collect(Float64)
     # select addr to rejuv
     # chance to ingnore weights
     n = length(weights)
-    unvisited = findfirst(state.counters .< proc.burnin)
+    unvisited = findfirst(state.counters .== 0)
     if !isnothing(unvisited)
         idx = unvisited
-        # _ws = zeros(size(weights))
-        # _ws[unvisited] .= 1.0 / length(unvisited)
-        # weights = _ws
     else
-        # state.counters = zeros(n)
         if bernoulli(proc.explore)
-            weights = 1.0 .- weights
-            weights = softmax(weights)
+            weights = fill(1.0/n, n)
         end
         idx = categorical(weights)
     end
     state.counters[idx] += 1
     addr = proc.nodes[idx]
+    println(addr)
     selection = proc.selections[addr]
 
+    current_trace = trace
+    distances = Vector{Float64}(undef, proc.burnin)
+    lls = Vector{Float64}(undef, proc.burnin)
+    for i = 1:proc.burnin
+        (new_tr, lls[i], _) = regenerate(trace, selection)
+        new_objective = proc.objective(new_tr)
+        distances[i] = proc.distance(prev_objective, new_objective)
+        accepted = log(rand()) < lls[i]
+        current_trace = accepted ? new_tr : current_trace
+    end
 
-    println(addr)
-    (new_tr, ll, _) = regenerate(trace, selection)
-    (new_tr, ll, addr)
+    lws = exp.(lls .- logsumexp(lls))
+    exp_dist = sum(distances .* lws)
+    state.sensitivities[addr] = exp_dist
+    state.current_trace = current_trace
+    state.current_objective = proc.objective(current_trace)
+    return addr
 end

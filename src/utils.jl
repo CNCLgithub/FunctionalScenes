@@ -90,7 +90,7 @@ function biased_tile_prior(gt::Room, sigma::Float64)
     grid[vs] .= 0.0
 
     max_g = maximum(grid)
-    grid = grid ./ max_g .* 0.75
+    grid = grid ./ max_g .* 0.8
 
     _grid = reverse(grid, dims = 1)
     println(heatmap(_grid, border = :none,
@@ -215,13 +215,14 @@ function viz_sensitivity(trace, weights)
     # weights = exp.(weights)
     grid = reshape(weights, size(params.tracker_ref))
     display(grid)
-    # grid = reverse(grid, dims = 1)
-    # println(heatmap(grid,
-    #                 title = "sensitivity",
-    #                 border = :none,
-    #                 # colorbar_border = :none,
-    #                 colormap = :inferno
-    #                 ))
+    grid = reverse(grid, dims = 1)
+    grid = repeat(grid, inner = (3,3))
+    println(heatmap(grid,
+                    title = "sensitivity",
+                    border = :none,
+                    # colorbar_border = :none,
+                    colormap = :inferno
+                    ))
 end
 
 function viz_barplot(weights, title)

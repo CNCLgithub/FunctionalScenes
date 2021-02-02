@@ -360,8 +360,8 @@ dprime_by_trial %>%
 
 dprime_by_trial %>%
   mutate(zc3_3d = scale(c3_3d)) %>%
-  # filter(zc3_3d < 0.0) %>%
-  filter(c3_3d < 0.97) %>%
+  filter(zc3_3d < 0.0) %>%
+  # filter(c3_3d < 0.97) %>%
   with(lm(d.prime ~ base_sense)) %>%
   summary()
 

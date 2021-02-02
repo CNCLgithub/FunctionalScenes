@@ -87,9 +87,12 @@ function room_sensitivity(chain, params, fs::Furniture)
     n = "$(steps)"
     weights = chain["aux_state"][:sensitivities]
     weights = @>> weights values collect(Float64)
-    top_trackers = sortperm(weights, rev = true)[1:5]
+    weights = max.(weights, 0.)
+    weights = (weights .- mean(weights)) ./ std(weights)
+    display(reshape(weights, size(params.tracker_ref)))
+    top_trackers = sortperm(weights, rev = true)[1:6]
     tracker_ids = room_to_tracker(params, fs)
-    (top_trackers, mean(weights[tracker_ids]))
+    (top_trackers, weights)
     # mean(zs[tracker_ids])
 end
 
@@ -145,37 +148,41 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     ogd = compare_og(base, room)
     display(ogd)
 
-    ab, ba = 0,0
+    # ab, ba = 0,0
     # base_query = query_from_params(base,
     #                                "/project/scripts/experiments/attention/gm.json";
     #                                img_size = (240, 360),
     #                                tile_window = 2.0, # must be high enough due to gt prior
     #                                active_bias = 10.0, # must be high enough due to gt prior
-    #                                base_sigma = 10.0
+    #                                base_sigma = 2.0
     #                           )
+    move_query = query_from_params(room,
+                                   "/project/scripts/experiments/attention/gm.json";
+                                    dims = (3,3),
+                                    offset = (0, 4),
+                                   img_size = (240, 360),
+                                   tile_window = 2.0, # must be high enough due to gt prior
+                                   active_bias = 10.0, # must be high enough due to gt prior
+                                   base_sigma = 2.0,
+                                   default_tracker_p = 1.0
+                              )
 
-    # params = first(base_query.args)
-    # base_chain = load(base_chain, "50")
-    # top_base, base_weights = room_sensitivity(base_chain, params,f)
+    params = first(move_query.args)
+    base_chain = load(base_chain, "96")
+    top_base, base_weights = room_sensitivity(base_chain, params,f)
 
 
-    # move_chain = load(move_chain, "50")
-    # shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
-    # top_move, move_weights = room_sensitivity(move_chain, params,
-    #                               shifted)
+    move_chain = load(move_chain, "96")
+    shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
+    top_move, move_weights = room_sensitivity(move_chain, params,
+                                  shifted)
 
-    # move_query = query_from_params(room,
-    #                                "/project/scripts/experiments/attention/gm.json";
-    #                                img_size = (240, 360),
-    #                                tile_window = 2.0, # must be high enough due to gt prior
-    #                                active_bias = 10.0, # must be high enough due to gt prior
-    #                                base_sigma = 10.0
-    #                           )
-    # ab = cross_predict(base_query,
-    #                    base_chain["estimates"][:trace],
-    #                    move_chain["estimates"][:trace],
-    #                    top_base)
-
+    ab = cross_predict(move_query,
+                       base_chain["estimates"][:trace],
+                       move_chain["estimates"][:trace],
+                       top_move)
+    # ba = norm(move_weights[top_move] - base_weights[top_move])
+    ba = norm(move_weights - base_weights)
     # ba = cross_predict(move_query,
     #                    move_chain["estimates"][:trace],
     #                    base_chain["estimates"][:trace],
@@ -198,6 +205,7 @@ function main(exp::String)
                        base_sense = Float64[],
                        move_sense = Float64[])
 
+    df = df[df.id .<= 2, :]
     for r in eachrow(df)
         base = "/renders/$(exp)/$(r.id).png"
         img = "/renders/$(exp)/$(r.id)_$(r.furniture)_$(r.move).png"
@@ -213,6 +221,7 @@ function main(exp::String)
 
         push!(new_df, (r.id, r.furniture, r.move, pixeld, result...))
     end
+    display(new_df)
     isdir("/experiments/$(exp)") || mkdir("/experiments/$(exp)")
     CSV.write("/experiments/$(exp)/covariates.csv", new_df)
 end

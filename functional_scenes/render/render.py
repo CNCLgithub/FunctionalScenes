@@ -54,11 +54,11 @@ def render_scene_batch(scenes, graphics:AbstractGraphics):
     mesh = join_meshes_as_batch([scene_to_mesh(x, device) for x
                                  in scenes]).to(device)
     end_ts = time.time()
-    print('render_scene_batch mesh {}'.format(end_ts - beg_ts))
+    # print('render_scene_batch mesh {}'.format(end_ts - beg_ts))
     beg_ts = end_ts
     result = graphics.render(mesh)
     end_ts = time.time()
-    print('render_scene_batch render {}'.format(end_ts - beg_ts))
+    # print('render_scene_batch render {}'.format(end_ts - beg_ts))
     # result = result.cpu().numpy()
     # return (result[:n] * 255).astype(np.uint8)
     return result[:n, ..., :3].permute(0, 3, 1, 2)
