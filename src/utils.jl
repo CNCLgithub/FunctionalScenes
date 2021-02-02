@@ -88,6 +88,15 @@ function biased_tile_prior(gt::Room, sigma::Float64)
     grid = imfilter(grid, gf, "symmetric")
     vs = @>> g vertices Base.filter(v -> istype(g, v, :wall))
     grid[vs] .= 0.0
+
+    max_g = maximum(grid)
+    grid = grid ./ max_g .* 0.75
+
+    _grid = reverse(grid, dims = 1)
+    println(heatmap(_grid, border = :none,
+                    title = "geometry prior",
+                    colorbar_border = :none,
+                    colormap = :inferno))
     return grid
 end
 
@@ -186,6 +195,7 @@ end
 
 
 function viz_ocg(ocg)
+    ocg = mean(ocg)
     ocg = reverse(ocg, dims = 1)
     println(heatmap(ocg,
                     title = "occupancy grid",
@@ -253,6 +263,9 @@ end
 # or pass average image to alexnet
 function graphics_from_instances(instances, params)
     g = params.graphics
+    if length(instances) > 5
+        instances = instances[1:5]
+    end
     instances = map(r -> translate(r, false, cubes=true), instances)
     batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
     features = @pycall functional_scenes.nn_features.single_feature(params.model,
@@ -318,9 +331,13 @@ function batch_og(tr::Gen.Trace)
     @>> get_retval(tr) begin
         last
         collect(Room)
-        map(x -> occupancy_grid(x, sigma = 1.0))
+        map(x -> occupancy_grid(x, sigma = 0.7, decay = 0.0001))
         mean
     end
+end
+
+function batch_compare_og(og_a, og_b)
+    map(wsd, og_a, og_b) |> sum
 end
 
 function softmax(x)

@@ -68,14 +68,17 @@ function lv_distance(a, b)
 end
 
 function compare_og(a,b)
-    # println("og a")
-    # display(a)
-    og_a = occupancy_grid(a, decay = 0.0, sigma = 1.0)
+    println("og a")
+    display(a)
+    og_a = occupancy_grid(a, decay = 0.0001, sigma = 0.7)
     # viz_ocg(og_a)
-    # println("og b")
-    # display(b)
-    og_b = occupancy_grid(b, decay = 0.0, sigma = 1.0)
-    wsd(og_a, og_b)
+    println("og b")
+    display(b)
+    og_b = occupancy_grid(b, decay = 0.0001, sigma = 0.7)
+    # viz_ocg(og_b)
+    # wsd(og_a, og_b)
+    # norm(og_a .- og_b)
+    map(wsd, og_a, og_b) |> sum
 end
 
 
@@ -84,27 +87,12 @@ function room_sensitivity(chain, params, fs::Furniture)
     n = "$(steps)"
     weights = chain["aux_state"][:sensitivities]
     weights = @>> weights values collect(Float64)
-    top_trackers = sortperm(weights, rev = true)[1:3]
+    top_trackers = sortperm(weights, rev = true)[1:5]
     tracker_ids = room_to_tracker(params, fs)
     (top_trackers, mean(weights[tracker_ids]))
     # mean(zs[tracker_ids])
 end
 
-function set_selected!(dest::ChoiceMap, selection::Selection, src::ChoiceMap)
-    for (key, value) in get_values_shallow(src)
-        if (key in selection)
-            # println("$(key) : $(dest[key]) => $(value)")
-            dest[key] = value
-        end
-    end
-    for (key, src_sm) in get_submaps_shallow(src)
-        subselection = selection[key]
-        dest_sm = get_submap(dest, key)
-        set_selected!(dest_sm, subselection, src_sm)
-        # set_submap!(dest, key, set_selected!(dest_sm, subselection, src_sm))
-    end
-    return nothing
-end
 
 function cross_predict(query, choices_a, choices_b, trackers)
     params = first(query.args)
@@ -155,45 +143,47 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     lvd = sum(map(lv_distance, paths_a, paths_b))
 
     ogd = compare_og(base, room)
+    display(ogd)
 
-    base_query = query_from_params(base,
-                                   "/project/scripts/experiments/attention/gm.json";
-                                   img_size = (240, 360),
-                                   tile_window = 2.0, # must be high enough due to gt prior
-                                   active_bias = 10.0, # must be high enough due to gt prior
-                                   base_sigma = 10.0
-                              )
+    ab, ba = 0,0
+    # base_query = query_from_params(base,
+    #                                "/project/scripts/experiments/attention/gm.json";
+    #                                img_size = (240, 360),
+    #                                tile_window = 2.0, # must be high enough due to gt prior
+    #                                active_bias = 10.0, # must be high enough due to gt prior
+    #                                base_sigma = 10.0
+    #                           )
 
-    params = first(base_query.args)
-    base_chain = load(base_chain, "50")
-    top_base, base_weights = room_sensitivity(base_chain, params,f)
+    # params = first(base_query.args)
+    # base_chain = load(base_chain, "50")
+    # top_base, base_weights = room_sensitivity(base_chain, params,f)
 
 
-    move_chain = load(move_chain, "50")
-    shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
-    top_move, move_weights = room_sensitivity(move_chain, params,
-                                  shifted)
+    # move_chain = load(move_chain, "50")
+    # shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
+    # top_move, move_weights = room_sensitivity(move_chain, params,
+    #                               shifted)
 
-    move_query = query_from_params(room,
-                                   "/project/scripts/experiments/attention/gm.json";
-                                   img_size = (240, 360),
-                                   tile_window = 2.0, # must be high enough due to gt prior
-                                   active_bias = 10.0, # must be high enough due to gt prior
-                                   base_sigma = 10.0
-                              )
-    ab = cross_predict(base_query,
-                       base_chain["estimates"][:trace],
-                       move_chain["estimates"][:trace],
-                       top_base)
+    # move_query = query_from_params(room,
+    #                                "/project/scripts/experiments/attention/gm.json";
+    #                                img_size = (240, 360),
+    #                                tile_window = 2.0, # must be high enough due to gt prior
+    #                                active_bias = 10.0, # must be high enough due to gt prior
+    #                                base_sigma = 10.0
+    #                           )
+    # ab = cross_predict(base_query,
+    #                    base_chain["estimates"][:trace],
+    #                    move_chain["estimates"][:trace],
+    #                    top_base)
 
-    ba = cross_predict(move_query,
-                       move_chain["estimates"][:trace],
-                       base_chain["estimates"][:trace],
-                       top_move)
+    # ba = cross_predict(move_query,
+    #                    move_chain["estimates"][:trace],
+    #                    base_chain["estimates"][:trace],
+    #                    top_move)
 
-    # @assert !isinf(ab)
-    # @assert !isinf(ba)
-    display((ab, ba))
+    # # @assert !isinf(ab)
+    # # @assert !isinf(ba)
+    # display((ab, ba))
     (lvd, ogd, ab, ba)
     # (lvd, ogd, base_weights, move_weights)
 end

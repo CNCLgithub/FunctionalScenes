@@ -26,12 +26,15 @@ isfloor(g,v) = istype(g,v,:floor)
 iswall(g,v) = (length ∘ neighbors)(g, v) < 4
 matched_type(g, e::Edge) = get_prop(g, src(e), :type) ==
     get_prop(g, dst(e), :type)
+wall_edge(g, e::Edge) = (get_prop(g, src(e), :type) == :wall) &&
+    (get_prop(g, dst(e), :type) == :wall)
+
 
 """
 Builds a room given ...
 """
 function Room(steps::Tuple{T,T}, bounds::Tuple{G,G},
-              ent::Vector{T}, exits::Vector{T}) where {T<:Int, G<:Real}
+              ent::Vector{T}, exs::Vector{T}) where {T<:Int, G<:Real}
     # initialize grid
     g = PathGraph(grid(steps))
 
@@ -42,13 +45,13 @@ function Room(steps::Tuple{T,T}, bounds::Tuple{G,G},
     # set entrances and exits
     # these are technically floors but are along the border
     @>> ent foreach(v -> set_prop!(g, v, :type, :floor))
-    @>> exits foreach(v -> set_prop!(g, v, :type, :floor))
+    @>> exs foreach(v -> set_prop!(g, v, :type, :floor))
 
     # walls and non-walls cannot be connected
     togo = @>> g edges collect filter(e -> !matched_type(g, e))
     foreach(e -> rem_edge!(g, e), togo)
 
-    return Room(steps, bounds, ent, exits, g)
+    return Room(steps, bounds, ent, exs, g)
 end
 
 

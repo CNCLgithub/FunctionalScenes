@@ -19,7 +19,8 @@ function render_base(bases::Vector{Int64}, name::String)
         base = load(base_p)["r"]
         p = "$(out)/$(id)"
         display(base)
-        render(base, p, mode = "full", threads = 4)
+        # render(base, p, mode = "none", threads = 4, navigation = true)
+        render(base, p, mode = "none", threads = 4, navigation = false)
     end
 end
 
@@ -33,7 +34,8 @@ function render_stims(df::DataFrame, name::String)
         room = shift_furniture(base,
                                furniture(base)[r.furniture],
                                Symbol(r.move))
-        render(room, p, mode = "full", threads = 4)
+        # render(room, p, mode = "none", threads = 4, navigation = true)
+        render(room, p, mode = "none", threads = 4, navigation = false)
     end
 end
 
@@ -74,10 +76,13 @@ function main()
     src = "/scenes/$(name)"
     df = DataFrame(CSV.File("$(src).csv"))
     seeds = unique(df.id)
-    render_torch(seeds, name)
-    render_torch_stims(df, name)
-    # render_base(seeds, name)
-    # render_stims(df, name)
+    # render_torch(seeds, name)
+    # render_torch_stims(df, name)
+
+    seeds = [1]
+    df = df[df.id .== 1, :]
+    render_base(seeds, name)
+    render_stims(df, name)
     return nothing
 end
 

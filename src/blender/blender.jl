@@ -120,8 +120,7 @@ end
 function plot_path(r::Room)
     space, transform = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
-    paths = navigability(r)
-    # vs = @>> paths lazymap(p -> lazymap(src, p)) flatten collect
+    paths = @>> r exits map(x -> safe_shortest_path(r, x))
     vs = vcat(paths...)
     vs = @>> Tuple.(cis[vs]) lazymap(transform)
     @>> vs lazymap(x -> spot(x, space)) collect

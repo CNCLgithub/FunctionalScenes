@@ -28,8 +28,9 @@ end
 function safe_shortest_path(r::Room, e::Tile)
     ent = entrance(r) |> first
     forward = safe_shortest_path(r, ent, e)
-    backward = safe_shortest_path(r, e, ent)
-    union(forward, backward)
+    # backward = safe_shortest_path(r, e, ent)
+    # union(forward, backward)
+    forward
 end
 
 function total_length(g::PathGraph)
@@ -69,7 +70,7 @@ function _wsd(a,b)
     OptimalTransport.pot.wasserstein_1d(a * v, b * v)
 end
 
-function wsd(a::Matrix{Float64}, b::Matrix{Float64}; n::Int64 = 100)::Float64
+function wsd(a::Matrix{Float64}, b::Matrix{Float64}; n::Int64 = 500)::Float64
     d = 0.
     for _ in 1:n
         d += _wsd(a,b)
@@ -78,11 +79,11 @@ function wsd(a::Matrix{Float64}, b::Matrix{Float64}; n::Int64 = 100)::Float64
 end
 
 
-function occupancy_grid(r::Room; decay = 0.0, sigma = 1.0)::Matrix{Float64}
+function occupancy_grid(r::Room; decay = 0.0, sigma = 1.0) # ::Matrix{Float64}
     es = exits(r)
     paths = @>> es map(e -> safe_shortest_path(r,e))
     f = p -> occupancy_grid(r, p, decay=decay, sigma=sigma)
-    @>> paths map(f) mean
+    @>> paths map(f)
 end
 
 function occupancy_grid(r::Room, p::Vector{Tile};
@@ -103,17 +104,17 @@ function occupancy_grid(r::Room, p::Vector{Tile};
             @>> ns collect filter(v -> istype(g, v, :floor)) println
             error("invalid path")
         end
-        m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
-        # m[v] = exp(decay * (i - 1))
+        # m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
+        m[v] = exp(decay * (i - 1))
         # m[v] = exp(decay * (lp - i))
     end
     gf = Kernel.gaussian(sigma)
     m = imfilter(m, gf, "symmetric")
     floor = @>> g vertices Base.filter(v -> isfloor(g, v)) collect
     mask[floor] .= 1
-    og = m .* mask
-    sog = sum(og)
-    iszero(sog) ? og : og ./ sog
+    mm = maximum(m)
+    mm = iszero(mm) ? m : m ./ mm
+    m .* mask
 end
 
 function navigability(r::Room)

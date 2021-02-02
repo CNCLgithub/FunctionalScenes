@@ -88,7 +88,35 @@ function shift_furniture(r::Room, fid::Int64, move::Symbol)
     shifted = @>> f map(v -> shift_tile(r, v, move)) collect(Tile) Set
     fs[fid] = shifted
 
+    source = pathgraph(r)
+
     new_r = Room(r.steps, r.bounds, r.entrance, r.exits)
+    g = pathgraph(new_r)
+
+    @>> source begin
+        vertices
+        collect
+        Base.filter(v -> isfloor(source, v))
+        foreach(v -> set_prop!(g, v, :type, :floor))
+    end
+    wall_tiles = @>> source begin
+        vertices
+        collect
+        Base.filter(v -> get_prop(source, v, :type) == :wall)
+    end
+    foreach(v -> set_prop!(g, v, :type, :wall), wall_tiles)
+    @>> wall_tiles begin
+        foreach(v -> @>> neighbors(g, v) collect map(n -> rem_edge!(g, Edge(v, n))))
+    end
+
+    @>> source begin
+        edges
+        collect
+        Base.filter(e -> wall_edge(source, e))
+        foreach(e -> add_edge!(g, e))
+    end
+
+    # add furniture
     Base.reduce(add, fs; init = new_r)
 end
 

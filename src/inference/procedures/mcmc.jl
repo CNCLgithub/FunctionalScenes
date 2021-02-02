@@ -7,11 +7,12 @@ export AttentionMH
     samples::Int64 = 10
     smoothness::Float64 = 1.0
     explore::Float64 = 0.30
+    burnin::Int64 = 10
 
     # task objective
     objective::Function = batch_og
     # destance metrics for two task objectives
-    distance::Function = wsd
+    distance::Function = batch_compare_og
 
     # adress schema
     nodes::Vector{Symbol}
@@ -29,7 +30,7 @@ end
 mutable struct AMHTrace <: MCMCTrace
     current_trace::Gen.Trace
     current_objective
-    visited::Vector{Bool}
+    counters::Vector{Int64}
     sensitivities::LittleDict{Symbol, Float64}
     weights::LittleDict{Symbol, Float64}
 end
@@ -48,7 +49,7 @@ function Gen_Compose.initialize_procedure(proc::AttentionMH,
                          weights)
     AMHTrace(trace,
              proc.objective(trace),
-             fill(false, n),
+             zeros(n),
              sensitivities,
              weights)
 end
@@ -88,7 +89,7 @@ end
 function update_sensitivity!(state::AMHTrace, addr, ll::Float64, dist::Float64)
     v = state.sensitivities[addr]
     println(v)
-    v = log(exp(log(dist) + clamp(ll, -Inf, 0.)) + exp(v))
+    v = ll >= 0.0  ? dist : exp(ll)*dist + (1 - exp(ll))*v
     # v = log(exp(log(dist) + ll) + exp(v))
     # v = log(dist + exp(v))
     # v -= log(2)
@@ -101,10 +102,10 @@ function update_weights!(state::AMHTrace, proc::AttentionMH)
     ks = Tuple(proc.nodes)
     new_weights = @>> values(state.sensitivities) collect(Float64)
     infs = findall(isinf, new_weights)
-    # if length(infs) != length(new_weights)
-    #     min_s = @>> new_weights Base.filter((!isinf)) minimum
-    #     new_weights[infs] .= min_s
-    # end
+    if length(infs) != length(new_weights)
+        min_s = @>> new_weights Base.filter((!isinf)) minimum
+        new_weights[infs] .= min_s
+    end
     new_weights = softmax(proc.smoothness .* new_weights)
     state.weights = LittleDict(ks, Tuple(new_weights))
     return nothing
@@ -119,18 +120,21 @@ function ancestral_kernel_move(proc::AttentionMH,
     # select addr to rejuv
     # chance to ingnore weights
     n = length(weights)
-    unvisited = findall(!, state.visited)
-    if !isempty(unvisited)
-        _ws = zeros(size(weights))
-        _ws[unvisited] .= 1.0 / length(unvisited)
-        weights = _ws
+    unvisited = findfirst(state.counters .< proc.burnin)
+    if !isnothing(unvisited)
+        idx = unvisited
+        # _ws = zeros(size(weights))
+        # _ws[unvisited] .= 1.0 / length(unvisited)
+        # weights = _ws
+    else
+        # state.counters = zeros(n)
+        if bernoulli(proc.explore)
+            weights = 1.0 .- weights
+            weights = softmax(weights)
+        end
+        idx = categorical(weights)
     end
-    if bernoulli(proc.explore)
-        weights = 1.0 .- weights
-        weights = softmax(weights)
-    end
-    idx = categorical(weights)
-    state.visited[idx] = true
+    state.counters[idx] += 1
     addr = proc.nodes[idx]
     selection = proc.selections[addr]
 

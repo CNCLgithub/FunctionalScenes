@@ -119,8 +119,8 @@ function main(cmd)
                               img_size = (240, 360),
                               # dims = (3,3),
                               # offset = (0, 4),
-                              # default_tracker_p = 0.5,
-                              tracker_ps = tracker_ps
+                              default_tracker_p = 0.5,
+                              # tracker_ps = tracker_ps
                               )
 
     selections = FunctionalScenes.selections(first(query.args))
