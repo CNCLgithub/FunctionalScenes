@@ -110,42 +110,32 @@ function cross_predict(query, choices_a, choices_b, trackers)
         s = select_from_model(params, t)
         from_b = merge(from_b, get_selected(choices_b, s))
     end
-    # open("/project/output/a.txt", "w") do io
-    #     Base.show(io, "text/plain", choices_a)
-    # end
-    # open("/project/output/b.txt", "w") do io
-    #     Base.show(io, "text/plain", choices_b)
-    # end
 
     constraints = merge(from_a, from_b)
 
-    # open("/project/output/c.txt", "w") do io
-    #     Base.show(io, "text/plain", constraints)
-    # end
-
     constraints[:viz] = query.observations[:viz]
     _, ls = generate(model, query.args, constraints)
-    # println(ls)
-    # @assert trackers != [5, 8, 11]
     return ls
 end
 
-function sample_chains(chain_p)
+function sample_steps(chain_p)
     chain = load(chain_p)
     n = length(chain)
-    k = n - 12
-    logscores = Vector{Float64}(undef, k)
+    k = n - 12 
     logscores = map(i -> chain["$(i)"]["log_score"], 12:n)
     ws = exp.(logscores .- logsumexp(logscores))
+    println("$(n), $(k)")
+    println(size(ws))
     step_ids = rand(Distributions.Categorical(ws), 10)
-    steps = @>> step_ids map(i -> chain["$(i+12)"]) collect
+    println(step_ids)
+    steps = @>> step_ids map(i -> chain["$(i+11)"]) collect
     sens = sens_from_chain(chain, 12, n)
     (steps, sens)
 end
 
 function sens_from_chain(chain, m, n)
     @>> collect(m:n) begin
-    	map(s -> s["$(i)"]["aux_state"][:sensitivities])
+    	map(s -> chain["$(s)"]["aux_state"][:sensitivities])
         x -> hcat(x...)
         x -> sum(x, dims = 2)
         vec
@@ -192,6 +182,8 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     f = furniture(base)[fid]
     move = Symbol(move)
     room = shift_furniture(base, fid, move)
+    shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
+ 
     es = exits(base)
     paths_a = @>> es map(e -> safe_shortest_path(base,e)) map(relative_path)
     paths_b = @>> es map(e -> safe_shortest_path(room,e)) map(relative_path)
@@ -201,13 +193,6 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     display(ogd)
 
     # ab, ba = 0,0
-    # base_query = query_from_params(base,
-    #                                "/project/scripts/experiments/attention/gm.json";
-    #                                img_size = (240, 360),
-    #                                tile_window = 2.0, # must be high enough due to gt prior
-    #                                active_bias = 10.0, # must be high enough due to gt prior
-    #                                base_sigma = 2.0
-    #                           )
     move_query = query_from_params(room,
                                    "/project/scripts/experiments/attention/gm.json";
                                    img_size = (240, 360),
@@ -216,41 +201,22 @@ function compare_rooms(base_p::String, base_chain, move_chain,
                                    base_sigma = 0.1,
                                    default_tracker_p = 1.0
                               )
-
     params = first(move_query.args)
-    base_map_chain, base_history = load_map_chain(base_chain)
-    viz_trace_history(base_history)
-    top_base, base_weights, base_ids = room_sensitivity(base_history, params,f)
 
+    base_steps, base_weights = sample_steps(base_chain)
+    move_steps, move_weights = sample_steps(move_chain)
+    top_base = sortperm(base_weights, rev = true)[1:5]
+    top_move = sortperm(move_weights, rev = true)[1:5]
+    joined_ids = union(top_base, top_move)
 
-    move_map_chain, move_history = load_map_chain(move_chain)
-    viz_trace_history(move_history)
-    move_log_score = move_map_chain["log_score"]
+    f = (a,b) -> cross_predict(move_query,
+                       a["estimates"][:trace],
+                       b["estimates"][:trace],
+                       joined_ids) - b["log_score"]
 
-    shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
-    top_move, move_weights, move_ids = room_sensitivity(move_history, params,
-                                  shifted)
-
-    joined_ids = union(base_ids, move_ids)
-    ab = cross_predict(move_query,
-                       base_map_chain["estimates"][:trace],
-                       move_map_chain["estimates"][:trace],
-                       joined_ids)
-
-    ab = ab - move_log_score
-    ba = sum(move_weights[move_ids])
-    # ba = norm(move_weights[joined_ids] - base_weights[joined_ids])
-    # ba = norm(move_weights - base_weights)
-    # ba = cross_predict(move_query,
-    #                    move_chain["estimates"][:trace],
-    #                    base_chain["estimates"][:trace],
-    #                    top_move)
-
-    # # @assert !isinf(ab)
-    # # @assert !isinf(ba)
-    # display((ab, ba))
+    ab = @>> map(f, base_steps, move_steps) mean
+    ba = @>> map(f, move_steps, base_steps) mean
     (lvd, ogd, ab, ba)
-    # (lvd, ogd, base_weights, move_weights)
 end
 
 
