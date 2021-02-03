@@ -1,6 +1,6 @@
 {
     "burnin" : 10,
-    "samples" : 72,
-    "smoothness" : 0.7,
+    "samples" : 48,
+    "smoothness" : 5.0,
     "explore" : 0.10
 }

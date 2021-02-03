@@ -6,6 +6,7 @@ using Images, FileIO
 using DataFrames
 using LinearAlgebra:norm
 using Statistics: mean, std
+using UnicodePlots
 
 import FunctionalScenes: Room, furniture, shift_furniture, navigability, wsd,
     occupancy_grid, diffuse_og, safe_shortest_path, shift_tile, room_to_tracker,
@@ -86,11 +87,10 @@ function room_sensitivity(chain, params, fs::Furniture)
     steps = length(keys(chain))
     n = "$(steps)"
     weights = chain["aux_state"][:sensitivities]
-    weights = @>> weights values collect(Float64)
     weights = max.(weights, 0.)
     weights = (weights .- mean(weights)) ./ std(weights)
     display(reshape(weights, size(params.tracker_ref)))
-    top_trackers = sortperm(weights, rev = true)[1:6]
+    top_trackers = sortperm(weights, rev = true)[1:12]
     tracker_ids = room_to_tracker(params, fs)
     (top_trackers, weights)
     # mean(zs[tracker_ids])
@@ -133,6 +133,38 @@ function cross_predict(query, choices_a, choices_b, trackers)
     return ls
 end
 
+function load_map_chain(chain_p)
+    chain = load(chain_p)
+    current_step = chain["13"]
+    n = length(chain)
+    weight_history = []
+    for i = 14:n
+        new_step = chain["$(i)"]
+        sens = new_step["aux_state"][:sensitivities]
+        push!(weight_history, sens)
+        current_step = current_step["log_score"] < new_step["log_score"] ? new_step : current_step
+    end
+    return current_step, weight_history
+end
+
+function viz_trace_history(history)
+    weights = hcat(history...)
+    display(weights)
+    nt = size(weights, 1)
+    ymax = maximum(weights)
+    plt = lineplot(weights[1, :], name = "1",
+                   ylim = (0, ymax * 1.1))
+    for i = 2:nt
+        lineplot!(plt, weights[i, :], name = "$(i)")
+    end
+    println(plt)
+
+    sums = sum(weights, dims = 2)
+    names = ["$(i)" for i = 1:nt]
+    plt = barplot(names, vec(sums))
+    println(plt)
+end
+
 function compare_rooms(base_p::String, base_chain, move_chain,
                        fid, move)
     @time base = load(base_p)["r"]
@@ -168,21 +200,23 @@ function compare_rooms(base_p::String, base_chain, move_chain,
                               )
 
     params = first(move_query.args)
-    base_chain = load(base_chain, "96")
+    map_base_chain, base_history = load_map_chain(base_chain)
+    viz_trace_history(base_history)
     top_base, base_weights = room_sensitivity(base_chain, params,f)
 
 
-    move_chain = load(move_chain, "96")
+    # move_chain = load(move_chain, "72")
+    move_map_chain = load_map_chain(move_chain)
     shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
-    top_move, move_weights = room_sensitivity(move_chain, params,
+    top_move, move_weights = room_sensitivity(move_map_chain, params,
                                   shifted)
 
     ab = cross_predict(move_query,
                        base_chain["estimates"][:trace],
-                       move_chain["estimates"][:trace],
+                       move_map_chain["estimates"][:trace],
                        top_move)
-    # ba = norm(move_weights[top_move] - base_weights[top_move])
-    ba = norm(move_weights - base_weights)
+    ba = norm(move_weights[top_move] - base_weights[top_move])
+    # ba = norm(move_weights - base_weights)
     # ba = cross_predict(move_query,
     #                    move_chain["estimates"][:trace],
     #                    base_chain["estimates"][:trace],
@@ -205,7 +239,7 @@ function main(exp::String)
                        base_sense = Float64[],
                        move_sense = Float64[])
 
-    df = df[df.id .<= 2, :]
+    df = df[df.id .<= 1, :]
     for r in eachrow(df)
         base = "/renders/$(exp)/$(r.id).png"
         img = "/renders/$(exp)/$(r.id)_$(r.furniture)_$(r.move).png"

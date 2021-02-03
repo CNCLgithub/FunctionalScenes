@@ -117,8 +117,8 @@ function main(cmd)
     # tracker_ps[[1,3,4,6]] .= 0.
     query = query_from_params(room, args["gm"],
                               img_size = (240, 360),
-                              dims = (3,3),
-                              offset = (0, 4),
+                              # dims = (3,3),
+                              # offset = (0, 4),
                               default_tracker_p = 1.0,
                               # tracker_ps = tracker_ps
                               )
@@ -158,7 +158,7 @@ end
 
 
 df = DataFrame(CSV.File("/scenes/$(experiment).csv"))
-for i = 1:1
+for i = 1:30
     cmd = ["$(i)", "1", "A"]
     main(cmd);
     for r in eachrow(df[df.id  .== i, :])

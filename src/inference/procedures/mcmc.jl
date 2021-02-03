@@ -31,8 +31,8 @@ mutable struct AMHTrace <: MCMCTrace
     current_trace::Gen.Trace
     current_objective
     counters::Vector{Int64}
-    sensitivities::LittleDict{Symbol, Float64}
-    weights::LittleDict{Symbol, Float64}
+    sensitivities::Vector{Float64}
+    weights::Vector{Float64}
 end
 
 function Gen_Compose.initialize_procedure(proc::AttentionMH,
@@ -43,14 +43,11 @@ function Gen_Compose.initialize_procedure(proc::AttentionMH,
     n = length(proc.nodes)
     # sensitivities = fill(-Inf, n)
     sensitivities = zeros(n)
-    sensitivities = LittleDict(proc.nodes,
-                               sensitivities)
     weights = fill(1.0/n, n)
-    weights = LittleDict(proc.nodes,
-                         weights)
+    counters = zeros(n)
     AMHTrace(trace,
              proc.objective(trace),
-             zeros(n),
+             counters,
              sensitivities,
              weights)
 end
@@ -74,7 +71,7 @@ function Gen_Compose.mc_step!(state::AMHTrace,
     aux_state = Dict(
         :objective => state.current_objective,
         :weights => state.weights,
-        :sensitivities => state.sensitivities,
+        :sensitivities => copy(state.sensitivities),
         :addr => addr)
 end
 
@@ -91,15 +88,7 @@ function update_sensitivity!(state::AMHTrace, addr, ll::Float64, dist::Float64)
 end
 
 function update_weights!(state::AMHTrace, proc::AttentionMH)
-    ks = Tuple(proc.nodes)
-    new_weights = @>> values(state.sensitivities) collect(Float64)
-    infs = findall(isinf, new_weights)
-    if length(infs) != length(new_weights)
-        min_s = @>> new_weights Base.filter((!isinf)) minimum
-        new_weights[infs] .= min_s
-    end
-    new_weights = softmax(proc.smoothness .* new_weights)
-    state.weights = LittleDict(ks, Tuple(new_weights))
+    state.weights = softmax(proc.smoothness .* state.sensitivities)
     return nothing
 end
 
@@ -114,7 +103,7 @@ function ancestral_kernel_move!(proc::AttentionMH,
 
     trace = state.current_trace
     prev_objective = state.current_objective
-    weights = @>> values(state.weights) collect(Float64)
+    weights = state.weights
     # select addr to rejuv
     # chance to ingnore weights
     n = length(weights)
@@ -144,8 +133,12 @@ function ancestral_kernel_move!(proc::AttentionMH,
     end
 
     lws = exp.(lls .- logsumexp(lls))
+    println(lls)
+    println(lws)
+    println(distances)
     exp_dist = sum(distances .* lws)
-    state.sensitivities[addr] = exp_dist
+    println(exp_dist)
+    state.sensitivities[idx] = exp_dist
     state.current_trace = current_trace
     state.current_objective = proc.objective(current_trace)
     return addr

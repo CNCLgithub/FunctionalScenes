@@ -81,17 +81,19 @@ end
 
 function biased_tile_prior(gt::Room, sigma::Float64)
     g = pathgraph(gt)
-    grid = zeros(steps(gt))
+    # grid = zeros(steps(gt))
+    grid = fill(0.2, steps(gt))
     vs = @>> g vertices Base.filter(v -> istype(g, v, :furniture))
-    grid[vs] .= 1.0
-    gf = Kernel.gaussian(sigma)
-    grid = imfilter(grid, gf, "symmetric")
+    grid[vs] .= 0.8
+    # vs = @>> g vertices Base.filter(v -> istype(g, v, :floor))
+    # grid[vs] .= 0.1
+    # gf = Kernel.gaussian(sigma)
+    # grid = imfilter(grid, gf, "symmetric")
     vs = @>> g vertices Base.filter(v -> istype(g, v, :wall))
     grid[vs] .= 0.0
 
-    max_g = maximum(grid)
-    grid = grid ./ max_g .* 0.8
-
+    # max_g = maximum(grid)
+    # grid = grid ./ max_g .* 0.8
     _grid = reverse(grid, dims = 1)
     println(heatmap(_grid, border = :none,
                     title = "geometry prior",
@@ -211,7 +213,6 @@ end
 
 function viz_sensitivity(trace, weights)
     params = first(get_args(trace))
-    weights = collect(values(weights))
     # weights = exp.(weights)
     grid = reshape(weights, size(params.tracker_ref))
     display(grid)

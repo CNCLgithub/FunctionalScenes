@@ -573,9 +573,16 @@ ab_dprime <- b_hr %>%
   result = m$r.squared
 }
 
-replicate(100, test()) %>%
-  mean %>%
-  print()
+split_half <- data.frame(r2 = replicate(100, test()))
+
+split_half %>%
+  ggplot(aes(x = r2)) +
+  geom_histogram()
+
+print(mean(split_half$r2))
+quantile(split_half$r2, 0.05) %>% print
+quantile(split_half$r2, 0.95) %>% print
+
 ```
 
 ```{r delta dprime}
