@@ -6,6 +6,7 @@ using Images, FileIO
 using DataFrames
 using LinearAlgebra:norm
 using Statistics: mean, std
+using Distributions
 using UnicodePlots
 
 import FunctionalScenes: Room, furniture, shift_furniture, navigability, wsd,
@@ -129,12 +130,36 @@ function cross_predict(query, choices_a, choices_b, trackers)
     return ls
 end
 
+function sample_chains(chain_p)
+    chain = load(chain_p)
+    n = length(chain)
+    k = n - 12
+    logscores = Vector{Float64}(undef, k)
+    logscores = map(i -> chain["$(i)"]["log_score"], 12:n)
+    ws = exp.(logscores .- logsumexp(logscores))
+    step_ids = rand(Distributions.Categorical(ws), 10)
+    steps = @>> step_ids map(i -> chain["$(i+12)"]) collect
+    sens = sens_from_chain(chain, 12, n)
+    (steps, sens)
+end
+
+function sens_from_chain(chain, m, n)
+    @>> collect(m:n) begin
+    	map(s -> s["$(i)"]["aux_state"][:sensitivities])
+        x -> hcat(x...)
+        x -> sum(x, dims = 2)
+        vec
+    end
+end
+
 function load_map_chain(chain_p)
     chain = load(chain_p)
+    k = length(chain) - 12
+
     current_step = chain["13"]
     n = length(chain)
     weight_history = []
-    for i = 14:n
+    for i = 40:n
         new_step = chain["$(i)"]
         sens = new_step["aux_state"][:sensitivities]
         push!(weight_history, sens)
@@ -145,7 +170,6 @@ end
 
 function viz_trace_history(history)
     weights = hcat(history...)
-    display(weights)
     nt = size(weights, 1)
     ymax = maximum(weights)
     plt = lineplot(weights[1, :], name = "1",
@@ -186,8 +210,6 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     #                           )
     move_query = query_from_params(room,
                                    "/project/scripts/experiments/attention/gm.json";
-                                    # dims = (3,3),
-                                    # offset = (0, 4),
                                    img_size = (240, 360),
                                    tile_window = 10.0, # must be high enough due to gt prior
                                    active_bias = 10.0, # must be high enough due to gt prior
@@ -201,9 +223,9 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     top_base, base_weights, base_ids = room_sensitivity(base_history, params,f)
 
 
-    # move_chain = load(move_chain, "72")
     move_map_chain, move_history = load_map_chain(move_chain)
     viz_trace_history(move_history)
+    move_log_score = move_map_chain["log_score"]
 
     shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
     top_move, move_weights, move_ids = room_sensitivity(move_history, params,
@@ -214,6 +236,8 @@ function compare_rooms(base_p::String, base_chain, move_chain,
                        base_map_chain["estimates"][:trace],
                        move_map_chain["estimates"][:trace],
                        joined_ids)
+
+    ab = ab - move_log_score
     ba = sum(move_weights[move_ids])
     # ba = norm(move_weights[joined_ids] - base_weights[joined_ids])
     # ba = norm(move_weights - base_weights)
@@ -243,8 +267,8 @@ function main(exp::String)
     for r in eachrow(df)
         base = "/renders/$(exp)/$(r.id).png"
         img = "/renders/$(exp)/$(r.id)_$(r.furniture)_$(r.move).png"
-        pixeld = compare_pixels(base, img)
-        # pixeld = 0
+	# pixeld = compare_pixels(base, img)
+        pixeld = 0
 
         base = "/scenes/$(exp)/$(r.id).jld2"
 
