@@ -83,16 +83,12 @@ function compare_og(a,b)
 end
 
 
-function room_sensitivity(chain, params, fs::Furniture)
-    steps = length(keys(chain))
-    n = "$(steps)"
-    weights = chain["aux_state"][:sensitivities]
-    weights = max.(weights, 0.)
-    weights = (weights .- mean(weights)) ./ std(weights)
-    display(reshape(weights, size(params.tracker_ref)))
-    top_trackers = sortperm(weights, rev = true)[1:12]
+function room_sensitivity(history, params, fs::Furniture)
+    weights = hcat(history...)
+    weights = sum(weights, dims = 2) |> vec
+    top_trackers = sortperm(weights, rev = true)[1:3]
     tracker_ids = room_to_tracker(params, fs)
-    (top_trackers, weights)
+    (top_trackers, weights, tracker_ids)
     # mean(zs[tracker_ids])
 end
 
@@ -190,32 +186,36 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     #                           )
     move_query = query_from_params(room,
                                    "/project/scripts/experiments/attention/gm.json";
-                                    dims = (3,3),
-                                    offset = (0, 4),
+                                    # dims = (3,3),
+                                    # offset = (0, 4),
                                    img_size = (240, 360),
-                                   tile_window = 2.0, # must be high enough due to gt prior
+                                   tile_window = 10.0, # must be high enough due to gt prior
                                    active_bias = 10.0, # must be high enough due to gt prior
-                                   base_sigma = 2.0,
+                                   base_sigma = 0.1,
                                    default_tracker_p = 1.0
                               )
 
     params = first(move_query.args)
-    map_base_chain, base_history = load_map_chain(base_chain)
+    base_map_chain, base_history = load_map_chain(base_chain)
     viz_trace_history(base_history)
-    top_base, base_weights = room_sensitivity(base_chain, params,f)
+    top_base, base_weights, base_ids = room_sensitivity(base_history, params,f)
 
 
     # move_chain = load(move_chain, "72")
-    move_map_chain = load_map_chain(move_chain)
+    move_map_chain, move_history = load_map_chain(move_chain)
+    viz_trace_history(move_history)
+
     shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
-    top_move, move_weights = room_sensitivity(move_map_chain, params,
+    top_move, move_weights, move_ids = room_sensitivity(move_history, params,
                                   shifted)
 
+    joined_ids = union(base_ids, move_ids)
     ab = cross_predict(move_query,
-                       base_chain["estimates"][:trace],
+                       base_map_chain["estimates"][:trace],
                        move_map_chain["estimates"][:trace],
-                       top_move)
-    ba = norm(move_weights[top_move] - base_weights[top_move])
+                       joined_ids)
+    ba = sum(move_weights[move_ids])
+    # ba = norm(move_weights[joined_ids] - base_weights[joined_ids])
     # ba = norm(move_weights - base_weights)
     # ba = cross_predict(move_query,
     #                    move_chain["estimates"][:trace],
@@ -239,7 +239,7 @@ function main(exp::String)
                        base_sense = Float64[],
                        move_sense = Float64[])
 
-    df = df[df.id .<= 1, :]
+    # df = df[df.id .<= 1, :]
     for r in eachrow(df)
         base = "/renders/$(exp)/$(r.id).png"
         img = "/renders/$(exp)/$(r.id)_$(r.furniture)_$(r.move).png"
