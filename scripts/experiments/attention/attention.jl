@@ -6,7 +6,7 @@ using DataFrames
 using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
-experiment = "2e_1p_30s_matchedc3"
+experiment = "2e_1p_30s"
 
 function parse_commandline(vs)
     s = ArgParseSettings()
