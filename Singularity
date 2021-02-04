@@ -28,6 +28,7 @@ from: nvidia/cuda:10.1-cudnn8-devel-ubuntu18.04
                         cmake \
                         python3.8-dev \
                         python3-pip \
+                        xvfb \
                         software-properties-common
 
     apt-get clean

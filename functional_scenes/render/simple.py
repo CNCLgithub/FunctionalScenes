@@ -23,7 +23,7 @@ class SimpleGraphics(AbstractGraphics):
                  lighting = default_light,
                  shader = SoftPhongShader):
         self.cameras = FoVPerspectiveCameras(device=device,
-                                             fov = 37.6,
+                                             fov = 31.6,
                                              aspect_ratio = 1.21
                                              )
         lighting.to(device)

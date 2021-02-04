@@ -85,6 +85,25 @@ function tiles(r::Room)
     @>> zip(types, coords) lazymap(xy -> tile(xy..., space)) collect
 end
 
+function cubify(r::Room)
+
+    g = pathgraph(r)
+    cis = CartesianIndices(steps(r))
+    dims = reverse(steps(r))
+    walls = zeros(4, dims...)
+    furniture = zeros(4, dims...)
+    for v in vertices(g)
+        idx = reverse(Tuple(cis[v]))
+        if istype(g,v,:wall)
+            walls[:, idx...] .= 1.0
+        elseif istype(g,v,:furniture)
+            furniture[1, idx...] = 1.0
+        end
+    end
+    return (furniture, walls)
+
+end
+
 function task(r::Room)
     space, transform = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
@@ -101,21 +120,27 @@ end
 function plot_path(r::Room)
     space, transform = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
-    paths = navigability(r)
-    # vs = @>> paths lazymap(p -> lazymap(src, p)) flatten collect
+    paths = @>> r exits map(x -> safe_shortest_path(r, x))
     vs = vcat(paths...)
     vs = @>> Tuple.(cis[vs]) lazymap(transform)
     @>> vs lazymap(x -> spot(x, space)) collect
 end
 
-function translate(r::Room, paths::Bool)
+function translate(r::Room, paths::Bool;
+                   cubes::Bool=false)
     ps = paths ? plot_path(r) : []
-    Dict(:floor => floor(r),
-         :ceiling => floor(r, ceiling = true),
-         :lights => lights(r),
-         :camera => camera(r),
-         :objects => vcat(tiles(r), task(r), ps),
-         )
+    d = Dict(:floor => floor(r),
+             :ceiling => floor(r, ceiling = true),
+             :lights => lights(r),
+             :camera => camera(r))
+    if cubes
+        furn, walls = cubify(r)
+        d[:walls] = walls
+        d[:furniture] = furn
+    else
+        d[:objects] = vcat(tiles(r), task(r), ps)
+    end
+    return d
 end
 
 default_script = joinpath(@__DIR__, "render.py")

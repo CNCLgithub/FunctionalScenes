@@ -19,7 +19,7 @@ else:
 
 print(device)
 # device = 'cuda:1'
-src = '/renders/2e_1p_30s/1/scene.json'
+src = '/renders/2e_1p_30s_matchedc3/1/scene.json'
 with open(src, 'r') as f:
     scene = json.load(f)
 
@@ -29,7 +29,7 @@ graphics.set_from_scene(scene)
 
 beg_ts = time.time()
 img, mesh = render_scene(scene, graphics)
-end_ts = time.time()  
+end_ts = time.time()
 print(end_ts - beg_ts)
 save_obj( '/renders/test.obj', mesh.verts_packed(), mesh.faces_packed(),)
 

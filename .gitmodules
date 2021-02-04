@@ -1,3 +1,9 @@
 [submodule "deps/GenRFS"]
 	path = deps/GenRFS
 	url = git@github.com:CNCLgithub/GenRFS.git
+[submodule "deps/Gen_Compose"]
+	path = deps/Gen_Compose
+	url = git@github.com:CNCLgithub/Gen_Compose.git
+[submodule "deps/slurmpy"]
+	path = deps/slurmpy
+	url = git@github.com:belledon/slurm.git

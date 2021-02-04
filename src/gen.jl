@@ -1,18 +1,62 @@
 
+@gen (static) function flip(p::Float64)::Bool
+    f = @trace(bernoulli(p), :flip)
+    return f
+end
+
+flip_map = Gen.Map(flip)
+
+@gen (static) function stability(ab::Tuple)
+    bounds, probs = ab
+    bw = @trace(uniform(bounds, probs), :sflip)
+    return bw
+end
+
+stability_map = Gen.Map(stability)
+
+@gen (static) function tracker_state(weights)
+    result = @trace(stability_map(weights), :state)
+    return result
+end
+
+tracker_state_map = Gen.Map(tracker_state)
+
 """
 Take a room and place a random set of objects in an xy plane
 """
-@gen function furniture_prior(r::Room, rate::Float64)
-    n = @trace(poisson(rate), :cardinality)
-    dx, dy = bounds(r) .* 0.8 # size of x and y dimensions
-    positions = Matrix{Float64}(undef, n , 2)
-    for i = 1:n
-        # sample the position within (-dx, +dx) and (-dy, +dy)
-        # TODO: fill in `nothing` with uniform sample
-        positions[i, 1] = @trace(uniform(-dx, +dx), i => :x) # x value
-        positions[i, 2] = @trace(uniform(-dy,+dy), i => :y) # y value
-    end
-    return positions
+@gen (static) function room_from_state(state::Vector{Float64},
+                                       params::ModelParams)::Room
+    occupied = @trace(flip_map(state),  :furniture)
+    result = add_from_state_flip(params, occupied)
+    return result
+end
+
+room_map = Gen.Map(room_from_state)
+
+@gen (static) function model(params::ModelParams)
+    # sampler trackers
+    active = @trace(flip_map(params.tracker_ps), :active)
+    trackers = define_trackers(params, active)
+    # a collection of local states
+    states = @trace(tracker_state_map(trackers), :trackers)
+    # a global room matrix
+    global_state = consolidate_local_states(states)
+    gs = fill(global_state, params.instances)
+    ps = fill(params, params.instances)
+
+    room_instances = @trace(room_map(gs, ps), :instances)
+    result = (global_state, room_instances)
+
+    # mean and variance of observation
+    viz = graphics_from_instances(room_instances, params)
+    # viz = (mean, cov diagonal)
+    pred = @trace(broadcasted_normal(viz[1], viz[2]), :viz)
+    # pred = @trace(mybroadcast(viz[1], viz[2]), :viz)
+
+    # compute in sensitivity for effeciency
+    # affordances = map(afforandace, room_instances, ps)
+
+    return result
 end
 
 
@@ -82,4 +126,4 @@ Move a piece of furniture
 end
 
 
-export furnish, furniture_step, furniture_chain, reorganize
+export furnish, furniture_step, furniture_chain, reorganize, model

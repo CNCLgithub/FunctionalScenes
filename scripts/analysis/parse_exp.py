@@ -89,8 +89,8 @@ def main():
         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("--exp", type = str, help = "Path to trial dataset",
-                        default = '/experiments/2e_1p_30s')
-    parser.add_argument("--table_name", type = str, default = "pilot",
+                        default = '2e_1p_30s')
+    parser.add_argument("--table_name", type = str, default = "2e_1p_30s",
                         help = 'Table name')
     parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["2.0"],
                         help = 'Experiment version flag')
@@ -107,9 +107,10 @@ def main():
                         help = 'Filename to dump parsed trial data')
     args = parser.parse_args()
 
-    os.path.isdir(args.exp) or os.mkdir(args.exp)
+    exp_src = os.path.join('/experiments', args.exp)
+    os.path.isdir(exp_src) or os.mkdir(args.exp)
 
-    db = os.path.join(args.exp, 'participants.db')
+    db = os.path.join(exp_src, 'participants.db')
     trs, qs = read_db(db, args.table_name,
                       args.exp_flag, args.mode)
 
@@ -143,13 +144,13 @@ def main():
     trs["ID"] = trs.WID.apply(lambda x: wid_translate[x])
 
 
-    out = os.path.join(args.exp, 'parsed_trials.csv')
+    out = os.path.join(exp_src, 'parsed_trials.csv')
     trs.to_csv(out, index=False)
 
     cl_qs = cl_qs[cl_qs.WID.isin(good_wids)]
     cl_qs["ID"] = cl_qs.WID.apply(lambda x: wid_translate[x])
 
-    out = os.path.join(args.exp, 'parsed_questions.csv')
+    out = os.path.join(exp_src, 'parsed_questions.csv')
     cl_qs[["ID", "instructionloops", "comments"]].to_csv(out, index=False)
 
 if __name__ == '__main__':

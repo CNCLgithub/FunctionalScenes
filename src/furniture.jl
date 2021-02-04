@@ -35,6 +35,16 @@ function remove(r::Room, f::Furniture)::Room
     return new_r
 end
 
+function clear_room(r::Room)::Room
+    g = pathgraph(r)
+    @>> g begin
+        vertices
+        Base.filter(v -> istype(g,v,:furniture))
+        x -> Furniture(x)
+        remove(r)
+    end
+end
+
 function patch!(r::Room, t::Tile, moves::Vector{Symbol})
     g = pathgraph(r)
     @>> moves begin
@@ -48,24 +58,68 @@ function patch!(r::Room, t::Tile, moves::Vector{Symbol})
     return nothing
 end
 
+
 function shift_furniture(r::Room, f::Furniture, move::Int64)
     shift_furniture(r, f, move_map[move])
 end
 
 function shift_furniture(r::Room, f::Furniture, move::Symbol)
     f = sort(collect(f), rev = in(move, [:down, :right]))
+    fs = furniture(r)
+
+    fid = findfirst(x -> !isempty(intersect(f, x)), fs)
+    return shift_furniture(r, fid, move)
+    # add shifted tiles to room
+    # new_r = add(r, shifted)
+    # new_g = pathgraph(new_r)
+    # # clear newly empty tiles
+    # @>> setdiff(f, shifted) foreach(v -> set_prop!(new_g, v, :type, :floor))
+    # # patch edges to tiles that are now empty
+    # spots = setdiff(move_map, [move])
+    # foreach(t -> patch!(new_r, t, spots), f)
+    # return new_r
+end
+
+
+function shift_furniture(r::Room, fid::Int64, move::Symbol)
+    fs = furniture(r)
+    f = fs[fid] |> collect
     # shift tiles
     shifted = @>> f map(v -> shift_tile(r, v, move)) collect(Tile) Set
-    # add shifted tiles to room
-    new_r = add(r, shifted)
-    new_g = pathgraph(new_r)
-    # clear newly empty tiles
-    @>> setdiff(f, shifted) foreach(v -> set_prop!(new_g, v, :type, :floor))
-    # patch edges to tiles that are now empty
-    spots = setdiff(move_map, [move])
-    foreach(t -> patch!(new_r, t, spots), f)
-    return new_r
+    fs[fid] = shifted
+
+    source = pathgraph(r)
+
+    new_r = Room(r.steps, r.bounds, r.entrance, r.exits)
+    g = pathgraph(new_r)
+
+    @>> source begin
+        vertices
+        collect
+        Base.filter(v -> isfloor(source, v))
+        foreach(v -> set_prop!(g, v, :type, :floor))
+    end
+    wall_tiles = @>> source begin
+        vertices
+        collect
+        Base.filter(v -> get_prop(source, v, :type) == :wall)
+    end
+    foreach(v -> set_prop!(g, v, :type, :wall), wall_tiles)
+    @>> wall_tiles begin
+        foreach(v -> @>> neighbors(g, v) collect map(n -> rem_edge!(g, Edge(v, n))))
+    end
+
+    @>> source begin
+        edges
+        collect
+        Base.filter(e -> wall_edge(source, e))
+        foreach(e -> add_edge!(g, e))
+    end
+
+    # add furniture
+    Base.reduce(add, fs; init = new_r)
 end
+
 
 function valid_spaces(r::Room)
     g = pathgraph(r)

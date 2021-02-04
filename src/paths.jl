@@ -12,19 +12,25 @@ function average_path_length(g, s, e; n = 5)
     isnan(l) ? Inf : l
 end
 
-
-function safe_shortest_path(r::Room, e::Tile)
+function safe_shortest_path(r::Room, start::Tile, stop::Tile)
     dx, dy = steps(r)
     g = pathgraph(r)
-    ent = entrance(r) |> first
     _, coords = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
-    ec = coords(Tuple(cis[e]))
-    vs = connected(g, ent) |> collect |> sort
+    ec = coords(Tuple(cis[stop]))
+    vs = connected(g, start) |> collect |> sort
     vcis = Tuple.(cis[vs])
     vi = @>> vcis map(v -> norm(ec .- coords(v))) argmin
-    ds = desopo_pape_shortest_paths(g, ent)
+    ds = desopo_pape_shortest_paths(g, start)
     enumerate_paths(ds, vs[vi])
+end
+
+function safe_shortest_path(r::Room, e::Tile)
+    ent = entrance(r) |> first
+    forward = safe_shortest_path(r, ent, e)
+    # backward = safe_shortest_path(r, e, ent)
+    # union(forward, backward)
+    forward
 end
 
 function total_length(g::PathGraph)
@@ -58,10 +64,28 @@ function diffuse_og(r::Room, f::Furniture)::Matrix{Float64}
     end
 end
 
-function occupancy_grid(r::Room; decay = -1, sigma = 0)
-    f = p -> occupancy_grid(r, p, decay=decay, sigma=sigma)
-    @>> navigability(r) map(f) mean
+function _wsd(a,b)
+    v = rand(size(a, 2))
+    v = v ./ norm(v)
+    OptimalTransport.pot.wasserstein_1d(a * v, b * v)
 end
+
+function wsd(a::Matrix{Float64}, b::Matrix{Float64}; n::Int64 = 500)::Float64
+    d = 0.
+    for _ in 1:n
+        d += _wsd(a,b)
+    end
+    d / n
+end
+
+
+function occupancy_grid(r::Room; decay = 0.0, sigma = 1.0) # ::Matrix{Float64}
+    es = exits(r)
+    paths = @>> es map(e -> safe_shortest_path(r,e))
+    f = p -> occupancy_grid(r, p, decay=decay, sigma=sigma)
+    @>> paths map(f)
+end
+
 function occupancy_grid(r::Room, p::Vector{Tile};
                         decay = -1, sigma = 1)
     g = pathgraph(r)
@@ -70,17 +94,27 @@ function occupancy_grid(r::Room, p::Vector{Tile};
     lp = length(p)
     iszero(lp) && return m
     for (i,v) in enumerate(p)
-        isfloor(g, v) || break
-        m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
-        # m[v] = exp(decay * (i - 1))
+        if !isfloor(g, v)
+            println("$(v) => $(get_prop(g, v, :type))")
+            ns = connected(g, v)
+            new_r = clear_room(r)
+            new_r = add(new_r, ns)
+            display(new_r)
+
+            @>> ns collect filter(v -> istype(g, v, :floor)) println
+            error("invalid path")
+        end
+        # m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
+        m[v] = exp(decay * (i - 1))
         # m[v] = exp(decay * (lp - i))
     end
     gf = Kernel.gaussian(sigma)
     m = imfilter(m, gf, "symmetric")
-    floor = @>> g vertices filter(v -> isfloor(g, v)) collect
+    floor = @>> g vertices Base.filter(v -> isfloor(g, v)) collect
     mask[floor] .= 1
-    og = m .* mask
-    og ./ sum(og)
+    mm = maximum(m)
+    mm = iszero(mm) ? m : m ./ mm
+    m .* mask
 end
 
 function navigability(r::Room)
