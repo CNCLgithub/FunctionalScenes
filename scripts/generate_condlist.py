@@ -63,6 +63,7 @@ def main():
 
     renders = '/renders/' + args.scene
     movies = '/movies/' + args.scene
+    #movies = '/movies/{0!s}_{1:0.3f}'.format(args.scene, args.stim_dur)
     os.path.isdir(movies) or os.mkdir(movies)
     df = pd.read_csv('/scenes/' + args.scene + '.csv')
     bases = np.unique(df.id)

@@ -26,7 +26,7 @@ else
 end
 
 
-model = functional_scenes.init_alexnet("/datasets/alexnet_places365.pth.tar")
+model = functional_scenes.init_alexnet("/datasets/alexnet_places365.pth.tar", device)
 graphics = functional_scenes.SimpleGraphics((480, 720), device)
 
 
@@ -118,7 +118,8 @@ end
 
 
 function main()
-    name = "2e_1p_30s_matchedc3"
+    name = "pytorch_rep"
+    #name = "2e_1p_30s_matchedc3"
     n = 30
     room_dims = (11,20)
     entrance = [6]
