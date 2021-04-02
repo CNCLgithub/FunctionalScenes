@@ -2,6 +2,7 @@ using Parameters: @with_kw
 using UnicodePlots
 using Images
 using ImageInTerminal
+using Statistics
 
 export ModelParams
 
@@ -162,7 +163,8 @@ end
 
 function room_to_tracker(params::ModelParams, fs)
     fs = collect(Int64, fs)
-    ts = Vector{Int64}(undef, size(fs)...)
+    # ts = Vector{Int64}(undef, size(fs)...)
+    ts = Int64[]
     full_coords = CartesianIndices(steps(params.template))
     tracker_linear = LinearIndices(size(params.tracker_ref))
     for (i,j) in enumerate(fs)
@@ -170,7 +172,11 @@ function room_to_tracker(params::ModelParams, fs)
         xy = Tuple(full_cart) .- params.thickness
         xy = xy .- (params.dims .* params.offset)
         xy = Int64.(ceil.(xy ./ params.dims))
-        ts[i] = tracker_linear[xy...]
+        if any(xy .> size(params.tracker_ref))
+            continue
+        end
+        push!(ts, tracker_linear[xy...])
+        # ts[i] = tracker_linear[xy...]
     end
     return ts
 end
@@ -265,14 +271,14 @@ end
 # or pass average image to alexnet
 function graphics_from_instances(instances, params)
     g = params.graphics
-    if length(instances) > 5
-        instances = instances[1:5]
+    if length(instances) > 1
+        instances = [instances[1]]
     end
     instances = map(r -> translate(r, false, cubes=true), instances)
     batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
     features = @pycall functional_scenes.nn_features.single_feature(params.model,
                                                                     "features.6",
-                                                                    batch)::Array{Float64, 4}
+                                                                     batch)::Array{Float64, 4}
     mu = mean(features, dims = 1)
     if length(instances) > 1
         sigma = std(features, mean = mu, dims = 1)
@@ -339,7 +345,8 @@ function batch_og(tr::Gen.Trace)
 end
 
 function batch_compare_og(og_a, og_b)
-    map(wsd, og_a, og_b) |> sum
+    cor(vec(mean(og_a)), vec(mean(og_b)))
+    # map(wsd, og_a, og_b) |> sum
 end
 
 function softmax(x)

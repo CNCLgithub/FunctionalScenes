@@ -29,9 +29,11 @@ SING="${ENV['path']}"
     source ${ENV[pyenv]}/bin/activate && \
     python3.8 -m pip install --upgrade pip && \
     cd functional_scenes && poetry install" && \
-    ./run.sh pip install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/cu101/torch_nightly.html \
-    ./run.sh python3.8 -m pip install  torch==1.7.1+cu101 torchvision==0.8.2+cu101  -f https://download.pytorch.org/whl/torch_stable.html && \
-    ./run.sh python3.8 -m pip install git+https://github.com/facebookresearch/pytorch3d.git
+    # ./run.sh pip install --pre torch torchvision -f https://download.pytorch.org/whl/nightly/cu101/torch_nightly.html \
+    # ./run.sh python3.8 -m pip install  torch==1.7.1+cu101 torchvision==0.8.2+cu101  -f https://download.pytorch.org/whl/torch_stable.html && \
+    ./run.sh python3.8 -m pip install torch==1.7.1+cu110 torchvision==0.8.2+cu110 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html && \
+    export MAX_JOBS=4 && \
+    ./run.sh python3.8 -m pip install -vv git+https://github.com/facebookresearch/pytorch3d.git
 
 # julia setup
 [[ "${@}" =~ "julia" ]] || echo "Not touching julia"
