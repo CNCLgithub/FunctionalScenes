@@ -273,8 +273,7 @@ function main(exp::String)
     for r in eachrow(df)
         base = "/renders/$(exp)/$(r.id).png"
         img = "/renders/$(exp)/$(r.id)_$(r.furniture)_$(r.move).png"
-	# pixeld = compare_pixels(base, img)
-        pixeld = 0
+	pixeld = compare_pixels(base, img)
 
         base = "/scenes/$(exp)/$(r.id).jld2"
 
@@ -293,6 +292,4 @@ function main(exp::String)
 end
 
 
-# main("pilot");
-# main("1exit");
-main("2e_1p_30s");
+main("2e_1p_30s_matchedc3");
