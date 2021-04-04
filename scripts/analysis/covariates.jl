@@ -74,8 +74,8 @@ function compare_og(a,b)
     og_b = occupancy_grid(b, decay = 0.0001, sigma = 0.7)
     viz_ocg(og_a)
     viz_ocg(og_b)
-    # cor(vec(mean(og_a)), vec(mean(og_b)))
-    map(wsd, og_a, og_b) |> sum
+    cor(vec(mean(og_a)), vec(mean(og_b)))
+    # map(wsd, og_a, og_b) |> sum
 end
 
 
@@ -124,14 +124,14 @@ end
 function sample_steps(chain_p, k)
     chain = load(chain_p)
     n = length(chain)
-    logscores = map(i -> chain["$(i)"]["log_score"], 37:n)
+    logscores = map(i -> chain["$(i)"]["log_score"], 13:n)
     ws = exp.(logscores .- logsumexp(logscores))
     println("$(n), $(k)")
     println(size(ws))
     step_ids = rand(Distributions.Categorical(ws), k)
     println(step_ids)
-    steps = @>> step_ids map(i -> chain["$(i+36)"]) collect
-    sens = sens_from_chain(chain, 37, n)
+    steps = @>> step_ids map(i -> chain["$(i+12)"]) collect
+    sens = sens_from_chain(chain, 13, n)
     (steps, sens)
 end
 
@@ -200,7 +200,7 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     base_query = query_from_params(base,
                                    "/project/scripts/experiments/attention/gm.json";
                                    instances = 20,
-                                   offset = (0, 0),
+                                   # offset = (0, 0),
                                    img_size = (240, 360),
                                    tile_window = 10.0, # must be high enough due to gt prior
                                    active_bias = 10.0, # must be high enough due to gt prior
@@ -209,7 +209,7 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     move_query = query_from_params(room,
                                    "/project/scripts/experiments/attention/gm.json";
                                    instances = 20,
-                                   offset = (0,0),
+                                   # offset = (0,0),
                                    img_size = (240, 360),
                                    tile_window = 10.0, # must be high enough due to gt prior
                                    active_bias = 10.0, # must be high enough due to gt prior
@@ -277,10 +277,10 @@ function main(exp::String)
 
         base = "/scenes/$(exp)/$(r.id).jld2"
 
-        # base_chain = "/experiments/$(exp)_attention_150/$(r.id)/1.jld2"
-        # move_chain = "/experiments/$(exp)_attention_150/$(r.id)_furniture_$(r.move)/1.jld2"
-        base_chain = "/experiments/$(exp)_attention/$(r.id)/1.jld2"
-        move_chain = "/experiments/$(exp)_attention/$(r.id)_furniture_$(r.move)/1.jld2"
+        base_chain = "/experiments/$(exp)_attention_150/$(r.id)/1.jld2"
+        move_chain = "/experiments/$(exp)_attention_150/$(r.id)_furniture_$(r.move)/1.jld2"
+        # base_chain = "/experiments/$(exp)_attention/$(r.id)/1.jld2"
+        # move_chain = "/experiments/$(exp)_attention/$(r.id)_furniture_$(r.move)/1.jld2"
         result = compare_rooms(base, base_chain, move_chain,
                                  r.furniture, r.move)
 
