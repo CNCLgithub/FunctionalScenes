@@ -158,7 +158,7 @@ function render(r::Room, out::String;
     open(scene_out, "w") do f
         write(f, scene)
     end
-    cmd = `$(blender) --verbose 2 -noaudio --background $(template) -P $(script) -t $(threads) -- --scene $(scene_out) --mode $(mode) --out $(out)`
+    cmd = `$(blender) --verbose 2 -noaudio --background $(template) -P $(script) -t $(threads) -- --scene $(scene_out) --mode $(mode) --out $(out) --resolution $(720,480)`
     run(cmd)
 end
 

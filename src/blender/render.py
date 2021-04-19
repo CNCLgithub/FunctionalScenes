@@ -341,7 +341,6 @@ def main():
     if args.mode == 'full':
         p = args.out + '.png'
         scene.render(p, resolution = args.resolution,)
-
     # if args.save_world:
     path = os.path.join(args.out, 'world.blend')
     scene.save(path)
