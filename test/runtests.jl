@@ -84,3 +84,10 @@ end;
 @testset "Navigation" begin
     @test compare(r, r2) > 0
 end;
+
+
+@testset "Showing" begin
+    r = Room((10,10), (10,10), [5], [22]);
+    p = k_shortest_paths(r, 5, 1, 1)
+    @show (r, first(p))
+end;

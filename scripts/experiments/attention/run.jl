@@ -6,7 +6,7 @@ using DataFrames
 using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
-experiment = "2e_1p_30s"
+experiment = "2e_1p_30s_matchedc3"
 
 function parse_commandline(vs)
     s = ArgParseSettings()
@@ -159,20 +159,21 @@ end
 
 
 function outer()
-    args = parse_outer()
+    # args = parse_outer()
+    args = Dict("scene" => 1)
     df = DataFrame(CSV.File("/scenes/$(experiment).csv"))
     i = args["scene"]
     cmd = ["$(i)", "1", "A"]
     main(cmd);
     for r in eachrow(df[df.id  .== i, :])
-	cmd = [
-	    "-f=$(r.furniture)",
-	    "-m=$(r.move)",
-	    "$(i)", "1", "A",
-	]
+    cmd = [
+        "-f=$(r.furniture)",
+        "-m=$(r.move)",
+        "$(i)", "1", "A",
+    ]
 
-	display(cmd)
-	main(cmd);
+    display(cmd)
+    main(cmd);
     end
 end
 

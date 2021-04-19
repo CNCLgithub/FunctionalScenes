@@ -1,6 +1,13 @@
 import Statistics: mean
 import ImageFiltering: Kernel, imfilter
 
+export navigability, compare, occupancy_grid, diffuse_og
+
+function k_shortest_paths(r::Room, k::Int64, ent::Int64, ext::Int64)
+    g = pathgraph(r)
+    yen_k_shortest_paths(g, ent, ext, weights(g), k).paths
+end
+
 function shortest_path_length(g, s, e)
     s = a_star(g, s, e)
     length(s)
@@ -133,4 +140,3 @@ compare(a::Room, b::Room) = @>> map(symdiff, navigability(a), navigability(b)) m
 #     length(setdiff(na,nb))
 # end
 
-export navigability, compare, occupancy_grid, diffuse_og

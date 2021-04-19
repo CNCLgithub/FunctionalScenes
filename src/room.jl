@@ -102,17 +102,28 @@ type_map = Dict{Symbol, Char}(
     :exit => '◎',
     :wall => '■',
     :floor => '□',
-    :furniture => '◆'
+    :furniture => '◆',
+    :path => '○'
 )
 
 print_row(i) = print("$(String(i))")
 
 function Base.show(io::IO, m::MIME"text/plain", r::Room)
+    Base.show(io,m,(r, Tile[]))
+end
+function Base.show(io::IO, m::MIME"text/plain", t::Tuple{Room, Vector{Tile}})
+    r, paths = t
     g = pathgraph(r)
-    types = @>> pathgraph(r) vertices lazymap(v -> get_prop(g, v, :type)) collect(Symbol)
+    types = @>> r begin
+        pathgraph 
+        vertices 
+        map(v -> get_prop(g, v, :type)) 
+        collect(Symbol)
+    end
     types[entrance(r)] .= :entrance
     types[exits(r)] .= :exit
-    grid = @>> types lazymap(t -> type_map[t]) collect(Char)
+    types[paths] .= :path
+    grid = @>> types map(t -> type_map[t]) collect(Char)
     grid = reshape(grid, steps(r))
     for i in eachrow(grid)
         print("\n")
