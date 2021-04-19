@@ -10,9 +10,11 @@ import Random:shuffle
 
 import FunctionalScenes: expand, furniture, valid_moves,
     shift_furniture, move_map, labelled_categorical,
-    translate
+    translate, k_shortest_paths, entrance, exits
 
 import FunctionalScenes: torch, functional_scenes
+
+import Gen:categorical
 
 features = Dict(
     "features.6" => "c3",
@@ -81,13 +83,22 @@ function search(r::Room)
     select(result, [:furniture, :move, :d])
 end
 
+# TODO: fill in the blanks 
 function build(r::Room; k = 12, factor = 1)
     weights = zeros(steps(r))
+    # ensures that there is no furniture near the observer
     start_x = Int(last(steps(r)) * 0.4)
     stop_x = last(steps(r)) - 2
     start_y = 2
     stop_y = first(steps(r)) - 1
     weights[start_y:stop_y, start_x:stop_x] .= 1.0
+    #entrance = entrance(r)
+    #exits = exits(r)
+    paths = k_shortest_paths(r,10,entrance(r)[1],exits(r)[1])
+    probs = fill(1.0 / 10, 10)
+    index = categorical(probs)
+    path = paths[index] # hint you can use Gen.categorical
+    weights[path] .= 0.0
     new_r = last(furniture_chain(k, r, weights))
     new_r = FunctionalScenes.expand(new_r, factor)
     dist = search(new_r)
@@ -123,7 +134,7 @@ function main()
     n = 30
     room_dims = (11,20)
     entrance = [6]
-    exits = [213, 217]
+    exits = [215]
     r = Room(room_dims, room_dims, entrance, exits)
     display(r)
     @time seeds, df = create(r, n = n)
