@@ -74,8 +74,9 @@ function compare_og(a,b)
     og_b = occupancy_grid(b, decay = 0.0001, sigma = 0.7)
     viz_ocg(og_a)
     viz_ocg(og_b)
-    # cor(vec(mean(og_a)), vec(mean(og_b)))
-    map(wsd, og_a, og_b) |> sum
+    r = cor(vec(mean(og_a)), vec(mean(og_b)))
+    d = map(wsd, og_a, og_b) |> sum
+    (r, d)
 end
 
 
@@ -124,14 +125,14 @@ end
 function sample_steps(chain_p, k)
     chain = load(chain_p)
     n = length(chain)
-    logscores = map(i -> chain["$(i)"]["log_score"], 37:n)
+    logscores = map(i -> chain["$(i)"]["log_score"], 13:n)
     ws = exp.(logscores .- logsumexp(logscores))
     println("$(n), $(k)")
     println(size(ws))
     step_ids = rand(Distributions.Categorical(ws), k)
     println(step_ids)
-    steps = @>> step_ids map(i -> chain["$(i+36)"]) collect
-    sens = sens_from_chain(chain, 37, n)
+    steps = @>> step_ids map(i -> chain["$(i+12)"]) collect
+    sens = sens_from_chain(chain, 13, n)
     (steps, sens)
 end
 
@@ -177,22 +178,15 @@ function viz_trace_history(history)
     println(plt)
 end
 
-function compare_rooms(base_p::String, base_chain, move_chain,
-                       fid, move)
-    @time base = load(base_p)["r"]
-
-    f = furniture(base)[fid]
-    move = Symbol(move)
-    room = shift_furniture(base, fid, move)
-    shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
- 
-    es = exits(base)
-    paths_a = @>> es map(e -> safe_shortest_path(base,e)) map(relative_path)
-    paths_b = @>> es map(e -> safe_shortest_path(room,e)) map(relative_path)
+function lv_distance(a::Room, b::Room)
+    es = exits(a)
+    paths_a = @>> es map(e -> safe_shortest_path(a,e)) map(relative_path)
+    paths_b = @>> es map(e -> safe_shortest_path(b,e)) map(relative_path)
     lvd = sum(map(lv_distance, paths_a, paths_b))
+end
 
-    ogd = compare_og(base, room)
-    
+function compare_model_predictions(base_p::String, base_chain, move_chain,
+                       fid, move)
     og_gt = occupancy_grid(base) 
     viz_ocg(og_gt)
     
@@ -200,7 +194,7 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     base_query = query_from_params(base,
                                    "/project/scripts/experiments/attention/gm.json";
                                    instances = 20,
-                                   offset = (0, 0),
+                                   # offset = (0, 0),
                                    img_size = (240, 360),
                                    tile_window = 10.0, # must be high enough due to gt prior
                                    active_bias = 10.0, # must be high enough due to gt prior
@@ -209,7 +203,7 @@ function compare_rooms(base_p::String, base_chain, move_chain,
     move_query = query_from_params(room,
                                    "/project/scripts/experiments/attention/gm.json";
                                    instances = 20,
-                                   offset = (0,0),
+                                   # offset = (0,0),
                                    img_size = (240, 360),
                                    tile_window = 10.0, # must be high enough due to gt prior
                                    active_bias = 10.0, # must be high enough due to gt prior
@@ -258,34 +252,42 @@ end
 function main(exp::String)
 
     df = DataFrame(CSV.File("/scenes/$(exp).csv"))
-    new_df = DataFrame(id = Int64[], furniture = Int64[],
-                       move = String[], pixeld = Float64[],
-                       lvd = Float64[], ogd = Float64[],
-                       base_sense = Float64[],
-                       move_sense = Float64[],
+    new_df = DataFrame(id = Int64[], furniture = Int64[], move = String[],
+                       pixeld = Float64[], # image features
+                       lvd = Float64[], ogd = Float64[], ogc = Float64[],  # ideal navigational affordances
+                       # model based inferences and attention
+                       base_sense = Float64[], move_sense = Float64[],
                        mogd = Float64[],
                        base_target_att = Float64[],
                        move_target_att = Float64[], 
                        base_total_att = Float64[],
-                       move_total_att = Float64[])
+                       move_total_att = Float64[],
+                       )
 
-    # df = df[df.id .<= 1, :]
     for r in eachrow(df)
         base = "/renders/$(exp)/$(r.id).png"
         img = "/renders/$(exp)/$(r.id)_$(r.furniture)_$(r.move).png"
-	# pixeld = compare_pixels(base, img)
-        pixeld = 0
+        pixeld = compare_pixels(base, img)
 
-        base = "/scenes/$(exp)/$(r.id).jld2"
 
-        # base_chain = "/experiments/$(exp)_attention_150/$(r.id)/1.jld2"
-        # move_chain = "/experiments/$(exp)_attention_150/$(r.id)_furniture_$(r.move)/1.jld2"
+        base_p = "/scenes/$(exp)/$(r.id).jld2"
+
+        base = load(base_p)["r"]
+        f = furniture(base)[r.furniture]
+        move = Symbol(r.move)
+        room = shift_furniture(base, r.furniture, move)
+        shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
+
+        lvd = lv_distance(base, room)
+        ogr, ogd = compare_og(base, room)
+
         base_chain = "/experiments/$(exp)_attention/$(r.id)/1.jld2"
         move_chain = "/experiments/$(exp)_attention/$(r.id)_furniture_$(r.move)/1.jld2"
-        result = compare_rooms(base, base_chain, move_chain,
-                                 r.furniture, r.move)
-
-        push!(new_df, (r.id, r.furniture, r.move, pixeld, result...))
+        # pred = compare_model_predictions(base, base_chain, move_chain,
+        #                                  r.furniture, r.move)
+        # `zeros` pads the ignored columns for now
+        row = (r.id, r.furniture, r.move, pixeld, lvd, ogd, ogr, zeros(7)...) 
+        push!(new_df, row)
     end
     display(new_df)
     isdir("/experiments/$(exp)") || mkdir("/experiments/$(exp)")
@@ -293,6 +295,4 @@ function main(exp::String)
 end
 
 
-# main("pilot");
-# main("1exit");
-main("2e_1p_30s");
+main("2e_1p_30s_matchedc3");

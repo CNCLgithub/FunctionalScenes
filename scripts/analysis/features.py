@@ -38,24 +38,6 @@ model = init_alexnet('/datasets/alexnet_places365.pth.tar',
 # model = init_alexnet_objects('pytorch/vision:v0.6.0')
 
 
-# TODO: just make a new room here
-src = '/renders/2e_1p_30s_matchedc3/1/scene.json'
-with open(src, 'r') as f:
-    template = json.load(f)
-
-graphics = SimpleGraphics((480, 720), device)
-# graphics = SimpleGraphics((240, 360), device)
-graphics.set_from_scene(template)
-
-def render_p3d(src):
-
-    with open(src, 'r') as f:
-        scene = json.load(f)
-    img, _ = render_scene(scene, graphics)
-    return Image.fromarray((img * 255).astype(np.uint8),
-                           mode = 'RGB')
-
-
 def feature_corr(r, renders):
 
     base = os.path.join(renders, '{0:d}.png'.format(r.id))
@@ -71,22 +53,13 @@ def foo(src, exp: str):
     name = '{0:d}_{1!s}_{2!s}'.format(src.id, src.furniture,
                                       src.move)
 
-    base_torch = '/renders/{0!s}/{1!s}_torch.png'.format(exp, base)
-    base_torch = Image.open(base_torch).convert('RGB')
-    row_torch = '/renders/{0!s}/{1!s}_torch.png'.format(exp, name)
-    row_torch = Image.open(row_torch).convert('RGB')
-    feats = compare_features(model, features, base_torch,
-                             row_torch)
-    feats = {(k+'_3d'):v for (k,v) in feats.items()}
-
     base_blend = '/renders/{0!s}/{1!s}.png'.format(exp, base)
     base_blend = Image.open(base_blend).convert('RGB')
     row_blend = '/renders/{0!s}/{1!s}.png'.format(exp, name)
     row_blend = Image.open(row_blend).convert('RGB')
 
-    feats.update(compare_features(model, features, base_blend,
-                                  row_blend))
-    return feats
+    return compare_features(model, features, base_blend,
+                            row_blend)
 
 
 def main():

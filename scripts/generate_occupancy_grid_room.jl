@@ -31,35 +31,6 @@ end
 model = functional_scenes.init_alexnet("/datasets/alexnet_places365.pth.tar", device)
 graphics = functional_scenes.SimpleGraphics((480, 720), device)
 
-
-function feat_pred(a_img, x)
-    b_d = translate(x, false)
-    b_img = functional_scenes.render_scene_pil(b_d, graphics)
-    feats = functional_scenes.nn_features.compare_features(model, features, a_img, b_img)
-    feats["c3"] < 0.97
-end
-
-function predicate(x)
-    any(iszero.(x.d)) && any((!iszero).(x.d))
-end
-
-
-function digest(df::DataFrame, base)
-    base_d = translate(base, false)
-    graphics.set_from_scene(base_d)
-    base_img = functional_scenes.render_scene_pil(base_d, graphics)
-    @>> DataFrames.groupby(df, :furniture) begin
-        filter(g -> nrow(g) >= 2)
-        map(g -> g[1:2, :])
-        filter(predicate)
-        filter(g -> all(
-                        map(x -> feat_pred(base_img, x), 
-                        g.room)))
-        x -> isempty(x) ? x : labelled_categorical(x)
-        DataFrame
-    end
-end
-
 function search(r::Room)
     # avoid furniture close to camera
     fs = furniture(r)[4:end]
@@ -78,12 +49,11 @@ function search(r::Room)
         end
     end
     isempty(data) && return  DataFrame()
-    result = @> data sort([:furniture, :d]) digest(r)
+    result = @> data sort([:furniture, :d]) 
     isempty(result) && return  DataFrame()
     select(result, [:furniture, :move, :d])
 end
 
-# TODO: fill in the blanks 
 function build(r::Room; k = 12, factor = 1)
     weights = zeros(steps(r))
     # ensures that there is no furniture near the observer
@@ -129,9 +99,10 @@ end
 
 
 function main()
-    name = "pytorch_rep"
+    #name = "pytorch_rep"
     #name = "2e_1p_30s_matchedc3"
-    n = 30
+    name = "occupancy_grid_data_driven"
+    n = 800
     room_dims = (11,20)
     entrance = [6]
     exits = [215]

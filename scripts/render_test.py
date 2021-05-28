@@ -6,6 +6,7 @@ import time
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import functional_scenes
 from functional_scenes.render import render_scene, SimpleGraphics
 from pytorch3d.io import save_obj
 
@@ -28,14 +29,8 @@ graphics = SimpleGraphics((480, 720), device)
 graphics.set_from_scene(scene)
 
 beg_ts = time.time()
-img, mesh = render_scene(scene, graphics)
+img = functional_scenes.render_scene_pil(scene, graphics)
 end_ts = time.time()
 print(end_ts - beg_ts)
-save_obj( '/renders/test.obj', mesh.verts_packed(), mesh.faces_packed(),)
 
-print(img.shape)
-plt.figure()
-plt.imshow(img)
-plt.grid("off");
-plt.axis("off");
-plt.savefig('/renders/test.png')
+img.save('/renders/test.png')

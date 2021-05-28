@@ -33,7 +33,7 @@ class SimpleGraphics(AbstractGraphics):
         raster_settings = RasterizationSettings(
             image_size=img_size,
             # bin_size=0, # naive rasterization
-            blur_radius=0.00001,
+            # blur_radius=0.00001,
             faces_per_pixel=10,
             cull_backfaces=True
         )
