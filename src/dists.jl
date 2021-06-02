@@ -1,4 +1,4 @@
-export mybroadcast
+export broadcasted_bernoulli
 
 @dist function labelled_categorical(xs)
     n = length(xs)
@@ -14,30 +14,27 @@ end
     xs[index]
 end
 
-# struct Mybroadcast <: Gen.Distribution{Array{Float32, 3}} end
+struct BroadcastedBernoulli <: Gen.Distribution{AbstractArray{Bool}} end
 
-# const mybroadcast = Mybroadcast()
+const broadcasted_bernoulli = BroadcastedBernoulli()
 
-# function Gen.random(::Mybroadcast, mean::Array{Float32, 3}, noise::Array{Float32, 3})
-#     broadcasted_normal(mean, noise)
-#     # img = mean .+ randn(size(mean)) .* noise
-#     # return img
-# end
+function Gen.random(::BroadcastedBernoulli, ws::Array{Float64})
+    bernoulli.(ws)
+end
 
-# function Gen.logpdf(::Mybroadcast, image::Array{Float32, 3},
-#                     mean::Array{Float32, 3}, noise::Array{Float32, 3})
-#     ll = Gen.logpdf(broadcasted_normal(image, mean, noise))
-#     display(ll)
-#     return ll
-#     # var = noise * noise
-#     # vec = (image-mean)[:]
-#     # lpdf = -(vec' * vec)/(2.0 * var) - 0.5 * log(2.0 * pi * var)
+function Gen.logpdf(::BroadcastedBernoulli, xs::AbstractArray{Bool},
+                    ws::AbstractArray{Float64})
+    s = size(ws)
+    Gen.assert_has_shape(xs, s;
+                     msg="`xs` has size $(size(xs))` but `ws` is size $(s)")
+    ll = 0
+    for i in LinearIndices(s)
+        ll += Gen.logpdf(bernoulli, xs[i], ws[i])
+    end
+    return ll
+end
 
-#     # return lpdf
-# end
+(::BroadcastedBernoulli)(ws) = Gen.random(BroadcastedDist(), ws)
 
-
-# (::Mybroadcast)(mean, noise) = Gen.random(Mybroadcast(), mean, noise)
-
-# Gen.has_output_grad(::Mybroadcast) = false
-# Gen.logpdf_grad(::Mybroadcast, value::Set, args...) = (nothing,)
+Gen.has_output_grad(::BroadcastedBernoulli) = false
+Gen.logpdf_grad(::BroadcastedBernoulli, value::Set, args...) = (nothing,)

@@ -12,6 +12,7 @@ using LightGraphs
 using LinearAlgebra
 using OptimalTransport
 using OrderedCollections
+using Parameters: @with_kw
 
 const torch = PyNULL()
 const functional_scenes = PyNULL()
@@ -26,7 +27,7 @@ include("dists.jl")
 include("room.jl")
 include("utils.jl")
 include("furniture.jl")
-include("gen.jl")
+include("gm/gm.jl")
 include("blender/blender.jl")
 include("paths.jl")
 include("inference/inference.jl")
