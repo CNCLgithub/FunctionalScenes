@@ -143,7 +143,7 @@ end
 
 function main()
     name = "1_exit_22x40"
-    n = 10
+    n = 30
     room_dims = (11,20)
     entrance = [6]
     exits = [215]

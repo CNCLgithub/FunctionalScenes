@@ -22,17 +22,17 @@ def main():
 
     parser.add_argument('--scenes', type = int, default = 30,
                         help = 'number of scenes')
-    parser.add_argument('--duration', type = int, default = 10,
+    parser.add_argument('--duration', type = int, default = 15,
                         help = 'job duration (min)')
     args = parser.parse_args()
 
-    n = args.scenes * args.chains
+    n = args.scenes
     tasks, kwargs, extras = att_tasks(args)
 
     interpreter = '#!/bin/bash'
     resources = {
         'cpus-per-task' : '4',
-        'mem-per-cpu' : '1GB',
+        'mem-per-cpu' : '2GB',
         'time' : '{0:d}'.format(args.duration),
         'partition' : 'scavenge_all',
         # 'gres' : 'gpu:1',

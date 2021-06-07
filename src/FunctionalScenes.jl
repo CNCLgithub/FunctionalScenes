@@ -12,7 +12,7 @@ using LinearAlgebra
 using OptimalTransport
 using OrderedCollections
 using Parameters: @with_kw
-using Lazy: @>, @>>, lazymap
+using Lazy: @>, @>>, lazymap, flatten
 
 const torch = PyNULL()
 const functional_scenes = PyNULL()
