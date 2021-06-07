@@ -2,6 +2,7 @@ using CSV
 using Lazy
 using JLD2
 using FileIO
+using ArgParse
 using FunctionalScenes
 
 import FunctionalScenes: shift_furniture, functional_scenes, translate,
@@ -82,7 +83,7 @@ function render_torch_stims(df::DataFrame, name::String)
     end
 end
 function main()
-    #name = "pytorch_rep"
+    args = parse_commandline()
     name = "1_exit_22x40"
     src = "/scenes/$(name)"
     df = DataFrame(CSV.File("$(src).csv"))
@@ -90,13 +91,38 @@ function main()
     # render_torch(seeds, name)
     # render_torch_stims(df, name)
 
+    seeds = [args.scene]
+    df = df[df.id .== args.scene, :]
     render_base(seeds, name,
                 spheres = true
                 )
     render_stims(df, name,
                  spheres = true,
                  )
+    render_base(seeds, name,
+                spheres = false
+                )
+    render_stims(df, name,
+                 spheres = false,
+                 )
     return nothing
 end
+
+
+
+function parse_commandline()
+    s = ArgParseSettings()
+
+    @add_arg_table! s begin
+        "scene"
+        help = "Which scene to run"
+        arg_type = Int64
+        required = true
+    end
+
+    return parse_args(s)
+end
+
+
 
 main();
