@@ -91,8 +91,9 @@ function main()
     # render_torch(seeds, name)
     # render_torch_stims(df, name)
 
-    seeds = [args.scene]
-    df = df[df.id .== args.scene, :]
+    @show args
+    seeds = [args["scene"]]
+    df = df[df.id .== args["scene"], :]
     render_base(seeds, name,
                 spheres = true
                 )
