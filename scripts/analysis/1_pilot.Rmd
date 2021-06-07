@@ -1,0 +1,81 @@
+---
+title: "pilot"
+output:
+  pdf_document: default
+  html_document:
+df_print: paged
+header-includes:
+ \usepackage{booktabs}
+ \usepackage{longtable}
+ \usepackage{array}
+ \usepackage{multirow}
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+
+---
+
+# Pilot
+
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'H', 
+                      echo=TRUE, warning=FALSE, message=FALSE)
+knitr::opts_knit$set(root.dir = '~/output/experiments/')
+
+```
+
+
+
+```{r includes}
+library(tidyverse)
+library(estimatr)
+library(ggplot2)
+library(readr)
+library(Hmisc)
+library(ggrepel)
+library(estimatr)
+
+
+
+th <- theme_classic() +
+  theme(axis.text = element_text(size=26)) +
+  theme(axis.title = element_text(size=30)) 
+theme_set(th)
+
+update_geom_defaults("point", list(size = 16))
+```
+
+```{r load}
+
+parsed_trials <- read_csv("~/output/experiments/1_exit_22x40/parsed_trials.csv") %>%
+    mutate(resp_same = Response == "j",
+         correct = !xor(base, resp_same))
+
+exp_data <- read_csv("~/output/scenes/1_exit_22x40.csv") %>%
+  rename(scene = id)
+
+# covariates <- read_csv("~/output/experiments/1_exit_22x40/covariates.csv")  %>%
+#   rename(scene = id) %>%
+#   mutate(zogd = scale(ogd),
+#          zpixeld = scale(pixeld),
+#          dsens = move_sense - base_sense)
+# 
+# features <- read_csv("~/output/experiments/1_exit_22x40/features.csv")  %>%
+#   rename(scene = id)
+
+```
+
+```{r} 
+
+raw_hits <- parsed_trials %>%
+  filter(!base) %>%
+  group_by(scene, move) %>%
+  summarise(c = sum(correct),
+            n = n()) %>%
+  left_join(exp_data)
+
+raw_hits %>%
+  group_by(d > 0) %>%
+  summarise(c = sum(c))
+```
+

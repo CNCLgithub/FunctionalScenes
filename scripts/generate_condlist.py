@@ -50,6 +50,9 @@ def main():
     parser.add_argument('--scene', type = str,
                         help = "Which scene dataset to use",
                         default = '2e_1p_30s')
+    parser.add_argument('--render', type = str,
+                        help = "Which render mode",
+                        default = 'cycles_cubes')
     parser.add_argument('--fps', type = int,
                         help = "FPS of resulting videos",
                         default = 60)
@@ -58,11 +61,12 @@ def main():
                         default = 0.750)
     parser.add_argument('--mask_dur', type = float,
                         help = 'duration of mask in seconds',
-                        default = 0.250)
+                        default = 0.500)
     args = parser.parse_args()
 
-    renders = '/renders/' + args.scene
-    movies = '/movies/' + args.scene
+    renders = '/renders/' + args.scene + '_' + args.render
+    movies = '/movies/' + args.scene + '_' + args.render
+
     #movies = '/movies/{0!s}_{1:0.3f}'.format(args.scene, args.stim_dur)
     os.path.isdir(movies) or os.mkdir(movies)
     df = pd.read_csv('/scenes/' + args.scene + '.csv')

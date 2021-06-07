@@ -19,6 +19,7 @@ export ModelParams
     offset::Tuple{Int64, Int64} = (0, 2) # offset in world space for each tracker
     inner_ref::CartesianIndices = CartesianIndices(dims)
     tracker_ref::CartesianIndices = _tracker_ref(template, dims, thickness, offset)
+    n_trackers::Int64 = length(tracker_ref)
     linear_ref::LinearIndices = _linear_ref(template)
     default_tracker_p::Float64 = 0.5
     tracker_ps::Vector{Float64} = fill(default_tracker_p,
@@ -169,16 +170,14 @@ function tracker_to_state(params::ModelParams, tracker::Int64)
     @>> (start:(start + params.tracker_size - 1)) collect(Int64) vec
 end
 
-function state_to_room(params::ModelParams, vs::Vector{CartesianIndex{N}}) where {N}
-    @>> vs LinearIndices collect(Int64) state_to_room(params)
-end
-
-function state_to_room(params::ModelParams, vs::Vector{Int64})
+"""
+Converts cartesian coordinats in tracker state space (inner_ref, tracker_id) to
+the linear indices of room coordinates (x, y)
+"""
+function state_to_room(params::ModelParams, vs::Vector{CartesianIndex{2}})
     result = Vector{Int64}(undef, length(vs))
-    for (i,j) in enumerate(vs)
-        tracker_idx = ceil(j / params.tracker_size) |> Int64
-        inner_idx = j % params.tracker_size + 1 |> Int64
-
+    for (i, cind) in enumerate(vs)
+        inner_idx, tracker_idx = cind
         outer = Tuple(params.tracker_ref[tracker_idx]) .- (1,1) .+ params.offset
         outer = Tuple(outer) .* params.dims
         cart = Tuple(params.inner_ref[inner_idx]) .+ outer .+ params.thickness
@@ -188,30 +187,26 @@ function state_to_room(params::ModelParams, vs::Vector{Int64})
     return result
 end
 
-function room_to_tracker(params::ModelParams, fs)
-    fs = collect(Int64, fs)
-    # ts = Vector{Int64}(undef, size(fs)...)
-    ts = Int64[]
-    full_coords = CartesianIndices(steps(params.template))
-    tracker_linear = LinearIndices(size(params.tracker_ref))
-    for (i,j) in enumerate(fs)
-        full_cart = full_coords[j]
-        xy = Tuple(full_cart) .- params.thickness
-        xy = xy .- (params.dims .* params.offset)
-        xy = Int64.(ceil.(xy ./ params.dims))
-        if any(xy .> size(params.tracker_ref))
-            continue
-        end
-        push!(ts, tracker_linear[xy...])
-        # ts[i] = tracker_linear[xy...]
-    end
-    return ts
-end
+# function room_to_tracker(params::ModelParams, vs::Vector{CartesianIndex{2}})
+#     ts = Int64[]
+#     full_coords = CartesianIndices(steps(params.template))
+#     tracker_linear = LinearIndices(size(params.tracker_ref))
+#     for (i,j) in enumerate(fs)
+#         full_cart = full_coords[j]
+#         xy = Tuple(full_cart) .- params.thickness
+#         xy = xy .- (params.dims .* params.offset)
+#         xy = Int64.(ceil.(xy ./ params.dims))
+#         if any(xy .> size(params.tracker_ref))
+#             continue
+#         end
+#         push!(ts, tracker_linear[xy...])
+#         # ts[i] = tracker_linear[xy...]
+#     end
+#     return ts
+# end
 
 function project_state_weights(params::ModelParams, state)
-    @show size(state)
-    n = prod(size(state))
-    state_to_room(params, collect(1:n))
+    state_to_room(params, CartesianIndices(size(state)))
 end
 
 function viz_global_state(trace::Gen.Trace)
@@ -367,4 +362,19 @@ end
 function batch_compare_og(og_a, og_b)
     cor(vec(mean(og_a)), vec(mean(og_b)))
     # map(wsd, og_a, og_b) |> sum
+end
+
+function mat_resize(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
+    mus = imresize(mat, dims)
+    vars = Matrix{Float64}(undef, dims[1], dims[2])
+
+    kdim = Int64.(size(mat) ./ dims)
+    ref = CartesianIndices{2}(dims)
+    for c in ref
+        start = (c .- (1, 1)) .* kdim
+        stop = c .* kdim
+        vars[c] = sd(mat[start[1] : stop[1],
+                            start[2] : stop[2]])
+    end
+    mus, vars
 end

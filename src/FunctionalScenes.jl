@@ -2,7 +2,6 @@ module FunctionalScenes
 
 using Gen
 using JSON
-using Lazy
 using GenRFS
 using PyCall
 using Statistics
@@ -13,6 +12,7 @@ using LinearAlgebra
 using OptimalTransport
 using OrderedCollections
 using Parameters: @with_kw
+using Lazy: @>, @>>, lazymap
 
 const torch = PyNULL()
 const functional_scenes = PyNULL()

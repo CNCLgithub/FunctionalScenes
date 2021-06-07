@@ -85,14 +85,14 @@ def parse_row(tname):
 
 def main():
 
-    parser = argparse.ArgumentParser(description = "Parses MOT Exp:1 data",
+    parser = argparse.ArgumentParser(description = "Parses participants.db",
         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("--exp", type = str, help = "Path to trial dataset",
                         default = '2e_1p_30s')
     parser.add_argument("--table_name", type = str, default = "2e_1p_30s",
                         help = 'Table name')
-    parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["2.0"],
+    parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["1.0"],
                         help = 'Experiment version flag')
     parser.add_argument("--mode", type = str, default = "debug",
                         choices = ['debug', 'sandbox', 'live'],
@@ -147,11 +147,11 @@ def main():
     out = os.path.join(exp_src, 'parsed_trials.csv')
     trs.to_csv(out, index=False)
 
-    cl_qs = cl_qs[cl_qs.WID.isin(good_wids)]
-    cl_qs["ID"] = cl_qs.WID.apply(lambda x: wid_translate[x])
+    # cl_qs = cl_qs[cl_qs.WID.isin(good_wids)]
+    # cl_qs["ID"] = cl_qs.WID.apply(lambda x: wid_translate[x])
 
-    out = os.path.join(exp_src, 'parsed_questions.csv')
-    cl_qs[["ID", "instructionloops", "comments"]].to_csv(out, index=False)
+    # out = os.path.join(exp_src, 'parsed_questions.csv')
+    # cl_qs[["ID", "instructionloops", "comments"]].to_csv(out, index=False)
 
 if __name__ == '__main__':
     main()

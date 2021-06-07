@@ -12,18 +12,23 @@ function furniture(r::Room)::Array{Furniture}
 end
 
 function add(r::Room, f::Furniture)::Room
-    g = copy(pathgraph(r))
+    g = deepcopy(pathgraph(r))
     # assign furniture status
     foreach(v -> set_prop!(g, v, :type, :furniture), f)
     # ensure that furniture is only connected to itself
     # returns a list of edges connected each furniture vertex
     es = @>> f begin
         collect
-        map(v -> @>> v neighbors(g) map(n -> Edge(v, n)))
+        map(v -> @>> v begin
+                neighbors(g)
+                filter(x -> !in(x, f))
+                map(n -> Edge(v, n))
+            end)
         x -> vcat(x...)
     end
     # removes any edge that is no longer valid in the neighborhood (ie :furniture <-> :floor)
-    foreach(e -> !matched_type(g, e) && rem_edge!(g, e), es)
+    foreach(e -> !matched_type(g, e) && rem_edge!(g, e),
+            es)
     Room(r.steps, r.bounds, r.entrance, r.exits, g)
 end
 
@@ -69,15 +74,6 @@ function shift_furniture(r::Room, f::Furniture, move::Symbol)
 
     fid = findfirst(x -> !isempty(intersect(f, x)), fs)
     return shift_furniture(r, fid, move)
-    # add shifted tiles to room
-    # new_r = add(r, shifted)
-    # new_g = pathgraph(new_r)
-    # # clear newly empty tiles
-    # @>> setdiff(f, shifted) foreach(v -> set_prop!(new_g, v, :type, :floor))
-    # # patch edges to tiles that are now empty
-    # spots = setdiff(move_map, [move])
-    # foreach(t -> patch!(new_r, t, spots), f)
-    # return new_r
 end
 
 
