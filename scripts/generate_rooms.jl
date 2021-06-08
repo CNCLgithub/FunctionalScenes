@@ -67,13 +67,14 @@ function digest(df::DataFrame, base)
     end
 end
 
-function search(r::Room)
+function search(r::Room, move_set)
     # avoid furniture close to camera
     fs = furniture(r)[4:end]
     data = DataFrame()
     for (i,f) in enumerate(fs)
         moves = collect(Bool, valid_moves(r, f))
         moves = move_map[moves]
+        moves = intersect(moves, move_set)
         for m in moves
             shifted = shift_furniture(r,f,m)
             d = mean(compare(r, shifted))
@@ -91,7 +92,8 @@ end
 
 function build(r::Room;
                k::Int64 = 8, factor::Int64 = 1,
-               pct_open::Float64 = 0.4)
+               pct_open::Float64 = 0.4,
+               moves::Vector{Symbol} = move_map)
     weights = zeros(steps(r))
     # ensures that there is no furniture near the observer
     start_x = Int(last(steps(r)) * pct_open)
@@ -110,7 +112,7 @@ function build(r::Room;
     weights[path] .= 0.0
     new_r = last(furniture_chain(k, r, weights))
     new_r = FunctionalScenes.expand(new_r, factor)
-    dist = search(new_r)
+    dist = search(new_r, moves)
     (new_r, dist)
 end
 
@@ -119,23 +121,45 @@ function saver(id::Int64, r::Room, out::String)
 end
 
 
-function create(base::Room; n::Int64 = 15)
-    seeds = Vector{Room}(undef, n)
+function create(room_dims::Tuple{Int64, Int64},
+                entrance::Int64,
+                doors::Vector{Int64};
+                n::Int64 = 8)
+    inds = LinearIndices(room_dims)
+    seeds = Vector{Room}(undef, n * length(doors))
     df = DataFrame()
-    i = 1
-    while i <= n
-        # Profile.init(delay = 0.001,
-        #             n = 10^6)
-        # @profilehtml seed, _df = build(base, factor = 2)
-        # @profilehtml seed, _df = build(base, factor = 2)
-        seed, _df = build(base, factor = 2)
-        if !isempty(_df)
-            println("$(i)/$(n)")
-            seeds[i] = seed
-            _df[!, :id] .= i
-            append!(df, _df)
-            i += 1
-        end
+    for (idx, door) in enumerate(doors)
+	    r = Room(room_dims, room_dims, [entrance], 
+                     [inds[door, room_dims[2]]])
+	    display(r)
+	    i = 1
+	    max_move = Int64(ceil(n / 4.0))
+	    @show max_move
+	    move_counts = Dict{Symbol, Int64}(zip(move_map, zeros(4)))
+	    while i <= n
+		seed, _df = build(r, factor = 2,
+				  moves = collect(Symbol, keys(move_counts)))
+		if !isempty(_df)
+		    move = filter(:d => d -> d > 0, _df)
+		    move = first(move[!, :move])
+		    if move_counts[move] >= max_move
+			println("limit reached for $(move)")
+			length(move_counts) > 2 && pop!(move_counts, move)
+			continue
+		    end
+		    move_counts[move] += 1
+		    @show move_counts
+                    id = (idx-1)*n + i
+		    seeds[id] = seed
+		    _df[!, :id] .= id
+		    _df[!, :door] .= idx
+		    append!(df, _df)
+		    i += 1
+		    println("$(i)/$(n)")
+		end
+
+	    end
+
     end
     return seeds, df
 end
@@ -143,13 +167,11 @@ end
 
 function main()
     name = "1_exit_22x40"
-    n = 30
     room_dims = (11,20)
-    entrance = [6]
-    exits = [215]
-    r = Room(room_dims, room_dims, entrance, exits)
-    display(r)
-    seeds, df = create(r, n = n)
+    entrance = 6
+    doors = [3, 5, 7, 9]
+    n = 8
+    seeds, df = create(room_dims, entrance, doors; n = n)
     out = "/scenes/$(name)"
     CSV.write("$(out).csv", df)
     isdir(out) || mkdir(out)
