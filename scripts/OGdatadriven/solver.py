@@ -6,6 +6,7 @@ warnings.filterwarnings("ignore")
 import os
 from tqdm import tqdm
 #import visdom
+import json
 
 import torch
 import torch.optim as optim
@@ -14,7 +15,7 @@ from torch.autograd import Variable
 from torchvision.utils import make_grid, save_image
 
 from utils import cuda
-from model import BetaVAE_H, BetaVAE_B
+from model import BetaVAE_H, BetaVAE_B, BetaVAE_OG
 from dataset import return_data
 
 from torchvision import transforms
@@ -32,6 +33,11 @@ def reconstruction_loss(x, x_recon, distribution):
         recon_loss = None
 
     return recon_loss
+
+def l2_distance(og,og_recon):
+    batch_size = og.size(0)
+    l2_dist = torch.dist(og, og_recon, p=2).div(batch_size)
+    return l2_dist
 
 
 def kl_divergence(mu, logvar):
@@ -89,10 +95,10 @@ class Solver(object):
         self.beta1 = args.beta1
         self.beta2 = args.beta2
 
-        if args.dataset.lower() == 'occupancy_grid_data_driven':
+        if args.dataset.lower() == 'occupancy_grid_data_driven_twodoors':
             self.nc = 3
             self.decoder_dist = 'gaussian'
-        elif args.dataset.lower() == 'test_occupancy_grid_data_driven':
+        elif args.dataset.lower() == 'test_occupancy_grid_data_driven_twodoors':
             self.nc = 3
             self.decoder_dist = 'gaussian'
         else:
@@ -105,10 +111,12 @@ class Solver(object):
         else:
             raise NotImplementedError('only support model H or B')
 
+        # optimizer for rendering room image
         self.net = cuda(net(self.z_dim, self.nc), self.use_cuda)
         self.optim = optim.Adam(self.net.parameters(), lr=self.lr,
                                     betas=(self.beta1, self.beta2))
-
+        
+        #parameter about visualization, skip for now
         self.viz_name = args.viz_name
         self.viz_port = args.viz_port
         self.viz_on = args.viz_on
@@ -119,6 +127,7 @@ class Solver(object):
         if self.viz_on:
             self.viz = visdom.Visdom(port=self.viz_port)
 
+        # load checkpoint if any
         self.ckpt_dir = os.path.join(args.ckpt_dir, args.viz_name)
         if not os.path.exists(self.ckpt_dir):
             os.makedirs(self.ckpt_dir, exist_ok=True)
@@ -135,19 +144,99 @@ class Solver(object):
         self.display_step = args.display_step
         self.save_step = args.save_step
 
+        # data loader
         self.dset_dir = args.dset_dir
         self.dataset = args.dataset
         self.batch_size = args.batch_size
         self.data_loader = return_data(args)
         self.test_iter = 0
+        self.test_og_iter = 0
+        self.og_iter = 0
         self.gather = DataGather()
+      
+        self.ckpt_name_og = args.ckpt_name_og
 
-    def test(self):
+        # whether to train occupancy grid or room 
+        self.train = args.train
+        if not self.train:
+            self.BetaVAE_OG = cuda(BetaVAE_OG(self.net.encoder,self.z_dim, self.nc), self.use_cuda)
+        #print(list(self.net.encoder.parameters()))
+
+    def train_OG(self):
+        out = False
+        pbar = tqdm(total=self.max_iter)
+        pbar.update(self.og_iter)
         file_path = os.path.join(self.ckpt_dir, self.ckpt_name)
         checkpoint = torch.load(file_path)
         self.net.load_state_dict(checkpoint['model_states']['net'])
+        
+        # load checkpoint for occupancy grid if any
+        self.load_checkpoint_occupancygrid(self.ckpt_name_og)
+        
+        # train decoder parameters only
+        #occupancy_grid_optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.BetaVAE_OG.parameters()), lr=self.lr,
+        #                            betas=(self.beta1, self.beta2))
+        occupancy_grid_optimizer = optim.Adam(self.BetaVAE_OG.decoder.parameters(), lr=self.lr,
+                                    betas=(self.beta1, self.beta2))
+        while not out:
+            for x,path in self.data_loader:
+                self.og_iter += 1
+                pbar.update(1)
+                x = Variable(cuda(x, self.use_cuda))
+                z_recon, mu, logvar = self.BetaVAE_OG(x)
+                og_true_batch = []
+                for occupancy_grid_path in path:
+                       with open(os.path.join(occupancy_grid_path.replace('/render.png',''),'og.json'),'r') as f:
+                              og_true = torch.FloatTensor(json.load(f)).unsqueeze(0)
+                              og_true_batch.append(og_true)
+                           
+                og_true_batch = torch.stack(og_true_batch,dim = 0) #tensor of dimension [batch_size, channel = 1, room_height, room_width]
+
+                occupancy_grid_distance = l2_distance(og_true_batch.cuda(),z_recon)
+                occupancy_grid_optimizer.zero_grad()
+                occupancy_grid_distance.backward()
+                occupancy_grid_optimizer.step()
+              
+                if self.og_iter%self.display_step == 0:
+                    pbar.write('[{}] occupancy_grid_distance:{:.3f}'.format(
+                        self.og_iter, occupancy_grid_distance.item()))
+
+                if self.og_iter%self.save_step == 0:
+                    #self.save_checkpoint_occupancygrid('og')
+                    self.save_checkpoint_occupancygrid(str(self.ckpt_name_og))
+                    pbar.write('Saved checkpoint(iter:{})'.format(self.og_iter))
+
+                if self.og_iter >= self.max_iter:
+                    out = True 
+                    break
+
+
+    def test_OG(self):
+        file_path_og = os.path.join(self.ckpt_dir, self.ckpt_name_og)
+        checkpoint_og = torch.load(file_path_og)
+        self.load_checkpoint_occupancygrid(self.ckpt_name_og)
+        #self.BetaVAE_OG.decoder.load_state_dict(checkpoint_og['model_states']['net'])
+
+        for x,path in self.data_loader:
+                self.test_og_iter += 1
+                x = Variable(cuda(x, self.use_cuda))
+                z_recon, mu, logvar = self.BetaVAE_OG(x)
+                og_true_batch = []
+                for occupancy_grid_path in path:
+                       with open(os.path.join(occupancy_grid_path.replace('/render.png',''),'og.json'),'r') as f:
+                              og_true = torch.FloatTensor(json.load(f)).unsqueeze(0)
+                              og_true_batch.append(og_true)
+                og_true_batch = torch.stack(og_true_batch,dim = 0)
+                self.reconstructed_z(og_true_batch,z_recon)
+
+    def test_vae(self):
+        file_path = os.path.join(self.ckpt_dir, self.ckpt_name)
+        checkpoint = torch.load(file_path)
+        self.net.load_state_dict(checkpoint['model_states']['net'])
+        #print(list(self.net.encoder.parameters()))
         print("checkpoint loaded for testing")
-        for x in self.data_loader: 
+
+        for x,path in self.data_loader: 
             self.test_iter += 1
             x = Variable(cuda(x, self.use_cuda))
             x_recon, mu, logvar = self.net(x)
@@ -155,20 +244,16 @@ class Solver(object):
             self.gather.insert(images=F.sigmoid(x_recon).data)
             self.reconstructed_image()
             self.gather.flush()
-        #outputs = net(images)
-        n_dsets2 = len(self.data_loader.dataset)
-        print(n_dsets2)
 
-    def train(self):
+    def train_vae(self):
         self.net_mode(train=True)
         self.C_max = Variable(cuda(torch.FloatTensor([self.C_max]), self.use_cuda))
         out = False
-        #n_dsets = len(self.data_loader)
-        #print(n_dsets)
         pbar = tqdm(total=self.max_iter)
         pbar.update(self.global_iter)
+
         while not out:
-            for x in self.data_loader:
+            for x,path in self.data_loader:
                 self.global_iter += 1
                 pbar.update(1)
                 x = Variable(cuda(x, self.use_cuda))
@@ -214,7 +299,8 @@ class Solver(object):
                         self.gather.flush()
 
                 if self.global_iter%self.save_step == 0:
-                    self.save_checkpoint('last')
+                    #self.save_checkpoint('last')
+                    self.save_checkpoint(str(self.ckpt_name))
                     pbar.write('Saved checkpoint(iter:{})'.format(self.global_iter))
 
                 if self.global_iter%50000 == 0:
@@ -229,7 +315,7 @@ class Solver(object):
 
     def reconstructed_image(self):
         #self.net_mode(train=False)
-        output_dir = os.path.join(self.output_dir, str(self.global_iter))
+        output_dir = os.path.join(self.output_dir, str(self.global_iter)+str(self.model)+"image_test_twodoors")
         os.makedirs(output_dir, exist_ok=True)
         x = self.gather.data['images'][0][:100]
         x = make_grid(x, normalize=True)
@@ -244,218 +330,20 @@ class Solver(object):
                                nrow=8, pad_value=1)
         #self.net_mode(train=True)
 
+    def reconstructed_z(self,og_true_batch,z_recon):
+        output_dir = os.path.join(self.output_dir, str(self.max_iter)+str(self.model)+"OG_test_twodoors")
+        os.makedirs(output_dir, exist_ok=True)
+        inv_transform = transforms.Resize((480, 720))
+        og_true_image = make_grid(og_true_batch.cuda(), normalize=True)
+        z_recon_image = make_grid(z_recon, normalize=True)
+        images = torch.stack([og_true_image,z_recon_image],dim = 0).cpu()
+        #images = z_recon_image.cpu()
+        #images = og_true_image.cpu()
+        images = inv_transform(images)
+        save_image(tensor=images,
+                      fp=os.path.join(output_dir, '{}.jpg'.format(self.test_og_iter)),
+                               nrow=8, pad_value=1)
 
-#viz_reconstruction, viz_lines and viz_tranverse are not used here, we can skip them
-
-    def viz_reconstruction(self):
-        self.net_mode(train=False)
-        x = self.gather.data['images'][0][:100]
-        x = make_grid(x, normalize=True)
-        x_recon = self.gather.data['images'][1][:100]
-        x_recon = make_grid(x_recon, normalize=True)
-        images = torch.stack([x, x_recon], dim=0).cpu()
-        self.viz.images(images, env=self.viz_name+'_reconstruction',
-                        opts=dict(title=str(self.global_iter)), nrow=10)
-        self.net_mode(train=True)
-
-    def viz_lines(self):
-        self.net_mode(train=False)
-        recon_losses = torch.stack(self.gather.data['recon_loss']).cpu()
-
-        mus = torch.stack(self.gather.data['mu']).cpu()
-        vars = torch.stack(self.gather.data['var']).cpu()
-
-        dim_wise_klds = torch.stack(self.gather.data['dim_wise_kld'])
-        mean_klds = torch.stack(self.gather.data['mean_kld'])
-        total_klds = torch.stack(self.gather.data['total_kld'])
-        klds = torch.cat([dim_wise_klds, mean_klds, total_klds], 1).cpu()
-        iters = torch.Tensor(self.gather.data['iter'])
-
-        legend = []
-        for z_j in range(self.z_dim):
-            legend.append('z_{}'.format(z_j))
-        legend.append('mean')
-        legend.append('total')
-
-        if self.win_recon is None:
-            self.win_recon = self.viz.line(
-                                        X=iters,
-                                        Y=recon_losses,
-                                        env=self.viz_name+'_lines',
-                                        opts=dict(
-                                            width=400,
-                                            height=400,
-                                            xlabel='iteration',
-                                            title='reconsturction loss',))
-        else:
-            self.win_recon = self.viz.line(
-                                        X=iters,
-                                        Y=recon_losses,
-                                        env=self.viz_name+'_lines',
-                                        win=self.win_recon,
-                                        update='append',
-                                        opts=dict(
-                                            width=400,
-                                            height=400,
-                                            xlabel='iteration',
-                                            title='reconsturction loss',))
-
-        if self.win_kld is None:
-            self.win_kld = self.viz.line(
-                                        X=iters,
-                                        Y=klds,
-                                        env=self.viz_name+'_lines',
-                                        opts=dict(
-                                            width=400,
-                                            height=400,
-                                            legend=legend,
-                                            xlabel='iteration',
-                                            title='kl divergence',))
-        else:
-            self.win_kld = self.viz.line(
-                                        X=iters,
-                                        Y=klds,
-                                        env=self.viz_name+'_lines',
-                                        win=self.win_kld,
-                                        update='append',
-                                        opts=dict(
-                                            width=400,
-                                            height=400,
-                                            legend=legend,
-                                            xlabel='iteration',
-                                            title='kl divergence',))
-
-        if self.win_mu is None:
-            self.win_mu = self.viz.line(
-                                        X=iters,
-                                        Y=mus,
-                                        env=self.viz_name+'_lines',
-                                        opts=dict(
-                                            width=400,
-                                            height=400,
-                                            legend=legend[:self.z_dim],
-                                            xlabel='iteration',
-                                            title='posterior mean',))
-        else:
-            self.win_mu = self.viz.line(
-                                        X=iters,
-                                        Y=vars,
-                                        env=self.viz_name+'_lines',
-                                        win=self.win_mu,
-                                        update='append',
-                                        opts=dict(
-                                            width=400,
-                                            height=400,
-                                            legend=legend[:self.z_dim],
-                                            xlabel='iteration',
-                                            title='posterior mean',))
-
-        if self.win_var is None:
-            self.win_var = self.viz.line(
-                                        X=iters,
-                                        Y=vars,
-                                        env=self.viz_name+'_lines',
-                                        opts=dict(
-                                            width=400,
-                                            height=400,
-                                            legend=legend[:self.z_dim],
-                                            xlabel='iteration',
-                                            title='posterior variance',))
-        else:
-            self.win_var = self.viz.line(
-                                        X=iters,
-                                        Y=vars,
-                                        env=self.viz_name+'_lines',
-                                        win=self.win_var,
-                                        update='append',
-                                        opts=dict(
-                                            width=400,
-                                            height=400,
-                                            legend=legend[:self.z_dim],
-                                            xlabel='iteration',
-                                            title='posterior variance',))
-        self.net_mode(train=True)
-
- 
-    def viz_traverse(self, limit=3, inter=2/3, loc=-1):
-        self.net_mode(train=False)
-        import random
-
-        decoder = self.net.decoder
-        encoder = self.net.encoder
-        interpolation = torch.arange(-limit, limit+0.1, inter)
-
-        n_dsets = len(self.data_loader.dataset)
-        rand_idx = random.randint(1, n_dsets-1)
-
-        random_img = self.data_loader.dataset.__getitem__(rand_idx)
-        random_img = Variable(cuda(random_img, self.use_cuda), volatile=True).unsqueeze(0)
-        random_img_z = encoder(random_img)[:, :self.z_dim]
-
-        random_z = Variable(cuda(torch.rand(1, self.z_dim), self.use_cuda), volatile=True)
-
-        if self.dataset == 'dsprites':
-            fixed_idx1 = 87040 # square
-            fixed_idx2 = 332800 # ellipse
-            fixed_idx3 = 578560 # heart
-
-            fixed_img1 = self.data_loader.dataset.__getitem__(fixed_idx1)
-            fixed_img1 = Variable(cuda(fixed_img1, self.use_cuda), volatile=True).unsqueeze(0)
-            fixed_img_z1 = encoder(fixed_img1)[:, :self.z_dim]
-
-            fixed_img2 = self.data_loader.dataset.__getitem__(fixed_idx2)
-            fixed_img2 = Variable(cuda(fixed_img2, self.use_cuda), volatile=True).unsqueeze(0)
-            fixed_img_z2 = encoder(fixed_img2)[:, :self.z_dim]
-
-            fixed_img3 = self.data_loader.dataset.__getitem__(fixed_idx3)
-            fixed_img3 = Variable(cuda(fixed_img3, self.use_cuda), volatile=True).unsqueeze(0)
-            fixed_img_z3 = encoder(fixed_img3)[:, :self.z_dim]
-
-            Z = {'fixed_square':fixed_img_z1, 'fixed_ellipse':fixed_img_z2,
-                 'fixed_heart':fixed_img_z3, 'random_img':random_img_z}
-        else:
-            fixed_idx = 0
-            fixed_img = self.data_loader.dataset.__getitem__(fixed_idx)
-            fixed_img = Variable(cuda(fixed_img, self.use_cuda), volatile=True).unsqueeze(0)
-            fixed_img_z = encoder(fixed_img)[:, :self.z_dim]
-
-            Z = {'fixed_img':fixed_img_z, 'random_img':random_img_z, 'random_z':random_z}
-
-        gifs = []
-        for key in Z.keys():
-            z_ori = Z[key]
-            samples = []
-            for row in range(self.z_dim):
-                if loc != -1 and row != loc:
-                    continue
-                z = z_ori.clone()
-                for val in interpolation:
-                    z[:, row] = val
-                    sample = F.sigmoid(decoder(z)).data
-                    samples.append(sample)
-                    gifs.append(sample)
-            samples = torch.cat(samples, dim=0).cpu()
-            title = '{}_latent_traversal(iter:{})'.format(key, self.global_iter)
-
-            if self.viz_on:
-                self.viz.images(samples, env=self.viz_name+'_traverse',
-                                opts=dict(title=title), nrow=len(interpolation))
-
-        if self.save_output:
-            output_dir = os.path.join(self.output_dir, str(self.global_iter))
-            os.makedirs(output_dir, exist_ok=True)
-            gifs = torch.cat(gifs)
-            gifs = gifs.view(len(Z), self.z_dim, len(interpolation), self.nc, 64, 64).transpose(1, 2)
-            for i, key in enumerate(Z.keys()):
-                for j, val in enumerate(interpolation):
-                    save_image(tensor=gifs[i][j].cpu(),
-                               fp=os.path.join(output_dir, '{}_{}.jpg'.format(key, j)),
-                               nrow=self.z_dim, pad_value=1)
-
-                #grid2gif(os.path.join(output_dir, key+'*.jpg'),
-                #         os.path.join(output_dir, key+'.gif'), delay=10)
-
-        self.net_mode(train=True)
 
     def net_mode(self, train):
         if not isinstance(train, bool):
@@ -465,6 +353,7 @@ class Solver(object):
             self.net.train()
         else:
             self.net.eval()
+
 
     def save_checkpoint(self, filename, silent=True):
         model_states = {'net':self.net.state_dict(),}
@@ -484,6 +373,7 @@ class Solver(object):
         if not silent:
             print("=> saved checkpoint '{}' (iter {})".format(file_path, self.global_iter))
 
+
     def load_checkpoint(self, filename):
         file_path = os.path.join(self.ckpt_dir, filename)
         if os.path.isfile(file_path):
@@ -498,3 +388,32 @@ class Solver(object):
             print("=> loaded checkpoint '{} (iter {})'".format(file_path, self.global_iter))
         else:
             print("=> no checkpoint found at '{}'".format(file_path))
+
+
+    def save_checkpoint_occupancygrid(self, filename, silent=True):
+        model_states = {'net':self.BetaVAE_OG.decoder.state_dict(),}
+        states = {'iter':self.og_iter,
+                  'model_states':model_states}
+
+        file_path = os.path.join(self.ckpt_dir, filename)
+        with open(file_path, mode='wb+') as f:
+            torch.save(states, f)
+        if not silent:
+            print("=> saved checkpoint for occupancy grid '{}' (iter {})".format(file_path, self.og_iter))
+
+
+    def load_checkpoint_occupancygrid(self, filename):
+        file_path = os.path.join(self.ckpt_dir, filename)
+        if os.path.isfile(file_path):
+            checkpoint = torch.load(file_path)
+            self.og_iter = checkpoint['iter']
+            self.BetaVAE_OG.decoder.load_state_dict(checkpoint['model_states']['net'])
+            print("=> loaded checkpoint '{} (iter {})'".format(file_path, self.og_iter))
+        else:
+            print("=> no checkpoint found at '{}'".format(file_path))
+
+
+
+
+
+

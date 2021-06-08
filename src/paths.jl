@@ -85,6 +85,13 @@ function wsd(a::Matrix{Float64}, b::Matrix{Float64}; n::Int64 = 500)::Float64
     d / n
 end
 
+function occupancy_position(r::Room)::Matrix{Float64}
+    g = pathgraph(r) # r is the room
+    grid = zeros(steps(r))
+    vs = @>> g vertices Base.filter(v -> istype(g, v, :furniture))
+    grid[vs] .= 1.0
+    grid
+end
 
 function occupancy_grid(r::Room; decay = 0.0, sigma = 1.0) # ::Matrix{Float64}
     es = exits(r)

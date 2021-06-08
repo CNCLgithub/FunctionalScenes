@@ -114,9 +114,19 @@ function create(base::Room; n::Int64 = 15)
     seeds = Vector{Room}(undef, n)
     df = DataFrame()
     i = 1
+    max_move = Int64(ceil(n / 4.0))
+    move_counts = Dict{Symbol, Int64}(zip([:up, :down, :left, :right],
+                                          zeros(4)))
     while i <= n
         @time seed, _df = build(base, factor = 2)
         if !isempty(_df)
+            move = filter(:d => d -> d > 0, _df)
+            @show move
+            move = first(move[:move])
+            if move_counts[move] >= max_move 
+                continue
+            end
+            move_counts[move] += 1
             seeds[i] = seed
             _df[!, :id] .= i
             append!(df, _df)
@@ -130,11 +140,12 @@ end
 
 function main()
     name = "pytorch_rep"
-    #name = "2e_1p_30s_matchedc3"
+    name = "2e_1p_30s_matchedc3"
     n = 30
     room_dims = (11,20)
     entrance = [6]
     exits = [215]
+    #exits = [213,217]
     r = Room(room_dims, room_dims, entrance, exits)
     display(r)
     @time seeds, df = create(r, n = n)
