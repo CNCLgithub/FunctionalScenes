@@ -58,7 +58,7 @@ def main():
                         default = 60)
     parser.add_argument('--stim_dur', type = float,
                         help = 'duration of A or B in seconds',
-                        default = 0.750)
+                        default = 0.250)
     parser.add_argument('--mask_dur', type = float,
                         help = 'duration of mask in seconds',
                         default = 0.500)

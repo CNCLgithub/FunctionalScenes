@@ -20,10 +20,10 @@ function camera(r::Room)
     space, transform = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
     pos = @>> Tuple.(cis[entrance(r)]) lazymap(transform) first
-    pos = pos .- ((0.5, 1.0) .* space)
-    pos = [pos..., 0.9 * tile_height]
+    pos = pos  .+ ((0.5, -1.25) .* space)
+    pos = [pos..., 0.75 * tile_height]
     # exts = @>> Tuple.(cis[exits(r)]) lazymap(transform) mean(dims = 2)
-    orientation = [0.45 * pi, 0., 0.]
+    orientation = [0.475 * pi, 0., 0.]
     # pos = [0,0,60]
     # orientation = [0, 0, 0.5 * pi]
     Dict(:position => pos,
@@ -48,8 +48,8 @@ function tile(t, coords, space, sphere)
         shape = :Block
     else
         # dx, dy = sphere ? 0.9 .* (dx, dy) : (dx, dy)
-        dx, dy = 0.9 .* (dx, dy)
-        dz = sqrt(dx^2 + dy^2)
+        dx, dy = (0.8, 0.6) .* (dx, dy)
+        dz = 0.35 * tile_height # sqrt(dx^2 + dy^2)
         shape = sphere ? :Ball : :Block
     end
     pos = [coords..., dz / 2.0]

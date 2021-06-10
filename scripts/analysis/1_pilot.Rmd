@@ -31,9 +31,6 @@ library(tidyverse)
 library(estimatr)
 library(ggplot2)
 library(readr)
-library(Hmisc)
-library(ggrepel)
-library(estimatr)
 
 
 
@@ -42,16 +39,18 @@ th <- theme_classic() +
   theme(axis.title = element_text(size=30)) 
 theme_set(th)
 
-update_geom_defaults("point", list(size = 16))
+update_geom_defaults("point", list(size = 10))
 ```
 
 ```{r load}
 
-parsed_trials <- read_csv("~/output/experiments/1_exit_22x40/parsed_trials.csv") %>%
+exp_name = "1_exit_22x40_ud"
+
+parsed_trials <- read_csv("~/output/experiments/1_exit_22x40_ud/parsed_trials.csv") %>%
     mutate(resp_same = Response == "j",
          correct = !xor(base, resp_same))
 
-exp_data <- read_csv("~/output/scenes/1_exit_22x40.csv") %>%
+exp_data <- read_csv("~/output/scenes/1_exit_22x40_ud.csv") %>%
   rename(scene = id)
 
 # covariates <- read_csv("~/output/experiments/1_exit_22x40/covariates.csv")  %>%
@@ -64,6 +63,34 @@ exp_data <- read_csv("~/output/scenes/1_exit_22x40.csv") %>%
 #   rename(scene = id)
 
 ```
+```{r}
+by_subj <- parsed_trials %>%
+  group_by(ID)
+
+hr_by_subj <- by_subj %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct),
+            n = n())
+
+fp_by_subj <- by_subj %>%
+  filter(base) %>%
+  summarise(fp = 1.0 - mean(correct))
+
+subject_performance <- hr_by_subj %>%
+  left_join(fp_by_subj, by = "ID")
+
+# passed_subjects <- subject_performance
+passed_subjects <- subject_performance %>%
+  filter(hr > 1.5*fp, n == 64)
+
+good_data <- passed_subjects %>%
+  left_join(parsed_trials)
+```
+```{r}
+good_data %>%
+  group_by(ID) %>%
+  summarise(n = n())
+```
 
 ```{r} 
 
@@ -75,7 +102,87 @@ raw_hits <- parsed_trials %>%
   left_join(exp_data)
 
 raw_hits %>%
+  group_by(move) %>%
+  summarise(c = sum(c))
+
+raw_hits %>%
+  group_by(door, d > 0) %>%
+  summarise(c = sum(c))
+
+raw_hits %>%
   group_by(d > 0) %>%
   summarise(c = sum(c))
+
 ```
+
+```{r}
+raw_hits %>%
+ ggplot(aes(x = d > 0, y = c)) + 
+ geom_boxplot()
+```
+
+```{r} 
+
+passed_hits <- good_data %>%
+  filter(!base) %>%
+  group_by(scene, move) %>%
+  summarise(c = sum(correct),
+            n = n()) %>%
+  left_join(exp_data)
+
+passed_hits %>%
+  group_by(move) %>%
+  summarise(c = sum(c))
+
+passed_hits %>%
+  group_by(door, d > 0) %>%
+  summarise(c = sum(c))
+
+passed_hits %>%
+  filter(d > 0) %>%
+  group_by(move) %>%
+  summarise(c = sum(c), 
+            n = n()) 
+
+passed_hits %>%
+  filter(d == 0) %>%
+  group_by(move) %>%
+  summarise(c = sum(c), 
+            n = n()) 
+
+
+passed_hits %>%
+  filter(d > 0) %>%
+  ggplot(aes(x = factor(move), y = d)) +
+  geom_violin()
+
+passed_hits %>%
+  filter(move %in% c("left", "right")) %>%
+  group_by(move, d > 0) %>%
+  summarise(c = sum(c), 
+            n = n(),
+            f = c / n / 15)
+
+passed_hits %>%
+  group_by(scene, d > 0) %>%
+  summarise(c = sum(c)) %>%
+  group_by(scene) %>%
+  summarise(dc = diff(c))
+
+passed_hits %>%
+  group_by(scene, d > 0) %>%
+  summarise(c = sum(c)) %>%
+  group_by(scene) %>%
+  summarise(dc = diff(c)) %>%
+  ggplot(aes(dc)) + 
+  geom_histogram()
+
+```
+
+```{r}
+passed_hits %>%
+ ggplot(aes(x = d > 0, y = c)) + 
+ geom_boxplot()
+```
+
 

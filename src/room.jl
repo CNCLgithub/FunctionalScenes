@@ -59,24 +59,78 @@ function expand(r::Room, factor::Int64)::Room
     g = pathgraph(r)
     s = Tuple(collect(steps(r)) .* factor)
     rows, cols = s
-    new_g = MetaGraph(grid(s))
 
-    a = CartesianIndices(steps(r))
-    c = LinearIndices(s)
-    kern = CartesianIndices((0:factor-1, 0:factor-1))
+    # will copy properties and edges from `src`
+    new_g = MetaGraph(SimpleGraph(prod(s)))
 
-    mp = @> g vertices reshape(steps(r)) repeat(inner=(factor,factor))
-    # display(@>> g vertices filter(v -> !has_prop(g, v, :type)))
-    # copy over tile info
-    sp = v -> set_prop!(new_g, v, :type,  get_prop(g, mp[v], :type))
-    @>> new_g vertices foreach(sp)
-    # display(@>> new_g vertices filter(v -> !has_prop(new_g, v, :type)))
-    # consolidate objects
-    @>> new_g edges collect filter(e -> !matched_type(new_g, e)) foreach(e -> rem_edge!(new_g, e))
+    # indices of src
+    src_c = CartesianIndices(steps(r))
+    # indices of dest
+    dest_c = CartesianIndices(s)
+    dest_l = LinearIndices(dest_c)
+    # mapping for src v -> dest vs
+    kern = CartesianIndices((1:factor, 1:factor))
+
+    # map for dest v -> src v
+    mp = @> g begin
+        vertices
+        # form m x n lattice of src
+        reshape(steps(r))
+        # scale up to dest
+        repeat(inner=(factor,factor))
+    end
+
+    for src in vertices(g)
+        # vs in dest that correspond to the same v in src
+        sister_vs = dest_l[src_c[src] .+ kern]
+        sister_vs = up_scale_inds(src_c, dest_c, factor, src)
+
+        # neighbors of src mapped to potential neighbors in dest
+        src_ns = @>> neighbors(g, src) collect(Tile)
+        dest_n_candidates = up_scale_inds(src_c, dest_c, factor, src_ns)
+
+        for dest in sister_vs
+            # copy type
+            set_prop!(new_g, dest, :type,
+                    get_prop(g, src, :type))
+
+            # connect sister vs according to grid structure
+            dc = dest_c[dest]
+            for sv in sister_vs
+                svc = dest_c[sv]
+                # sister is either left,right,above,below
+                if !is_next_to(dc, svc)
+                    continue
+                end
+                add_edge!(new_g, Edge(dest, sv))
+            end
+
+            # connect to neighbhors from src
+            for sn in dest_n_candidates
+                snc = dest_c[sn]
+                if !is_next_to(dc, snc)
+                    continue
+                end
+                add_edge!(new_g, Edge(dest, sn))
+            end
+        end
+    end
+
     # update entrances and exits
-    ent = [first(c[a[entrance(r)] * factor .- kern])]
-    exs = @>> r exits lazymap(v -> first(c[collect(a[v] * factor .- kern)])) collect
-
+    ent = @>> r begin
+        entrance
+        first
+        up_scale_inds(src_c, dest_c, factor)
+        first
+        x -> [x]
+    end
+    exs = @>> r begin
+        exits
+        first
+        up_scale_inds(src_c, dest_c, factor)
+        first
+        x -> [x]
+    end
     Room(s, bounds(r) .* factor, ent, exs, new_g)
 end
 

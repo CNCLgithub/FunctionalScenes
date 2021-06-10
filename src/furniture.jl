@@ -1,8 +1,9 @@
 const Furniture = Set{Tile}
 
 
-function furniture(r::Room)::Array{Furniture}
-    g = pathgraph(r)
+furniture(r::Room)::Array{Furniture} = furniture(pathgraph(r))
+
+function furniture(g::PathGraph)::Array{Furniture}
     vs = @>> g begin
         connected_components
         filter(c -> istype(g, first(c), :furniture))
@@ -17,18 +18,15 @@ function add(r::Room, f::Furniture)::Room
     foreach(v -> set_prop!(g, v, :type, :furniture), f)
     # ensure that furniture is only connected to itself
     # returns a list of edges connected each furniture vertex
-    es = @>> f begin
-        collect
-        map(v -> @>> v begin
-                neighbors(g)
-                filter(x -> !in(x, f))
-                map(n -> Edge(v, n))
-            end)
-        x -> vcat(x...)
+    @>> f begin
+        collect(Tile)
+        foreach(v -> @>> v begin
+                    neighbors(g)
+                    collect(Tile) # must collect for compete iteration
+                    # removes any extraneous edges
+                    foreach(x -> !in(x, f) && rem_edge!(g, Edge(x, v)))
+                end)
     end
-    # removes any edge that is no longer valid in the neighborhood (ie :furniture <-> :floor)
-    foreach(e -> !matched_type(g, e) && rem_edge!(g, e),
-            es)
     Room(r.steps, r.bounds, r.entrance, r.exits, g)
 end
 

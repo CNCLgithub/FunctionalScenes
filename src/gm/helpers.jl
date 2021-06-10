@@ -226,7 +226,7 @@ end
 
 
 function viz_ocg(ocg)
-    ocg = mean(ocg)
+    # ocg = mean(ocg)
     ocg = reverse(ocg, dims = 1)
     println(heatmap(ocg,
                     title = "occupancy grid",

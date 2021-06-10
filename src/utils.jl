@@ -37,3 +37,26 @@ function read_json(path)
 
     return sym_data
 end
+
+function is_next_to(a::CartesianIndex{2}, b::CartesianIndex{2})
+    d = abs.(Tuple(a - b))
+    # is either left,right,above,below
+    d == (1, 0) || d == (0, 1)
+end
+
+function up_scale_inds(src::CartesianIndices{2}, dest::CartesianIndices{2},
+                       factor::Int64, vs::Vector{Int64})
+    result = Array{Int64, 3}(undef, factor, factor, length(vs))
+    for i = 1:length(vs)
+        result[:, :, i] = up_scale_inds(src, dest, factor, vs[i])
+    end
+    vec(result)
+end
+
+function up_scale_inds(src::CartesianIndices{2}, dest::CartesianIndices{2},
+                       factor::Int64, v::Int64)
+    kern = CartesianIndices((1:factor, 1:factor))
+    offset = CartesianIndex(1,1)
+    dest_l = LinearIndices(dest)
+    dest_l[(src[v] - offset) * factor .+ kern]
+end

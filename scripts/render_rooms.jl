@@ -12,6 +12,10 @@ using DataFrames
 
 device = _load_device()
 
+cycles_args = Dict(
+    :mode => "full"
+)
+
 function render_base(bases::Vector{Int64}, name::String;
                      spheres = false)
     out = spheres ? "spheres" : "cubes"
@@ -22,11 +26,9 @@ function render_base(bases::Vector{Int64}, name::String;
         base = load(base_p)["r"]
         p = "$(out)/$(id)"
         display(base)
-        render(base, p, mode = "full", threads = 8, navigation = false,
+        render(base, p;
+               cycles_args...,
                spheres = spheres)
-        # render(base, p, mode = "full", threads = 8, navigation = false,
-        #        spheres = true)
-        # render(base, p, mode = "full",threads = 8,  navigation = false)
     end
 end
 
@@ -42,11 +44,9 @@ function render_stims(df::DataFrame, name::String;
         room = shift_furniture(base,
                                furniture(base)[r.furniture],
                                Symbol(r.move))
-        render(room, p, mode = "full", threads = 8, navigation = false,
+        render(room, p;
+               cycles_args...,
                spheres = spheres)
-        # render(room, p, mode = "full", threads = 8, navigation = false,
-        #        spheres = true)
-        # render(room, p, mode = "full",threads = 4,  navigation = false)
     end
 end
 
@@ -83,23 +83,29 @@ function render_torch_stims(df::DataFrame, name::String)
     end
 end
 function main()
-    args = parse_commandline()
-    name = "1_exit_22x40"
+    # args = parse_commandline()
+    args = Dict("scene" => 0)
+    # args = Dict("scene" => 6)
+
+    name = "1_exit_22x40_ud"
     src = "/scenes/$(name)"
     df = DataFrame(CSV.File("$(src).csv"))
     seeds = unique(df.id)
     # render_torch(seeds, name)
     # render_torch_stims(df, name)
+    if args["scene"] == 0
+        seeds = unique(df.id)
+    else
+        seeds = [args["scene"]]
+        df = df[df.id .== args["scene"], :]
+    end
 
-    @show args
-    seeds = [args["scene"]]
-    df = df[df.id .== args["scene"], :]
-    render_base(seeds, name,
-                spheres = true
-                )
-    render_stims(df, name,
-                 spheres = true,
-                 )
+    # render_base(seeds, name,
+    #             spheres = true
+    #             )
+    # render_stims(df, name,
+    #              spheres = true,
+    #              )
     render_base(seeds, name,
                 spheres = false
                 )
@@ -120,7 +126,6 @@ function parse_commandline()
         arg_type = Int64
         required = true
     end
-
     return parse_args(s)
 end
 

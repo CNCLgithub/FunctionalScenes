@@ -97,7 +97,7 @@ def main():
     parser.add_argument("--mode", type = str, default = "debug",
                         choices = ['debug', 'sandbox', 'live'],
                         help = 'Experiment mode')
-    parser.add_argument("--trialsbyp", type = int, default = 120,
+    parser.add_argument("--trialsbyp", type = int, default = 128,
                         help = 'Number of trials expected per subject')
     parser.add_argument("--trialdata", type = str,
                         default = '/experiments/pilot/parsed_trials.csv',
