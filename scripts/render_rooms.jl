@@ -16,21 +16,21 @@ cycles_args = Dict(
     :mode => "full"
 )
 
-function render_base(bases::Vector{Int64}, name::String;
-                     spheres = false)
-    out = spheres ? "spheres" : "cubes"
-    out = "/renders/$(name)_cycles_$(out)"
-    isdir(out) || mkdir(out)
-    for id in bases
-        base_p = "/scenes/$(name)/$(id).jld2"
-        base = load(base_p)["r"]
-        p = "$(out)/$(id)"
-        display(base)
-        render(base, p;
-               cycles_args...,
-               spheres = spheres)
-    end
-end
+# function render_base(bases::Vector{Int64}, name::String;
+#                      spheres = false)
+#     out = spheres ? "spheres" : "cubes"
+#     out = "/renders/$(name)_cycles_$(out)"
+#     isdir(out) || mkdir(out)
+#     for id in bases
+#         base_p = "/scenes/$(name)/$(id).jld2"
+#         base = load(base_p)["r"]
+#         p = "$(out)/$(id)"
+#         display(base)
+#         render(base, p;
+#                cycles_args...,
+#                spheres = spheres)
+#     end
+# end
 
 function render_stims(df::DataFrame, name::String;
                      spheres = false)
@@ -39,11 +39,15 @@ function render_stims(df::DataFrame, name::String;
     isdir(out) || mkdir(out)
     for r in eachrow(df)
         base_p = "/scenes/$(name)/$(r.id).jld2"
-        base = load(base_p)["r"]
-        p = "$(out)/$(r.id)_$(r.furniture)_$(r.move)"
+        base = load(base_p)["rs"][r.door]
+        p = "$(out)/$(r.id)_$(r.door)"
+        render(base, p;
+               cycles_args...,
+               spheres = spheres)
         room = shift_furniture(base,
                                furniture(base)[r.furniture],
                                Symbol(r.move))
+        p = "$(out)/$(r.id)_$(r.door)_$(r.furniture)_$(r.move)"
         render(room, p;
                cycles_args...,
                spheres = spheres)
@@ -87,7 +91,7 @@ function main()
     args = Dict("scene" => 0)
     # args = Dict("scene" => 6)
 
-    name = "1_exit_22x40_ud"
+    name = "1_exit_22x40_doors"
     src = "/scenes/$(name)"
     df = DataFrame(CSV.File("$(src).csv"))
     seeds = unique(df.id)
@@ -106,9 +110,9 @@ function main()
     # render_stims(df, name,
     #              spheres = true,
     #              )
-    render_base(seeds, name,
-                spheres = false
-                )
+    # render_base(seeds, name,
+    #             spheres = false
+    #             )
     render_stims(df, name,
                  spheres = false,
                  )

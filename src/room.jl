@@ -1,4 +1,6 @@
 
+export Room, pathgraph, entrance, exits, bounds, steps, expand
+
 const Tile = Int64
 const PathGraph = MetaGraphs.MetaGraph{Int64, Float64}
 
@@ -187,4 +189,3 @@ function Base.show(io::IO, m::MIME"text/plain", t::Tuple{Room, Vector{Tile}})
 end
 
 
-export Room, pathgraph, entrance, exits, bounds, steps

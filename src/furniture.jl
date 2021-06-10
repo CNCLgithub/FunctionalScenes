@@ -1,5 +1,6 @@
-const Furniture = Set{Tile}
+export add, remove, Furniture, furniture
 
+const Furniture = Set{Tile}
 
 furniture(r::Room)::Array{Furniture} = furniture(pathgraph(r))
 
@@ -9,6 +10,16 @@ function furniture(g::PathGraph)::Array{Furniture}
         filter(c -> istype(g, first(c), :furniture))
         map(Set{Tile})
         collect()
+    end
+end
+
+"""
+Adds the furniture of `src` to `dest`
+"""
+function add(src::Room, dest::Room)::Room
+    @>> src begin
+        furniture
+        fs -> foldl(add, fs; init = dest)
     end
 end
 
@@ -155,5 +166,3 @@ function valid_moves(r::Room, f::Furniture)
     moves[:, 4] = f .+ rows
     @>> moves eachcol lazymap(m -> valid_move(g,f,m)) collect(Float64)
 end
-
-export add, remove, Furniture, furniture
