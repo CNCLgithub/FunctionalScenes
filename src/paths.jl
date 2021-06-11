@@ -1,7 +1,7 @@
 import Statistics: mean
 import ImageFiltering: Kernel, imfilter
 
-export navigability, compare, occupancy_grid, diffuse_og
+export navigability, compare, occupancy_grid, diffuse_og, safe_shortest_paths
 
 function k_shortest_paths(r::Room, k::Int64, ent::Int64, ext::Int64)
     g = pathgraph(r)
@@ -19,13 +19,18 @@ function average_path_length(g, s, e; n = 5)
     isnan(l) ? Inf : l
 end
 
-function build_subpath(g::AbstractGraph, gd::Array{Int64}, v::Int64)::Vector{Int64}
+function build_subpath(g::AbstractGraph, gd::Array{Int64}, v)::Vector{Int64}
     path = @>> g nv zeros BitVector
     build_subpath!(path, g, gd, v)
     findall(path)
 end
 
-function build_subpath!(path::BitVector, g::AbstractGraph, gd::Array{Int64}, v::Int64)
+function build_subpath!(path::BitVector, g::AbstractGraph{T}, gd::Array{T},
+                        vs::Vector{T}) where {T<:Int}
+    @>> vs foreach(v -> build_subpath!(path, g, gd, v))
+end
+
+function build_subpath!(path::BitVector, g::AbstractGraph{T}, gd::Array{T}, v::T) where {T<:Int}
     # add neighbors that are 1 unit closer to the src
     path[v] = 1
     d_next = gd[v] - 1
@@ -46,52 +51,49 @@ function build_subpath!(path::BitVector, g::AbstractGraph, gd::Array{Int64}, v::
 end
 
 function all_shortest_paths(r::Room)
-    all_shortest_paths(pathgraph(r), first(entrance(r)), first(exits(r)))
+    all_shortest_paths(pathgraph(r), entrance(r), exits(r))
 end
 
 function all_shortest_paths(g::AbstractGraph, start::Tile, stop::Tile)
+end
+
+function all_shortest_paths(g::AbstractGraph{T}, start::Vector{T},
+                            stop::Vector{T}) where {T}
     # get subgraph of just floor
     floor, vmap = @> g begin
         filter_vertices(:type, :floor)
         (@>> induced_subgraph(g))
     end
-    ent_i = findfirst(vmap .== start)
-    exit_i = findfirst(vmap .== stop)
+    ent_i = @>> vmap map(v -> in(v, start)) findall
+    exit_i = @>> vmap map(v -> in(v, stop)) findall
 
     # compute geodesic distances to the entrance for each tile
     gd = gdistances(floor, ent_i)
-    # we could filter out any vertices that have a gd > the exit but
-    # that would require another level of vertex mapping
 
     # walk through
-    vs = Int64[]
-    start_d = gd[exit_i]
 
     # No path from entrance to exit
-    start_d <= length(floor) || return vs
+    maximum(gd[exit_i]) <= length(floor) || return T[]
 
     floor_path = build_subpath(floor, gd, exit_i)
     # map back to pathgraph
     vmap[floor_path]
 end
 
-function safe_shortest_path(r::Room, start::Tile, stop::Tile)
-    dx, dy = steps(r)
+function safe_shortest_paths(r::Room)
     g = pathgraph(r)
-    _, coords = lattice_to_coord(r)
-    cis = CartesianIndices(steps(r))
-    ec = coords(Tuple(cis[stop]))
-    vs = connected(g, start) |> collect |> sort
-    vcis = Tuple.(cis[vs])
-    # index of the closest point to the exit
-    vi = @>> vcis map(v -> norm(ec .- coords(v))) argmin
-    all_shortest_paths(g, start, vs[vi])
-    # yen_k_shortest_paths(g, start, vs[vi], weights(g), k).paths
-end
-
-function safe_shortest_path(r::Room, e::Tile)
-    ent = entrance(r) |> first
-    safe_shortest_path(r, ent, e)
+    ents = entrance(r)
+    exs = exits(r)
+    vs = @>> ents begin
+        first
+        connected(g)
+        collect(Tile)
+    end
+    # closest points to the exit
+    # that are still reachable from the entrance
+    gs = @>> r steps grid graph->gdistances(graph, exs)
+    safe_exits = findall(gs .== minimum(gs))
+    all_shortest_paths(g, ents, safe_exits)
 end
 
 function total_length(g::PathGraph)
@@ -144,13 +146,10 @@ function occupancy_grid(r::Room;
                         decay::Float64 = 0.0,
                         sigma::Float64 = 1.0)
     @>> r begin
-        exits
-        # k paths for each exit
-        map(e -> safe_shortest_path(r,e))
+        safe_shortest_paths
         # grids for exit x paths -> one grid per exit
-        map(ps -> occupancy_grid(r, ps, decay=decay, sigma=sigma))
-        # average grids across exits
-        mean
+        path -> occupancy_grid(r, path;
+                               decay=decay, sigma=sigma)
     end
 end
 
@@ -174,7 +173,8 @@ function occupancy_grid(r::Room, p::Vector{Tile};
     mask = zeros(steps(r))
     lp = length(p)
     iszero(lp) && return m
-    for (i,v) in enumerate(p)
+    gs = @>> r entrance gdistances(g)
+    for v in p
         if !isfloor(g, v)
             println("$(v) => $(get_prop(g, v, :type))")
             ns = connected(g, v)
@@ -186,7 +186,7 @@ function occupancy_grid(r::Room, p::Vector{Tile};
             error("invalid path")
         end
         # m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
-        m[v] = exp(decay * (i - 1))
+        m[v] = exp(decay * gs[v])
         # m[v] = exp(decay * (lp - i))
     end
     gf = Kernel.gaussian(sigma)

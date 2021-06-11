@@ -5,7 +5,7 @@ import json
 import argparse
 import numpy as np
 import pandas as pd
-from functional_scenes import blank, chain, still, concat, run_cmd
+from functional_scenes import blank, chain, still, concat, vflip, run_cmd
 
 noise = '/project/src/blender/noise.jpeg'
 
@@ -25,7 +25,8 @@ noise = '/project/src/blender/noise.jpeg'
 #     run_cmd(cmd)
 
 
-def stimuli(a, b, fps, im_dur, mk_dur, out):
+def stimuli(a, b, fps, im_dur, mk_dur, out,
+            flip = False):
     """Creates a video of the pattern `a -> mask -< b`
     """
     src = '' # blank takes an empty argument
@@ -33,8 +34,9 @@ def stimuli(a, b, fps, im_dur, mk_dur, out):
     p2 = out + '_p2'
     cmd = chain([still], [(im_dur,fps)], a, p1, 'a')
     cmd += chain([still], [(im_dur,fps)], b, p2, 'b')
-    cmd += chain([blank, concat, concat],
-                 [(mk_dur, fps), (p2+'.mp4', True), (p1+'.mp4', False)],
+    cmd += chain([blank, concat, concat, vflip],
+                 [(mk_dur, fps), (p2+'.mp4', True), (p1+'.mp4', False),
+                  (flip,)],
                  src, out, 'c')
     cmd.append('rm ' + p1 + '.mp4')
     cmd.append('rm ' + p2 + '.mp4')
@@ -72,30 +74,33 @@ def main():
     df = pd.read_csv('/scenes/' + args.scene + '.csv')
     bases = np.unique(df.id)
 
-    # first create each `a->a` trial
-    aa_movies = []
-    for i in bases:
-        src = os.path.join(renders, '{0:d}.png'.format(i))
-        suffix = '{0:d}_{0:d}'.format(i)
-        out = os.path.join(movies, suffix)
-        stimuli(src, src, args.fps, args.stim_dur, args.mask_dur, out)
-        aa_movies.append(suffix + '.mp4')
 
-    # then proceed to make `a -> b` trials
+    aa_movies = []
     ab_movies = []
-    for _, row in df.iterrows():
-        base = os.path.join(renders, '{0:d}.png'.format(row.id))
-        suffix = '{0:d}_{1:d}_{2!s}'.format(row.id, row.furniture, row.move)
-        src = os.path.join(renders, suffix + '.png')
-        out = os.path.join(movies, suffix)
-        stimuli(base, src, args.fps, args.stim_dur, args.mask_dur, out)
-        ab_movies.append(suffix + '.mp4')
+    # groupby move
+    for move_g in move_groups:
+        for r in move_g.iterrows():
+            # first create each `a->a` trial
+            base = os.path.join(renders, '{0:d}_{1:d}.png'.format(r.id, r.door))
+            base_suffix = '{0:d}_{0:d}'.format(r.id)
+            base_out = os.path.join(movies, base_suffix)
+            stimuli(base, base, args.fps, args.stim_dur, args.mask_dur, base_out,
+                    flip = r.flip)
+            aa_movies.append(base_suffix + '.mp4')
+
+            # then proceed to make `a -> b` trials
+            move_suffix = '{0:d}_{1:d}_{2:d}_{2!s}'.format(row.id, r.door,
+                                                     row.furniture,
+                                                     row.move)
+            move_src = os.path.join(renders, move_suffix + '.png')
+            move_out = os.path.join(movies, move_suffix)
+            stimuli(base, src, args.fps, args.stim_dur, args.mask_dur, out,
+                    flip = r.flip)
+            ab_movies.append(move_suffix + '.mp4')
 
     # repeate aa trials to have a 50/50 split
     naa = len(aa_movies)
     nab = len(ab_movies)
-    reps = int(nab / naa)
-    aa_movies = np.repeat(aa_movies, reps).tolist()
 
     trials = [aa_movies + ab_movies]
     with open(os.path.join(movies, args.scene + '.json'), 'w') as f:

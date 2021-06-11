@@ -26,6 +26,12 @@ def concat(b, out, a, reverse = False):
         cmd = cmd.format(a, b, out)
     return cmd
 
+def vflip(source, out, flip):
+    cmd = ''
+    if flip:
+        cmd += 'ffmpeg -i {0!s} -vf vflip -c:a copy {1!s}'.format(source, out)
+    return cmd
+
 def still(src, out, dur, fps):
     cmd = 'ffmpeg -loop 1 -r {0:d} -i {1!s} -c:v libx264 -t {2:f} -pix_fmt yuv420p {3!s}'
     cmd = cmd.format(fps,src,dur,out)

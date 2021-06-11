@@ -123,15 +123,15 @@ function expand(r::Room, factor::Int64)::Room
         entrance
         first
         up_scale_inds(src_c, dest_c, factor)
-        first
-        x -> [x]
+        x -> dest_l[x]
+        vec
     end
     exs = @>> r begin
         exits
         first
         up_scale_inds(src_c, dest_c, factor)
-        first
-        x -> [x]
+        x -> dest_l[x]
+        vec
     end
     Room(s, bounds(r) .* factor, ent, exs, new_g)
 end
