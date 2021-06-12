@@ -21,7 +21,7 @@ using StatProfilerHTML
 
 function examine_moves(r::Room, move_set::Vector{Symbol})
     # avoid furniture close to camera
-    fs = furniture(r) # [4:end]
+    fs = furniture(r)[4:end]
     data = DataFrame()
     base_og = occupancy_grid(r; sigma = 0., decay = 0.)
     for (i,f) in enumerate(fs)
@@ -37,7 +37,7 @@ function examine_moves(r::Room, move_set::Vector{Symbol})
             # display((shifted, safe_shortest_paths(shifted)))
             # FunctionalScenes.viz_ocg(base_og - shifted_og)
             append!(data,
-                    DataFrame(furniture = i,
+                    DataFrame(furniture = i + 3,
                               move = m,
                               d = d,
                               room = shifted))
@@ -72,7 +72,7 @@ function digest(df::DataFrame)::DataFrame
 end
 
 function build(rooms::Vector{Room};
-               k::Int64 = 6, factor::Int64 = 1,
+               k::Int64 = 8, factor::Int64 = 1,
                pct_open::Float64 = 0.4,
                moves::Vector{Symbol} = move_map)
     # assuming all rooms have the same entrance and dimensions
@@ -172,7 +172,7 @@ function main()
     inds = LinearIndices(room_dims)
     doors = [3, 9]
     doors = @>> doors map(d -> inds[d, room_dims[2]]) collect(Int64)
-    n = 64
+    n = 32
     seeds, df = create(room_dims, entrance, doors; n = n)
     out = "/scenes/$(name)"
     CSV.write("$(out).csv", df)

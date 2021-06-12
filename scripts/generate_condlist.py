@@ -63,7 +63,7 @@ def main():
                         default = 0.250)
     parser.add_argument('--mask_dur', type = float,
                         help = 'duration of mask in seconds',
-                        default = 0.500)
+                        default = 0.750)
     args = parser.parse_args()
 
     renders = '/renders/' + args.scene + '_' + args.render
@@ -72,31 +72,27 @@ def main():
     #movies = '/movies/{0!s}_{1:0.3f}'.format(args.scene, args.stim_dur)
     os.path.isdir(movies) or os.mkdir(movies)
     df = pd.read_csv('/scenes/' + args.scene + '.csv')
-    bases = np.unique(df.id)
-
 
     aa_movies = []
     ab_movies = []
     # groupby move
-    for move_g in move_groups:
-        for r in move_g.iterrows():
-            # first create each `a->a` trial
-            base = os.path.join(renders, '{0:d}_{1:d}.png'.format(r.id, r.door))
-            base_suffix = '{0:d}_{0:d}'.format(r.id)
-            base_out = os.path.join(movies, base_suffix)
-            stimuli(base, base, args.fps, args.stim_dur, args.mask_dur, base_out,
-                    flip = r.flip)
-            aa_movies.append(base_suffix + '.mp4')
-
-            # then proceed to make `a -> b` trials
-            move_suffix = '{0:d}_{1:d}_{2:d}_{2!s}'.format(row.id, r.door,
-                                                     row.furniture,
-                                                     row.move)
-            move_src = os.path.join(renders, move_suffix + '.png')
-            move_out = os.path.join(movies, move_suffix)
-            stimuli(base, src, args.fps, args.stim_dur, args.mask_dur, out,
-                    flip = r.flip)
-            ab_movies.append(move_suffix + '.mp4')
+    for (_, r) in df.iterrows():
+        # first create each `a->a` trial
+        base = os.path.join(renders, '{0:d}_{1:d}.png'.format(r.id, r.door))
+        base_suffix = '{0:d}_{0:d}_{1:d}'.format(r.id, r.door)
+        base_out = os.path.join(movies, base_suffix)
+        stimuli(base, base, args.fps, args.stim_dur, args.mask_dur, base_out,
+                flip = r.flip)
+        aa_movies.append(base_suffix + '.mp4')
+        # then proceed to make `a -> b` trials
+        move_suffix = '{0:d}_{1:d}_{2:d}_{3!s}'.format(r.id, r.door,
+                                                  r.furniture,
+                                                  r.move)
+        move_src = os.path.join(renders, move_suffix + '.png')
+        move_out = os.path.join(movies, move_suffix)
+        stimuli(base, move_src, args.fps, args.stim_dur, args.mask_dur, move_out,
+                flip = r.flip)
+        ab_movies.append(move_suffix + '.mp4')
 
     # repeate aa trials to have a 50/50 split
     naa = len(aa_movies)

@@ -38,7 +38,8 @@ function floor(r::Room; ceiling = false)
          :orientation => [rx,0,0],
          :shape => :Plane,
          :dims => [dx, dy, 0],
-         :appearance => :white)
+         :appearance => ceiling ? :white : :blue)
+         # :appearance => :white)
 end
 
 function tile(t, coords, space, sphere)
@@ -48,7 +49,7 @@ function tile(t, coords, space, sphere)
         shape = :Block
     else
         # dx, dy = sphere ? 0.9 .* (dx, dy) : (dx, dy)
-        dx, dy = (0.8, 0.6) .* (dx, dy)
+        # dx, dy = (0.8, 0.6) .* (dx, dy)
         dz = 0.35 * tile_height # sqrt(dx^2 + dy^2)
         shape = sphere ? :Ball : :Block
     end
@@ -57,7 +58,8 @@ function tile(t, coords, space, sphere)
          :orientation => [0,0,0],
          :shape => shape,
          :dims => [dx,dy,dz],
-         :appearance => t == :wall ? :white : :blue)
+         :appearance =>  :blue)
+         # :appearance => t == :wall ? :white : :blue)
 end
 
 

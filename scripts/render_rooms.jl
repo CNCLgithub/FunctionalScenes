@@ -87,8 +87,8 @@ function render_torch_stims(df::DataFrame, name::String)
     end
 end
 function main()
-    # args = parse_commandline()
-    args = Dict("scene" => 0)
+    args = parse_commandline()
+    # args = Dict("scene" => 0)
     # args = Dict("scene" => 6)
 
     name = "1_exit_22x40_doors"

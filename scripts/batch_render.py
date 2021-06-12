@@ -20,9 +20,9 @@ def main():
         formatter_class = argparse.ArgumentDefaultsHelpFormatter
     )
 
-    parser.add_argument('--scenes', type = int, default = 30,
+    parser.add_argument('--scenes', type = int, default = 32,
                         help = 'number of scenes')
-    parser.add_argument('--duration', type = int, default = 15,
+    parser.add_argument('--duration', type = int, default = 20,
                         help = 'job duration (min)')
     args = parser.parse_args()
 
@@ -34,7 +34,7 @@ def main():
         'cpus-per-task' : '4',
         'mem-per-cpu' : '2GB',
         'time' : '{0:d}'.format(args.duration),
-        'partition' : 'scavenge_all',
+        'partition' : 'scavenge',
         # 'gres' : 'gpu:1',
         'requeue' : None,
         'job-name' : 'rooms',
