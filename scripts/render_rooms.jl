@@ -34,7 +34,8 @@ cycles_args = Dict(
 # end
 
 function render_stims(df::DataFrame, name::String;
-                     spheres = false)
+                      spheres = false,
+                      threads = Sys.CPU_THREADS)
     out = spheres ? "spheres" : "cubes"
     out = "/renders/$(name)_cycles_$(out)"
     isdir(out) || mkdir(out)
@@ -88,9 +89,12 @@ function render_torch_stims(df::DataFrame, name::String)
     end
 end
 function main()
-    args = parse_commandline()
-    # args = Dict("scene" => 0)
-    # args = Dict("scene" => 1)
+    # args = parse_commandline()
+    args = Dict(
+        # "scene" => 0,
+        "scene" => 1,
+        "threads" => Sys.CPU_THREADS
+    )
 
     name = "1_exit_22x40_doors"
     src = "/scenes/$(name)"
@@ -116,6 +120,7 @@ function main()
     #             )
     render_stims(df, name,
                  spheres = false,
+                 threads = args["threads"]
                  )
     return nothing
 end
@@ -130,6 +135,12 @@ function parse_commandline()
         help = "Which scene to run"
         arg_type = Int64
         required = true
+
+
+        "--threads"
+        help = "Number of threads for cycles"
+        arg_type = Int64
+        default = 4
     end
     return parse_args(s)
 end

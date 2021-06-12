@@ -169,29 +169,52 @@ end
 
 function strongly_connected(r::Room, f::Furniture, move::Symbol)
 
-    r_cart = CartesianIndices(steps(r))
     f_inds = collect(Int64, f)
     shifted = @>> f_inds begin
         map(v -> shift_tile(r, v, move))
         collect(Tile)
     end
 
-    c1 = CartesianIndex(0, 1)
-    c2 = CartesianIndex(1, 0)
+    h, _ = steps(r)
+    g = grid(steps(r))
+    gs = gdistances(g, f_inds)
+    shifted_gs = gdistances(g, shifted)
+
+    fs = furniture(r)
+    other_inds = map(x -> collect(Int64, x), fs)
 
     connected = Int64[]
-    for (i, other) in enumerate(furniture(r))
+    gaps = BitVector(zeros(h))
+    for i = 1:length(fs)
 
-        other == f && continue
-        other_inds = collect(Int64, other)
-        gs = gdistances(grid(steps(r)), other_inds)
+        # skip rest if same as f
+        fs[i] == f && continue
 
-        !any(d -> d == 1, gs[f_inds]) && continue
-        # return if moving breaks connection
-        !any(d -> d == 1, gs[shifted]) && return Int64[]
+        # fill in gaps
+        gaps[(other_inds[i] .- 1) .% h .+ 1] .= 1
 
+        touching1 = any(d -> d == 1, gs[other_inds[i]])
+        touching2 = any(d -> d == 1, shifted_gs[other_inds[i]])
+
+        # not touching
+        (!touching1 && !touching2)  && continue
+
+        # weakly connected
+        xor(touching1, touching2) && return Int64[]
+
+        # strongly connected
         push!(connected, i)
+
     end
+
+    # check to see if `f` is in the front
+    !all(gaps[(f_inds .- 1) .% h .+ 1]) && return Int64[]
+
+    # location after move
+    gaps[(shifted .- 1) .% h .+ 1] .= 1
+
+    # gap was made with shift, reject
+    !all(gaps[(f_inds .- 1) .% h .+ 1]) && return Int64[]
 
     return connected
 end

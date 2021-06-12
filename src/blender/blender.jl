@@ -38,8 +38,8 @@ function floor(r::Room; ceiling = false)
          :orientation => [rx,0,0],
          :shape => :Plane,
          :dims => [dx, dy, 0],
-         :appearance => ceiling ? :white : :blue)
-         # :appearance => :white)
+         # :appearance => ceiling ? :white : :blue)
+         :appearance => :white)
 end
 
 function tile(t, coords, space, sphere)
@@ -58,8 +58,8 @@ function tile(t, coords, space, sphere)
          :orientation => [0,0,0],
          :shape => shape,
          :dims => [dx,dy,dz],
-         :appearance =>  :blue)
-         # :appearance => t == :wall ? :white : :blue)
+         # :appearance =>  :blue)
+         :appearance => t == :wall ? :white : :blue)
 end
 
 

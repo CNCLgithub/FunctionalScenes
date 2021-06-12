@@ -21,7 +21,7 @@ using StatProfilerHTML
 
 function examine_moves(r::Room, move_set::Vector{Symbol})
     # avoid furniture close to camera
-    fs = furniture(r)[4:end]
+    fs = furniture(r)
     data = DataFrame()
     base_og = occupancy_grid(r; sigma = 0., decay = 0.)
     for (i,f) in enumerate(fs)
@@ -36,21 +36,14 @@ function examine_moves(r::Room, move_set::Vector{Symbol})
             shifted = shift_furniture(r,f,m)
             shifted_og = occupancy_grid(shifted; sigma = 0., decay = 0.)
             d = norm(base_og - shifted_og)
-            # d = wsd(base_og, shifted_og)
-            # display((r, safe_shortest_paths(r)))
-            # display((shifted, safe_shortest_paths(shifted)))
-            # FunctionalScenes.viz_ocg(base_og - shifted_og)
             append!(data,
-                    DataFrame(furniture = i + 3,
+                    DataFrame(furniture = i,
                               move = m,
                               d = d,
                               room = shifted))
         end
     end
     data
-    # result = @> data sort([:furniture, :d]) digest(r)
-    # isempty(result) && return  DataFrame()
-    # select(result, [:furniture, :move, :d])
 end
 
 function change_in_path(x)
@@ -76,15 +69,16 @@ function digest(df::DataFrame)::DataFrame
 end
 
 function build(rooms::Vector{Room};
-               k::Int64 = 8, factor::Int64 = 1,
-               pct_open::Float64 = 0.4,
+               k::Int64 = 20, factor::Int64 = 1,
+               pct_open::Float64 = 0.5,
                moves::Vector{Symbol} = move_map)
     # assuming all rooms have the same entrance and dimensions
     r = first(rooms)
+    r = expand(r, factor)
     weights = zeros(steps(r))
     # ensures that there is no furniture near the observer
     start_x = Int64(last(steps(r)) * pct_open)
-    stop_x = last(steps(r)) - 4 # nor blocking the exit
+    stop_x = last(steps(r)) - 2 # nor blocking the exit
     start_y = 2
     stop_y = first(steps(r)) - 1
     weights[start_y:stop_y, start_x:stop_x] .= 1.0
@@ -93,12 +87,15 @@ function build(rooms::Vector{Room};
     new_r = last(furniture_chain(k, r, weights))
     results = DataFrame()
     for (i, ri) in enumerate(rooms)
-        new_r = i > 1 ? add(new_r, ri) : new_r
-        expanded = expand(new_r, factor)
-        _df = examine_moves(expanded, moves)
+        new_r = i > 1 ? add(new_r, expand(ri, factor)) : new_r
+        # expanded = expand(new_r, factor)
+        # _df = examine_moves(expanded, moves)
+        _df = examine_moves(new_r, moves)
+        isempty(_df) && continue
         _df[!, :door] .= i
         append!(results, _df)
-        new_rooms[i] = expanded
+        # new_rooms[i] = expanded
+        new_rooms[i] = new_r
     end
     results = isempty(results) ? results : digest(results)
     (new_rooms, results)
@@ -176,7 +173,7 @@ function main()
     inds = LinearIndices(room_dims)
     doors = [3, 9]
     doors = @>> doors map(d -> inds[d, room_dims[2]]) collect(Int64)
-    n = 32
+    n = 2
     seeds, df = create(room_dims, entrance, doors; n = n)
     out = "/scenes/$(name)"
     CSV.write("$(out).csv", df)

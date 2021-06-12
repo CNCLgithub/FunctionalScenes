@@ -81,7 +81,7 @@ subject_performance <- hr_by_subj %>%
 
 # passed_subjects <- subject_performance
 passed_subjects <- subject_performance %>%
-  filter(hr > 1.5*fp, n == 64)
+  filter(fp < 0.2, n == 64)
 
 good_data <- passed_subjects %>%
   left_join(parsed_trials)
@@ -92,100 +92,118 @@ good_data %>%
   summarise(n = n())
 ```
 
-```{r} 
-
-raw_hits <- parsed_trials %>%
-  filter(!base) %>%
-  group_by(scene, door) %>%
-  summarise(c = sum(correct),
-            n = n()) %>%
-  left_join(exp_data)
-
-raw_hits %>%
-  group_by(d > 0) %>%
-  summarise(c = sum(c))
-
-raw_hits %>%
-  group_by(flip, d > 0) %>%
-  summarise(c = sum(c),
-            n = n())
-
-raw_hits %>%
-  group_by(scene, door, d > 0) %>%
-  summarise(c = sum(c)) %>%
-  group_by(scene) %>%
-  summarise(dc = diff(c) / first(c))
-# %>%
+# ```{r} 
+# 
+# raw_hits <- parsed_trials %>%
+#   filter(!base) %>%
+#   group_by(scene, door) %>%
+#   summarise(c = sum(correct),
+#             n = n()) %>%
+#   left_join(exp_data)
+# 
+# raw_hits %>%
+#   group_by(d > 0) %>%
+#   summarise(c = sum(c))
+# 
+# raw_hits %>%
+#   group_by(flip, d > 0) %>%
+#   summarise(c = sum(c),
+#             n = n())
+# 
+# raw_hits %>%
+#   group_by(scene, door, d > 0) %>%
+#   summarise(c = sum(c)) %>%
+#   group_by(scene) %>%
+#   summarise(dc = diff(c)) %>%
+#   # filter(dc != 0) %>%
 #   ggplot(aes(dc)) + 
 #   geom_histogram()
+# 
+# ```
 
-```
-
-```{r}
-
-```
-
-
-```{r}0
-raw_hits %>%
- ggplot(aes(x = d > 0, y = c)) + 
- geom_boxplot()
-```
 
 ```{r} 
 
 passed_hits <- good_data %>%
   filter(!base) %>%
-  group_by(scene, move) %>%
+  group_by(scene, door) %>%
   summarise(c = sum(correct),
-            n = n()) %>%
+            n = n(),
+            f = c / n) %>%
   left_join(exp_data)
 
-passed_hits %>%
-  group_by(move) %>%
-  summarise(c = sum(c))
 
 passed_hits %>%
   group_by(door, d > 0) %>%
-  summarise(c = sum(c))
+  summarise(c = sum(c),
+            f = mean(f))
 
-passed_hits %>%
-  filter(d > 0) %>%
-  group_by(move) %>%
-  summarise(c = sum(c), 
-            n = n()) 
-
-passed_hits %>%
-  filter(d == 0) %>%
-  group_by(move) %>%
-  summarise(c = sum(c), 
-            n = n()) 
-
-
-passed_hits %>%
-  filter(d > 0) %>%
-  ggplot(aes(x = factor(move), y = d)) +
-  geom_violin()
-
-passed_hits %>%
-  filter(move %in% c("left", "right")) %>%
-  group_by(move, d > 0) %>%
-  summarise(c = sum(c), 
-            n = n(),
-            f = c / n / 15)
 
 passed_hits %>%
   group_by(scene, d > 0) %>%
-  summarise(c = sum(c)) %>%
+  summarise(c = sum(c),
+            f = mean(f)) %>%
   group_by(scene) %>%
-  summarise(dc = diff(c))
+  summarise(dc = diff(c),
+            df = diff(f))
 
 passed_hits %>%
-  group_by(scene, d > 0) %>%
-  summarise(c = sum(c)) %>%
+ group_by(scene, d > 0) %>%
+ summarise(c = sum(c),
+           f = mean(f)) %>%
   group_by(scene) %>%
-  summarise(dc = diff(c)) %>%
-  ggplot(aes(dc)) + 
+  summarise(dc = diff(c),
+            df = diff(f)) %>%
+  ggplot(aes(df)) + 
+  geom_histogram()
+
+
+hr_by_door <- passed_hits %>%
+  group_by(scene) %>%
+  summarise(f = mean(f)) %>%
+  filter(f < 0.5) %>%
+  select(scene) %>%
+  left_join(passed_hits) %>%
+  group_by(door, d > 0) %>%
+  summarise(c = sum(c),
+            f = mean(f))
+ 
+hr_by_door
+
+delta_hr_by_scene <- passed_hits %>%
+  group_by(scene) %>%
+  summarise(f = mean(f)) %>%
+  filter(f < 0.50) %>%
+  select(scene) %>%
+  left_join(passed_hits) %>%
+  group_by(scene, d > 0) %>%
+  summarise(c = sum(c),
+            f = mean(f),
+            n = n * n(),
+            d = d) %>%
+  group_by(scene) %>%
+  summarise(dc = diff(c),
+            df = diff(f),
+            maxf = max(f),
+            muf = mean(f),
+            n = sum(n),
+            d = max(d))
+
+delta_hr_by_scene
+
+delta_hr_by_scene %>%
+  ggplot(aes(x = muf, y = df)) +
+  geom_density2d_filled()
+
+
+delta_hr_by_door <- delta_hr_by_scene %>%
+  summarise(mu = mean(df),
+            sd = sd(df),
+            se = sd / sqrt(n * n()))
+delta_hr_by_door
+
+delta_hr_by_scene%>%
+  ggplot(aes(df)) + 
   geom_histogram()
 
 ```
