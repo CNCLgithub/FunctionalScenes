@@ -44,13 +44,13 @@ update_geom_defaults("point", list(size = 10))
 
 ```{r load}
 
-exp_name = "1_exit_22x40_ud"
+exp_name = "1_exit_22x40_doors"
 
-parsed_trials <- read_csv("~/output/experiments/1_exit_22x40_ud/parsed_trials.csv") %>%
+parsed_trials <- read_csv("~/output/experiments/1_exit_22x40_doors/parsed_trials.csv") %>%
     mutate(resp_same = Response == "j",
          correct = !xor(base, resp_same))
 
-exp_data <- read_csv("~/output/scenes/1_exit_22x40_ud.csv") %>%
+exp_data <- read_csv("~/output/scenes/1_exit_22x40_doors.csv") %>%
   rename(scene = id)
 
 # covariates <- read_csv("~/output/experiments/1_exit_22x40/covariates.csv")  %>%
@@ -96,26 +96,37 @@ good_data %>%
 
 raw_hits <- parsed_trials %>%
   filter(!base) %>%
-  group_by(scene, move) %>%
+  group_by(scene, door) %>%
   summarise(c = sum(correct),
             n = n()) %>%
   left_join(exp_data)
 
 raw_hits %>%
-  group_by(move) %>%
-  summarise(c = sum(c))
-
-raw_hits %>%
-  group_by(door, d > 0) %>%
-  summarise(c = sum(c))
-
-raw_hits %>%
   group_by(d > 0) %>%
   summarise(c = sum(c))
+
+raw_hits %>%
+  group_by(flip, d > 0) %>%
+  summarise(c = sum(c),
+            n = n())
+
+raw_hits %>%
+  group_by(scene, door, d > 0) %>%
+  summarise(c = sum(c)) %>%
+  group_by(scene) %>%
+  summarise(dc = diff(c) / first(c))
+# %>%
+#   ggplot(aes(dc)) + 
+#   geom_histogram()
 
 ```
 
 ```{r}
+
+```
+
+
+```{r}0
 raw_hits %>%
  ggplot(aes(x = d > 0, y = c)) + 
  geom_boxplot()

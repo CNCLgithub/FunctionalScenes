@@ -1,4 +1,4 @@
-export add, remove, Furniture, furniture
+export add, remove, Furniture, furniture, strongly_connected
 
 const Furniture = Set{Tile}
 
@@ -165,4 +165,32 @@ function valid_moves(r::Room, f::Furniture)
     moves[:, 3] = f .- rows
     moves[:, 4] = f .+ rows
     @>> moves eachcol lazymap(m -> valid_move(g,f,m)) collect(Float64)
+end
+
+function strongly_connected(r::Room, f::Furniture, move::Symbol)
+
+    r_cart = CartesianIndices(steps(r))
+    f_inds = collect(Int64, f)
+    shifted = @>> f_inds begin
+        map(v -> shift_tile(r, v, move))
+        collect(Tile)
+    end
+
+    c1 = CartesianIndex(0, 1)
+    c2 = CartesianIndex(1, 0)
+
+    connected = Int64[]
+    for (i, other) in enumerate(furniture(r))
+
+        other == f && continue
+        other_inds = collect(Int64, other)
+        gs = gdistances(grid(steps(r)), other_inds)
+
+        !any(d -> d == 1, gs[f_inds]) && continue
+        !any(d -> d == 1, gs[shifted]) && continue
+
+        push!(connected, i)
+    end
+
+    return connected
 end

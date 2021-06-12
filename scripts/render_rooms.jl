@@ -13,7 +13,8 @@ using DataFrames
 device = _load_device()
 
 cycles_args = Dict(
-    :mode => "full"
+    # :mode => "full"
+    :mode => "none"
 )
 
 # function render_base(bases::Vector{Int64}, name::String;
@@ -87,9 +88,9 @@ function render_torch_stims(df::DataFrame, name::String)
     end
 end
 function main()
-    args = parse_commandline()
+    # args = parse_commandline()
     # args = Dict("scene" => 0)
-    # args = Dict("scene" => 6)
+    args = Dict("scene" => 1)
 
     name = "1_exit_22x40_doors"
     src = "/scenes/$(name)"

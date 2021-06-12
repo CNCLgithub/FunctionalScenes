@@ -29,6 +29,10 @@ function examine_moves(r::Room, move_set::Vector{Symbol})
         moves = move_map[moves]
         moves = intersect(moves, move_set)
         for m in moves
+            # only consider strongly connected moves
+            connected = strongly_connected(r, f, m)
+            isempty(connected) && continue
+
             shifted = shift_furniture(r,f,m)
             shifted_og = occupancy_grid(shifted; sigma = 0., decay = 0.)
             d = norm(base_og - shifted_og)

@@ -66,18 +66,19 @@ def parse_row(tname):
     # scene data
     tpath, _ = os.path.splitext(tname)
     splits = tpath.split('_')
-    if len(splits) == 2:
+    if len(splits) == 3:
         base = True
-        scene, _ = splits
+        scene, _, door = splits
         furniture = None
         move = None
     else:
         base = False
-        scene, furniture, move = splits
+        scene, door, furniture, move = splits
 
     new_row = {
         'base' : base,
         'scene' : scene,
+        'door' : door,
         'furniture' : furniture,
         'move' : move}
     return new_row
