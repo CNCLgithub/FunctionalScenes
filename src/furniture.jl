@@ -187,7 +187,8 @@ function strongly_connected(r::Room, f::Furniture, move::Symbol)
         gs = gdistances(grid(steps(r)), other_inds)
 
         !any(d -> d == 1, gs[f_inds]) && continue
-        !any(d -> d == 1, gs[shifted]) && continue
+        # return if moving breaks connection
+        !any(d -> d == 1, gs[shifted]) && return Int64[]
 
         push!(connected, i)
     end
