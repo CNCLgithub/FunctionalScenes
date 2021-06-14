@@ -69,7 +69,7 @@ function digest(df::DataFrame)::DataFrame
 end
 
 function build(rooms::Vector{Room};
-               k::Int64 = 20, factor::Int64 = 1,
+               k::Int64 = 16, factor::Int64 = 1,
                pct_open::Float64 = 0.5,
                moves::Vector{Symbol} = move_map)
     # assuming all rooms have the same entrance and dimensions
@@ -78,7 +78,7 @@ function build(rooms::Vector{Room};
     weights = zeros(steps(r))
     # ensures that there is no furniture near the observer
     start_x = Int64(last(steps(r)) * pct_open)
-    stop_x = last(steps(r)) - 2 # nor blocking the exit
+    stop_x = last(steps(r)) - 4 # nor blocking the exit
     start_y = 2
     stop_y = first(steps(r)) - 1
     weights[start_y:stop_y, start_x:stop_x] .= 1.0
@@ -173,7 +173,7 @@ function main()
     inds = LinearIndices(room_dims)
     doors = [3, 9]
     doors = @>> doors map(d -> inds[d, room_dims[2]]) collect(Int64)
-    n = 2
+    n = 32
     seeds, df = create(room_dims, entrance, doors; n = n)
     out = "/scenes/$(name)"
     CSV.write("$(out).csv", df)

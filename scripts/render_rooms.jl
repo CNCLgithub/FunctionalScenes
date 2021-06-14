@@ -89,12 +89,12 @@ function render_torch_stims(df::DataFrame, name::String)
     end
 end
 function main()
-    # args = parse_commandline()
     args = Dict(
         # "scene" => 0,
         "scene" => 1,
         "threads" => Sys.CPU_THREADS
     )
+    args = parse_commandline()
 
     name = "1_exit_22x40_doors"
     src = "/scenes/$(name)"
