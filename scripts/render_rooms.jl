@@ -13,8 +13,9 @@ using DataFrames
 device = _load_device()
 
 cycles_args = Dict(
-    :mode => "full"
+    :mode => "full",
     # :mode => "none"
+    :navigation => true
 )
 
 # function render_base(bases::Vector{Int64}, name::String;
@@ -91,10 +92,10 @@ end
 function main()
     args = Dict(
         # "scene" => 0,
-        "scene" => 1,
+        "scene" => 29,
         "threads" => Sys.CPU_THREADS
     )
-    args = parse_commandline()
+    # args = parse_commandline()
 
     name = "1_exit_22x40_doors"
     src = "/scenes/$(name)"

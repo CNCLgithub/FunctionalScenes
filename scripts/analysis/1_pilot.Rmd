@@ -34,12 +34,12 @@ library(readr)
 
 
 
-th <- theme_classic() +
-  theme(axis.text = element_text(size=26)) +
-  theme(axis.title = element_text(size=30)) 
-theme_set(th)
+# th <- theme_classic() +
+#   theme(axis.text = element_text(size=26)) +
+#   theme(axis.title = element_text(size=30)) 
+# theme_set(th)
 
-update_geom_defaults("point", list(size = 10))
+# update_geom_defaults("point", list(size = 10))
 ```
 
 ```{r load}
@@ -48,19 +48,25 @@ exp_name = "1_exit_22x40_doors"
 
 parsed_trials <- read_csv("~/output/experiments/1_exit_22x40_doors/parsed_trials.csv") %>%
     mutate(resp_same = Response == "j",
-         correct = !xor(base, resp_same))
+         correct = !xor(base, resp_same)) %>%
+  # trying to remove extra responses at the end
+  group_by(ID, TrialOrder) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+# 8 per row
+gaps = c(TRUE, FALSE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE,
+         TRUE, TRUE,  TRUE, TRUE, TRUE, FALSE, FALSE, TRUE, 
+         FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE, FALSE,
+         FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, TRUE)
+
+gaps <- data.frame(scene = 1:32,
+                   gap = gaps)
 
 exp_data <- read_csv("~/output/scenes/1_exit_22x40_doors.csv") %>%
-  rename(scene = id)
+  rename(scene = id) %>%
+  left_join(gaps, by = c("scene"))
 
-# covariates <- read_csv("~/output/experiments/1_exit_22x40/covariates.csv")  %>%
-#   rename(scene = id) %>%
-#   mutate(zogd = scale(ogd),
-#          zpixeld = scale(pixeld),
-#          dsens = move_sense - base_sense)
-# 
-# features <- read_csv("~/output/experiments/1_exit_22x40/features.csv")  %>%
-#   rename(scene = id)
 
 ```
 ```{r}
@@ -77,11 +83,14 @@ fp_by_subj <- by_subj %>%
   summarise(fp = 1.0 - mean(correct))
 
 subject_performance <- hr_by_subj %>%
-  left_join(fp_by_subj, by = "ID")
+  left_join(fp_by_subj, by = "ID") %>%
+  mutate(d_hr_fr = hr - fp)
 
 # passed_subjects <- subject_performance
 passed_subjects <- subject_performance %>%
-  filter(fp < 0.2, n == 64)
+  # filter(hr >= 1.75 * fp)
+  filter(hr > 2.0 * fp, n == 64)
+  # filter(n == 64)
 
 good_data <- passed_subjects %>%
   left_join(parsed_trials)
@@ -134,18 +143,10 @@ passed_hits <- good_data %>%
 
 
 passed_hits %>%
-  group_by(door, d > 0) %>%
+  group_by(gap, door, d > 0) %>%
   summarise(c = sum(c),
             f = mean(f))
 
-
-passed_hits %>%
-  group_by(scene, d > 0) %>%
-  summarise(c = sum(c),
-            f = mean(f)) %>%
-  group_by(scene) %>%
-  summarise(dc = diff(c),
-            df = diff(f))
 
 passed_hits %>%
  group_by(scene, d > 0) %>%
@@ -161,57 +162,79 @@ passed_hits %>%
 hr_by_door <- passed_hits %>%
   group_by(scene) %>%
   summarise(f = mean(f)) %>%
-  filter(f < 0.5) %>%
+  # filter(f <= 0.60) %>%
   select(scene) %>%
   left_join(passed_hits) %>%
   group_by(door, d > 0) %>%
   summarise(c = sum(c),
             f = mean(f))
  
-hr_by_door
-
 delta_hr_by_scene <- passed_hits %>%
   group_by(scene) %>%
   summarise(f = mean(f)) %>%
-  filter(f < 0.50) %>%
+  # filter(f <= 0.60) %>%
   select(scene) %>%
   left_join(passed_hits) %>%
   group_by(scene, d > 0) %>%
   summarise(c = sum(c),
             f = mean(f),
             n = n * n(),
-            d = d) %>%
+            d = d,
+            g = first(gap)) %>%
   group_by(scene) %>%
   summarise(dc = diff(c),
             df = diff(f),
             maxf = max(f),
             muf = mean(f),
             n = sum(n),
-            d = max(d))
-
-delta_hr_by_scene
+            d = max(d),
+            g = first(g))
 
 delta_hr_by_scene %>%
-  ggplot(aes(x = muf, y = df)) +
+  ggplot(aes(x = d, y = df)) +
   geom_density2d_filled()
 
-
-delta_hr_by_door <- delta_hr_by_scene %>%
-  summarise(mu = mean(df),
-            sd = sd(df),
-            se = sd / sqrt(n * n()))
-delta_hr_by_door
-
-delta_hr_by_scene%>%
-  ggplot(aes(df)) + 
-  geom_histogram()
 
 ```
 
 ```{r}
 passed_hits %>%
- ggplot(aes(x = d > 0, y = c)) + 
+ ggplot(aes(x = d > 0, y = f)) + 
  geom_boxplot()
 ```
+
+```{r}
+model <- t.test(delta_hr_by_scene$df)
+model
+```
+
+
+```{r}
+model <- good_data %>%
+  filter(!base) %>%
+  left_join(exp_data, by = c("scene", "door")) %>%
+  with(lm(correct ~ d > 0))
+model %>%
+  summary()
+```
+
+```{r}
+model <- passed_hits %>%
+  with(lm(f ~ (d > 0) + gap))
+model %>%
+  summary()
+```
+
+
+```{r}
+model <-  good_data %>%
+  left_join(exp_data, by = c("scene", "door")) %>%
+  filter(d > 0, !base) %>%
+  with(lm(correct ~ d + gap))
+model %>%
+  summary()
+```
+
+
 
 

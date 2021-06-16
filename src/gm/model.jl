@@ -17,7 +17,7 @@ end
     level = @trace(categorical(params.level_weights), :level)
     # a vec of tuples for each tile
     lp = level_prior(params, level)
-    state = @trace(Gen.Map(stability)(lp), :state)
+    state = @trace(broadcasted_uniform(lp), :state)
     return (level, state)
 end
 

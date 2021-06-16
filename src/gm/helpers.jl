@@ -364,7 +364,10 @@ function batch_compare_og(og_a, og_b)
     # map(wsd, og_a, og_b) |> sum
 end
 
-function mat_resize(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
+function refine_mat(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
+end
+
+function coarsen_mat(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
     mus = imresize(mat, dims)
     vars = Matrix{Float64}(undef, dims[1], dims[2])
 
@@ -374,7 +377,7 @@ function mat_resize(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
         start = (c .- (1, 1)) .* kdim
         stop = c .* kdim
         vars[c] = sd(mat[start[1] : stop[1],
-                            start[2] : stop[2]])
+                         start[2] : stop[2]])
     end
     mus, vars
 end
