@@ -6,7 +6,7 @@ using FunctionalScenes
 using JSON
 
 import FunctionalScenes: shift_furniture, functional_scenes, translate,
-    _init_graphics, _load_device,occupancy_grid
+    _init_graphics, _load_device,occupancy_position
 
 using DataFrames
 
@@ -53,14 +53,15 @@ function render_torch(bases::Vector{Int64}, name::String)
     for id in bases
         base_p = "/scenes/$(name)/$(id).jld2"
         base = load(base_p)["r"]
-        display(base)
+        #display(base)
 
 	out = "/datasets/$(name)/$(id)"
 	isdir(out) || mkdir(out)
 
         p = "$(out)/render.png"
         graphics = _init_graphics(base, (480, 720), device)
-        og = occupancy_grid(base, decay = 0.0, sigma = 1.0)[1]
+        #og = occupancy_grid(base, decay = 0.0, sigma = 1.0)[1]
+        og = occupancy_position(base)
 	#display(og)
 	og_name = "og"
 
@@ -86,7 +87,8 @@ function render_torch_stims(df::DataFrame, name::String)
                                furniture(base)[r.furniture],
                                Symbol(r.move))
         graphics = _init_graphics(base, (480, 720), device)
-        og = occupancy_grid(room, decay = 0.0, sigma = 1.0)[1]
+        #og = occupancy_grid(room, decay = 0.0, sigma = 1.0)[1]
+        og = occupancy_position(room)
         og_name = "og"
 
         og_json = save_occupancy_grid(og,out,og_name)
@@ -97,13 +99,13 @@ function render_torch_stims(df::DataFrame, name::String)
 end
 function main()
     #name = "pytorch_rep"
-    name = "occupancy_grid_data_driven"
+    #name = "test_occupancy_grid_data_driven"
+    name = "test_occupancy_grid_data_driven_twodoors"
     src = "/scenes/$(name)"
     df = DataFrame(CSV.File("$(src).csv"))
     seeds = unique(df.id)
     render_torch(seeds, name)
     render_torch_stims(df, name)
-
     # seeds = [1]
     # df = df[df.id .== 1, :]
     # render_base(seeds, name)

@@ -17,3 +17,12 @@ user.conf
 
 *.png
 *.gif
+*.blend1
+
+
+.config/
+.R*
+.rstudio/
+.local/
+scripts/analysis/*.tex
+scripts/analysis/*.pdf

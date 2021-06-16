@@ -64,7 +64,8 @@ function build(r::Room; k = 12, factor = 1)
     weights[start_y:stop_y, start_x:stop_x] .= 1.0
     #entrance = entrance(r)
     #exits = exits(r)
-    paths = k_shortest_paths(r,10,entrance(r)[1],exits(r)[1])
+    j = categorical(fill(1.0 / 2, 2))
+    paths = k_shortest_paths(r,10,entrance(r)[1],exits(r)[j])
     probs = fill(1.0 / 10, 10)
     index = categorical(probs)
     path = paths[index] # hint you can use Gen.categorical
@@ -101,11 +102,12 @@ end
 function main()
     #name = "pytorch_rep"
     #name = "2e_1p_30s_matchedc3"
-    name = "occupancy_grid_data_driven"
-    n = 800
+    name = "test_occupancy_grid_data_driven_twodoors"
+    n = 10
     room_dims = (11,20)
     entrance = [6]
-    exits = [215]
+    #exits = [215]
+    exits = [213,217]
     r = Room(room_dims, room_dims, entrance, exits)
     display(r)
     @time seeds, df = create(r, n = n)

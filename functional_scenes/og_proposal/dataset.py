@@ -8,9 +8,6 @@ from torchvision import transforms
 from PIL import Image
 from torchvision.datasets import ImageFolder
 
-def is_power_of_2(num):
-    return ((num & (num - 1)) == 0) and num != 0
-
 class CustomImageFolder(ImageFolder):
     def __init__(self, root, transform=None):
         super(CustomImageFolder, self).__init__(root, transform)
@@ -21,7 +18,7 @@ class CustomImageFolder(ImageFolder):
         if self.transform is not None:
             img = self.transform(img)
 
-        return img
+        return (img,path)
 
 
 def return_data(args):
@@ -32,17 +29,17 @@ def return_data(args):
     image_size = args.image_size
     assert image_size == 64, 'currently only image size of 64 is supported'
 
-    if name.lower() == 'occupancy_grid_data_driven':
+    if name.lower() == 'occupancy_grid_data_driven_twodoors':
         #root = os.path.join(dset_dir, 'occupancygrid')
-        root = os.path.join(dset_dir,'occupancy_grid_data_driven')
+        root = os.path.join(dset_dir,'occupancy_grid_data_driven_twodoors')
         transform = transforms.Compose([
              transforms.Resize((image_size, image_size)),
              transforms.ToTensor(),])
         train_kwargs = {'root':root, 'transform':transform}
         dset = CustomImageFolder
 
-    elif name.lower() == 'test_occupancy_grid_data_driven':
-        root = os.path.join(dset_dir,'test_occupancy_grid_data_driven')
+    elif name.lower() == 'test_occupancy_grid_data_driven_twodoors':
+        root = os.path.join(dset_dir,'test_occupancy_grid_data_driven_twodoors')
         transform = transforms.Compose([
              transforms.Resize((image_size, image_size)),
              transforms.ToTensor(),])
@@ -69,6 +66,7 @@ if __name__ == '__main__':
         transforms.Resize((64, 64)),
         transforms.ToTensor(),])
 
+    # for debugging purpose
     #dset = CustomDataSet('output/datasets', transform)
     dset = CustomImageFolder('output/datasets', transform)
     loader = DataLoader(dset,
