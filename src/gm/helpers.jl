@@ -335,25 +335,23 @@ function coarsen_state(params::ModelParams, state, lvl::Int64)
     end
 end
 
-function coarsen_state(mat, dims::Tuple{Int64, Int64})
-    # println("coarsening\nstart:\t")
-    # display(mat)
-    # mus = Matrix{Float64}(undef, dims[1], dims[2])
-    # m_dims = size(mat)
-    # sds = Matrix{Float64}(undef, m_dims...)
+function coarsen_state(mat::Array{T}, dims::Tuple{Int64, Int64}) where {T}
+    mus = zeros(T, dims[1], dims[2])
+    m_dims = size(mat)
 
-    # ref = CartesianIndices(dims)
-    # kdim = Int64.(size(mat) ./ dims)
-    # kern = CartesianIndices(kdim)
-    # for c in ref
-    #     idxs = CartesianIndex((Tuple(c) .- (1, 1)) .* kdim) .+ kern
-    #     mus[c] = mean(mat[idxs])
-    #     # sds[idxs] .= std(mat[idxs], mean = mus[c])
-    # end
-    # # println("coarsening\nend:\t")
-    # # display(mus)
-    # mus
-    fill(mean(mat), dims)
+    ref = CartesianIndices(dims)
+    kdim = Int64.(size(mat) ./ dims)
+    k = prod(kdim)
+    kern = CartesianIndices(kdim)
+    for outer in ref
+        c = CartesianIndex((Tuple(outer) .- (1, 1)) .* kdim)
+        for inner in kern
+            idx = c + inner
+            mus[outer] += mat[idx]
+        end
+        mus[outer] /= k
+    end
+    mus
 end
 
 """
@@ -376,14 +374,21 @@ function refine_weight(params::ModelParams, lvl::Int64)
 end
 
 function clean_state(state::AbstractArray;
-                     sigma = 1E-2)
-    m = mean(state)
+                     sigma = 1E-5)
+    clamp.(state, sigma, 1.0 - sigma)
+    # m = mean(state)
     # center around 0
-    x = state .- m
-    # scale to (-0.5, 0.5)
-    s = (2.0 + sigma) * maximum(abs.(x))
-    x ./= s
-    # re-shift to [0, 1]
-    x .+= 0.5
-    x
+    # x = state .- m
+    # # scale to (-0.5, 0.5)
+    # s = (2.0 + sigma) * maximum(abs.(x))
+    # x ./= s
+    # # re-shift to [0, 1]
+    # x .+= (m / s)
+    # x
 end
+
+# # stable softmax
+# function softmax(x)
+#     x = x .- maximum(x)
+#     return exp.(x) / sum(exp.(x))
+# end

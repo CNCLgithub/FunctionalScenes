@@ -12,6 +12,7 @@ using LinearAlgebra
 using OptimalTransport
 using OrderedCollections
 using Parameters: @with_kw
+using Base.Iterators: take
 using Lazy: @>, @>>, lazymap, flatten
 
 const torch = PyNULL()
@@ -23,9 +24,9 @@ function __init__()
     @load_generated_functions
 end
 
+include("utils.jl")
 include("dists.jl")
 include("room.jl")
-include("utils.jl")
 include("furniture.jl")
 include("gm/gm.jl")
 include("blender/blender.jl")
