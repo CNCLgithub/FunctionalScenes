@@ -21,14 +21,17 @@ function test()
 
     @show params
     trace, ll = generate(model, (params,))
-    display(trace[:trackers => 1 => :state])
 
+    println("ORIGINAL TRACE")
+    display(trace[:trackers => 1 => :state])
     @show ll
 
-    mh(trace, split_merge_proposal, (1,), split_merge_involution)
+    # mh(trace, split_merge_proposal, (1,), split_merge_involution)
 
+    println("\n\n\nNEW TRACE")
     trace_translator = Gen.SymmetricTraceTranslator(split_merge_proposal, (1,), split_merge_involution)
-    (new_trace, log_weight) = trace_translator(trace)
+    (new_trace, log_weight) = trace_translator(trace; check = false)
+
     display(new_trace[:trackers => 1 => :state])
 
     new_lvl, new_state = new_trace[:trackers => 1]

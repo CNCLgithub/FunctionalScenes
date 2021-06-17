@@ -314,38 +314,46 @@ function batch_compare_og(og_a, og_b)
     # map(wsd, og_a, og_b) |> sum
 end
 
-function refine_state(params::ModelParams, state::Matrix{Float64}, lvl::Int64)
+function refine_state(params::ModelParams, state, lvl::Int64)
     @>> lvl begin
         level_dims(params)
         refine_state(state)
     end
 end
-function refine_state(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
+function refine_state(mat, dims::Tuple{Int64, Int64})
     kdim = Int64.(dims ./ size(mat))
     repeat(mat, inner = kdim)
 end
+function refine_state(mat::Float64, dims::Tuple{Int64, Int64})
+    fill(mat, dims)
+end
 
-function coarsen_state(params::ModelParams, state::Matrix{Float64}, lvl::Int64)
+function coarsen_state(params::ModelParams, state, lvl::Int64)
     @>> lvl begin
         level_dims(params)
         coarsen_state(state)
     end
 end
 
-function coarsen_state(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
-    mus = Matrix{Float64}(undef, dims[1], dims[2])
-    m_dims = size(mat)
-    sds = Matrix{Float64}(undef, m_dims[1], m_dims[2])
+function coarsen_state(mat, dims::Tuple{Int64, Int64})
+    # println("coarsening\nstart:\t")
+    # display(mat)
+    # mus = Matrix{Float64}(undef, dims[1], dims[2])
+    # m_dims = size(mat)
+    # sds = Matrix{Float64}(undef, m_dims...)
 
-    ref = CartesianIndices(dims)
-    kdim = Int64.(size(mat) ./ dims)
-    kern = CartesianIndices(kdim)
-    for c in ref
-        idxs = CartesianIndex((Tuple(c) .- (1, 1)) .* kdim) .+ kern
-        mus[c] = mean(mat[idxs])
-        sds[idxs] .= std(mat[idxs], mean = mus[c])
-    end
-    mus, sds
+    # ref = CartesianIndices(dims)
+    # kdim = Int64.(size(mat) ./ dims)
+    # kern = CartesianIndices(kdim)
+    # for c in ref
+    #     idxs = CartesianIndex((Tuple(c) .- (1, 1)) .* kdim) .+ kern
+    #     mus[c] = mean(mat[idxs])
+    #     # sds[idxs] .= std(mat[idxs], mean = mus[c])
+    # end
+    # # println("coarsening\nend:\t")
+    # # display(mus)
+    # mus
+    fill(mean(mat), dims)
 end
 
 """
@@ -367,6 +375,15 @@ function refine_weight(params::ModelParams, lvl::Int64)
     return w
 end
 
-function clean_state(state::AbstractArray{Float64})
-    clamp.(state, 0., 1.0)
+function clean_state(state::AbstractArray;
+                     sigma = 1E-2)
+    m = mean(state)
+    # center around 0
+    x = state .- m
+    # scale to (-0.5, 0.5)
+    s = (2.0 + sigma) * maximum(abs.(x))
+    x ./= s
+    # re-shift to [0, 1]
+    x .+= 0.5
+    x
 end

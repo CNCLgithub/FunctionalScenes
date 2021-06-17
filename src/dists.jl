@@ -36,6 +36,7 @@ end
 
 (::BroadcastedBernoulli)(ws) = Gen.random(BroadcastedBernoulli(), ws)
 
+is_discrete(::BroadcastedBernoulli) = true
 Gen.has_output_grad(::BroadcastedBernoulli) = false
 Gen.logpdf_grad(::BroadcastedBernoulli, value::Set, args...) = (nothing,)
 
@@ -55,7 +56,16 @@ function Gen.random(::BroadcastedUniform, ws::AbstractArray{Tuple{Float64, Float
     return result
 end
 
-function Gen.logpdf(::BroadcastedUniform, xs::AbstractArray{Float64},
+
+
+function Gen.logpdf(::BroadcastedUniform,
+                    xs::Float64,
+                    ws::AbstractArray{Tuple{Float64, Float64}})
+    Gen.logpdf(uniform, xs, ws[1]...)
+end
+
+function Gen.logpdf(::BroadcastedUniform,
+                    xs::AbstractArray{Float64},
                     ws::AbstractArray{Tuple{Float64, Float64}})
     s = size(ws)
     Gen.assert_has_shape(xs, s;
@@ -69,5 +79,21 @@ end
 
 (::BroadcastedUniform)(ws) = Gen.random(BroadcastedUniform(), ws)
 
-Gen.has_output_grad(::BroadcastedUniform) = false
-Gen.logpdf_grad(::BroadcastedUniform, value::Set, args...) = (nothing,)
+function logpdf_grad(::BroadcastedUniform,
+                     xs::Union{AbstractArray{Float64}, Float64},
+                     ws::AbstractArray{Tuple{Float64, Float64}})
+    # s = size(ws)
+    # Gen.assert_has_shape(xs, s;
+    #                  msg="`xs` has size $(size(xs))` but `ws` is size $(s)")
+    inv_diff = 0.
+    for i in LinearIndices(s)
+        low, high = ws[i]
+        inv_diff += 1.0 / (high - low)
+    end
+    (0., inv_diff, -inv_diff)
+end
+
+
+is_discrete(::BroadcastedUniform) = false
+has_output_grad(::BroadcastedUniform) = true
+has_argument_grads(::BroadcastedUniform) = (true, true)
