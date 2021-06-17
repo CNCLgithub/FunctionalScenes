@@ -24,8 +24,9 @@ end
 """
 Take a room and place a random set of objects in an xy plane
 """
-@gen (static) function room_from_state(state::Matrix{Float64},
+@gen (static) function room_from_state(state::Array{Float64, 3},
                                        params::ModelParams)::Room
+    cleaned = clean_state(state)
     occupied = @trace(broadcasted_bernoulli(state),
                       :furniture)
     result = add_from_state_flip(params, occupied)

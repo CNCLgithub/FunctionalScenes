@@ -22,10 +22,8 @@ function mytest()
                          instances = 10,
                          template = r,
                          feature_weights = "/datasets/alexnet_places365.pth.tar",
-                         base_sigma = 10.0
-                         )
+                         base_sigma = 10.0)
     println(params.device)
-
 
     # display(params.linear_ref)
     # display(FunctionalScenes.tracker_to_state(params, 3))

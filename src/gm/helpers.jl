@@ -12,13 +12,12 @@ export ModelParams
     template::Room = template_from_room(gt)
 
     # thickness of walls
-    thickness::Tuple{Int64, Int64} = (2,2)
+    offset::CartesianIndex{2} = CartesianIndex(2, 2)
 
     # tracker parameters
     dims::Tuple{Int64, Int64} = (6, 6) # size of each tracker
-    offset::Tuple{Int64, Int64} = (0, 2) # offset in world space for each tracker
     inner_ref::CartesianIndices = CartesianIndices(dims)
-    tracker_ref::CartesianIndices = _tracker_ref(template, dims, thickness, offset)
+    tracker_ref::CartesianIndices = _tracker_ref(template, dims, offset)
     n_trackers::Int64 = length(tracker_ref)
     linear_ref::LinearIndices = _linear_ref(template)
     default_tracker_p::Float64 = 0.5
@@ -26,8 +25,8 @@ export ModelParams
                                        length(tracker_ref))
     tracker_size::Int64 = prod(dims)
 
-    base::Tuple{Int64, Int64} = (1, 1)
-    factor::Int64 = 3
+    base::Tuple{Int64, Int64} = (3, 3)
+    factor::Int64 = 2
     levels::Int64 = _count_levels(dims, base, factor)
 
     # tracker prior
@@ -43,6 +42,7 @@ export ModelParams
     img_size::Tuple{Int64, Int64} = (480, 720)
     graphics = _init_graphics(template, img_size, device)
     model = functional_scenes.init_alexnet(feature_weights, device)
+    # minimum variance in prediction
     base_sigma::Float64 = 0.1
 end
 
@@ -57,10 +57,9 @@ function _init_graphics(r, img_size, device)
     return graphics
 end
 
-function _tracker_ref(r::Room, dims, thickness, offset)
-    thickness = thickness .* 2
-    space = (steps(r) .- thickness) ./ dims
-    space = space .- offset
+function _tracker_ref(r::Room, dims, offset)
+    offset = Tuple(offset) .* 2
+    space = (steps(r) .- offset) ./ dims
     space = Int64.(space)
     CartesianIndices(space)
 end
@@ -81,9 +80,10 @@ end
 
 
 function level_dims(base::Tuple{T,T}, factor::T, lvl::T) where {T<:Int64}
-    base .* factor^(lvl - 1)
+    lvl == 1 ? (1, 1) : base .* (factor^(lvl - 2))
 end
 function level_dims(params::ModelParams, lvl::Int64)
+    @assert lvl <= params.levels "level $(lvl) out of bounds $(params.levels)"
     @unpack base, factor = params
     level_dims(base, factor, lvl)
 end
@@ -94,8 +94,8 @@ end
 
 function level_prior(params::ModelParams, lvl::Int64)
     @unpack base, bounds, factor = params
-    c = prod(level_dims(params, lvl))
-    fill(bounds, c)
+    d = level_dims(params, lvl)
+    fill(bounds, d)
 end
 
 
@@ -106,57 +106,23 @@ function create_obs(params::ModelParams, r::Room)
     return constraints
 end
 
-function consolidate_local_states(params::ModelParams, states)::Matrix{Float64}
-    @unpack dims, factor, tracker_size, tracker_ps = params
-
-    gs = Matrix{Float64}(undef, tracker_size, length(tracker_ps))
-
+function consolidate_local_states(params::ModelParams, states)::Array{Float64, 3}
+    @unpack dims, factor, tracker_size, n_trackers = params
+    gs = Array{Float64}(undef, dims[1], dims[2], n_trackers)
     for (i, tracker) in enumerate(states)
         level, state = tracker
-        # the dimensions of the tracker for a given level
-        lds = level_dims(params, level)
-
         # resize the tracker's state to span its slice in the scene
-        if prod(lds) == 1
-            # 1x1 tracker, cannot use `Image.imresize`
-            resized = fill(state[1], tracker_size)
-        else
-            resized = @> state begin
-                # first convert from vec -> matrix
-                reshape(lds)
-                # resize from tracker space to scene space
-                imresize(dims)
-                vec
-            end
-        end
-        gs[:, i] = resized
+        gs[:, :, i] = refine_state(state, dims)
     end
     gs
 end
 
-function room_from_state_args(params::ModelParams, gs::Matrix{Float64})
+function room_from_state_args(params::ModelParams, gs::Array{Float64, 3})
     @unpack instances = params
     gs = fill(gs, instances)
     ps = fill(params, instances)
     (gs, ps)
 end
-
-# function map_tracker_weights(params::ModelParams, tid::Int64)
-#     vs = @>> tid tracker_to_state(params) state_to_room(params)
-#     ws = params.tile_weights[vs] |> vec
-#     collect(Tuple{Float64, Float64}, zip(ws .- params.tile_window,
-#                                          ws .+ params.tile_window))
-# end
-
-# """
-# Maps the
-# """
-# function map_tracker_weights(params::ModelParams)
-#     ids = 1:length(active)
-#     @>> ids begin
-#         map(i -> map_tracker_weights(params, i))
-#     end
-# end
 
 function add_from_state_flip(params::ModelParams, occupied)::Room
     r = params.template
@@ -174,36 +140,20 @@ end
 Converts cartesian coordinats in tracker state space (inner_ref, tracker_id) to
 the linear indices of room coordinates (x, y)
 """
-function state_to_room(params::ModelParams, vs::Vector{CartesianIndex{2}})
+function state_to_room(params::ModelParams, vs::Vector{CartesianIndex{3}})
+    @unpack dims, offset, tracker_ref, inner_ref, linear_ref = params
     result = Vector{Int64}(undef, length(vs))
     for (i, cind) in enumerate(vs)
-        inner_idx, tracker_idx = cind
-        outer = Tuple(params.tracker_ref[tracker_idx]) .- (1,1) .+ params.offset
-        outer = Tuple(outer) .* params.dims
-        cart = Tuple(params.inner_ref[inner_idx]) .+ outer .+ params.thickness
-        cart = CartesianIndex(cart)
-        result[i] = params.linear_ref[cart]
+        x, y, tracker = Tuple(cind)
+        outer = tracker_ref[tracker]
+        # the top left corner of the tracker
+        outer = CartesianIndex((Tuple(outer) .- (1, 1)) .* dims)
+        c = CartesianIndex{2}(x, y) + outer + offset
+        # convert to linear space (graph vertex space)
+        result[i] = linear_ref[c]
     end
     return result
 end
-
-# function room_to_tracker(params::ModelParams, vs::Vector{CartesianIndex{2}})
-#     ts = Int64[]
-#     full_coords = CartesianIndices(steps(params.template))
-#     tracker_linear = LinearIndices(size(params.tracker_ref))
-#     for (i,j) in enumerate(fs)
-#         full_cart = full_coords[j]
-#         xy = Tuple(full_cart) .- params.thickness
-#         xy = xy .- (params.dims .* params.offset)
-#         xy = Int64.(ceil.(xy ./ params.dims))
-#         if any(xy .> size(params.tracker_ref))
-#             continue
-#         end
-#         push!(ts, tracker_linear[xy...])
-#         # ts[i] = tracker_linear[xy...]
-#     end
-#     return ts
-# end
 
 function project_state_weights(params::ModelParams, state)
     state_to_room(params, CartesianIndices(size(state)))
@@ -364,20 +314,59 @@ function batch_compare_og(og_a, og_b)
     # map(wsd, og_a, og_b) |> sum
 end
 
-function refine_mat(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
+function refine_state(params::ModelParams, state::Matrix{Float64}, lvl::Int64)
+    @>> lvl begin
+        level_dims(params)
+        refine_state(state)
+    end
+end
+function refine_state(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
+    kdim = Int64.(dims ./ size(mat))
+    repeat(mat, inner = kdim)
 end
 
-function coarsen_mat(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
-    mus = imresize(mat, dims)
-    vars = Matrix{Float64}(undef, dims[1], dims[2])
-
-    kdim = Int64.(size(mat) ./ dims)
-    ref = CartesianIndices{2}(dims)
-    for c in ref
-        start = (c .- (1, 1)) .* kdim
-        stop = c .* kdim
-        vars[c] = sd(mat[start[1] : stop[1],
-                         start[2] : stop[2]])
+function coarsen_state(params::ModelParams, state::Matrix{Float64}, lvl::Int64)
+    @>> lvl begin
+        level_dims(params)
+        coarsen_state(state)
     end
-    mus, vars
+end
+
+function coarsen_state(mat::Matrix{Float64}, dims::Tuple{Int64, Int64})
+    mus = Matrix{Float64}(undef, dims[1], dims[2])
+    m_dims = size(mat)
+    sds = Matrix{Float64}(undef, m_dims[1], m_dims[2])
+
+    ref = CartesianIndices(dims)
+    kdim = Int64.(size(mat) ./ dims)
+    kern = CartesianIndices(kdim)
+    for c in ref
+        idxs = CartesianIndex((Tuple(c) .- (1, 1)) .* kdim) .+ kern
+        mus[c] = mean(mat[idxs])
+        sds[idxs] .= std(mat[idxs], mean = mus[c])
+    end
+    mus, sds
+end
+
+"""
+Probability of refining or coarsening
+
+lvl = 1   ? 1
+      <N  ? 0.5,
+      N   ? 0
+"""
+function refine_weight(params::ModelParams, lvl::Int64)
+    @unpack levels = params
+    if lvl == 1
+        w = 1.0
+    elseif lvl < levels
+        w = 0.5
+    else
+        w = 0.0
+    end
+    return w
+end
+
+function clean_state(state::AbstractArray{Float64})
+    clamp.(state, 0., 1.0)
 end
