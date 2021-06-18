@@ -1,24 +1,17 @@
+@gen function random_walk_proposal(trace, tracker)
+    addr = :trackers => tracker => :state
+    {addr} ~ broadcasted_normal(trace[addr], 0.05)
+end
+
+
 @kern function tracker_kernel(trace, tracker)
 
     # update the level of a given tracker
-    trace ~ mh(trace, )
-    for i in 1:trace[:n]
-        trace ~ mh(trace, random_walk_proposal, (i,))
-    end
+    trace ~ mh(trace, split_merge_proposal, (tracker,), split_merge_involution)
+    # random walk over state for that tracker
+    trace ~ mh(trace, random_walk_proposal, (tracker,))
 
-    # repeatedly pick a random x and do a random walk update on it
-    if trace[:n] > 0
-        for rep in 1:10
-            let i ~ uniform_discrete(1, trace[:n])
-                trace ~ mh(trace, random_walk_proposal, (i,))
-            end
-        end
-    end
-
-    # remove the last x, or add a new one, a random number of times
-    let n_add_remove_reps ~ uniform_discrete(0, max_n_add_remove)
-        for rep in 1:n_add_remove_reps
-            trace ~ mh(trace, add_remove_proposal, (), add_remove_involution)
-        end
-    end
+    # update room instances; currently using ancestral distribution
+    selected = select_tracker_from_state(trace, tracker)
+    trace ~ mh(trace, selected)
 end

@@ -258,14 +258,10 @@ end
 
 function select_from_model(params::ModelParams, tracker::Int64)
     s = select()
-    # tracker state
-    for i = 1:params.tracker_size
-        push!(s, :trackers => tracker => :state )
-    end
     # associated rooms samples
     idxs = tracker_to_state(params, tracker)
     for i = 1:params.instances, j in idxs
-        push!(s, :instances => i => :furniture => j => :flip)
+        ph!(s, :instances => i => :furniture => j => :flip)
     end
     StaticSelection(s)
 end
@@ -381,15 +377,6 @@ end
 function clean_state(state::AbstractArray;
                      sigma = 1E-5)
     clamp.(state, sigma, 1.0 - sigma)
-    # m = mean(state)
-    # center around 0
-    # x = state .- m
-    # # scale to (-0.5, 0.5)
-    # s = (2.0 + sigma) * maximum(abs.(x))
-    # x ./= s
-    # # re-shift to [0, 1]
-    # x .+= (m / s)
-    # x
 end
 
 # # stable softmax
