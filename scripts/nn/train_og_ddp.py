@@ -12,24 +12,13 @@ torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
 
 
-def main(args):
-    seed = args.seed
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    np.random.seed(seed)
+def main():
 
-    net = Solver(args)
-
-    if args.train:
-        net.train()
-    else:
-        net.test()
-
-
-if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='toy Beta-VAE')
 
-    parser.add_argument('--train', default=True, type=str2bool, help='train or test')
+    parser.add_argument('--train', default=True, type=str2bool, help='train beta-VAE or train following occupancy grid')
+    parser.add_argument('--test', default=False, type=str2bool, help='test following occupancy grid')
+
     parser.add_argument('--seed', default=1, type=int, help='random seed')
     parser.add_argument('--cuda', default=True, type=str2bool, help='enable cuda')
     parser.add_argument('--max_iter', default=1e6, type=float, help='maximum training iteration')
@@ -63,7 +52,27 @@ if __name__ == "__main__":
 
     parser.add_argument('--ckpt_dir', default='checkpoints', type=str, help='checkpoint directory')
     parser.add_argument('--ckpt_name', default='last', type=str, help='load previous checkpoint. insert checkpoint filename')
+    parser.add_argument('--ckpt_name_og', default='og', type=str, help='load previous checkpoint. insert checkpoint filename')
 
     args = parser.parse_args()
 
-    main(args)
+    seed = args.seed
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    np.random.seed(seed)
+    net = Solver(args)
+
+    if args.train:
+        net.train_vae()
+        #net.train_OG()
+    else:
+        #net.test_vae()
+        net.train_OG()
+    
+    if not args.train and args.test:
+        net.test_OG()
+
+
+if __name__ == "__main__":
+    main()
+

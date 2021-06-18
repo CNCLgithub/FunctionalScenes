@@ -144,6 +144,56 @@ class BetaVAE_B(BetaVAE_H):
     def _decode(self, z):
         return self.decoder(z)
 
+class BetaVAE_OG(nn.Module):
+    def __init__(self, encoder, z_dim=10, nc=1):
+        super(BetaVAE_OG, self).__init__()
+        self.nc = nc
+        self.z_dim = z_dim
+        #self.net.load_state_dict(checkpoint['model_states']['net'])
+        #self.encoder = self.net.encoder
+        self.encoder = encoder
+        for p in self.encoder.parameters():
+            p.requires_grad = False
+            
+        self.decoder = nn.Sequential(
+            nn.Linear(z_dim, 256),               # B, 256
+            nn.ReLU(True),
+            nn.Linear(256, 256),                 # B, 256
+            nn.ReLU(True),
+            nn.Linear(256, 32*4*4),              # B, 512
+            nn.ReLU(True),
+            View((-1, 32, 4, 4)),                # B,  32,  4,  4
+            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32,  8,  8
+            nn.ReLU(True),
+            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32, 16, 16
+            nn.ReLU(True),
+            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32, 32, 32
+            nn.ReLU(True),
+            #nn.ConvTranspose2d(32, nc, 4, 2, 1), # change to the dimension of occupancy grid
+            nn.ConvTranspose2d(32, 1, [9,3], 1, [0,6]),
+        )
+        
+    def weight_init(self):
+        for block in self._modules:
+            for m in self._modules[block]:
+                kaiming_init(m)
+
+    def forward(self, x):
+        distributions = self._encode(x)
+        mu = distributions[:, :self.z_dim]
+        logvar = distributions[:, self.z_dim:]
+        z = reparametrize(mu, logvar)
+        z_recon = self._decode(z)
+        #.view(x.size())
+
+        return z_recon, mu, logvar
+
+    def _encode(self, x):
+        return self.encoder(x)
+
+    def _decode(self, z):
+        return self.decoder(z)
+
 
 def kaiming_init(m):
     if isinstance(m, (nn.Linear, nn.Conv2d)):

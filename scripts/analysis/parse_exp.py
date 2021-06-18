@@ -66,18 +66,19 @@ def parse_row(tname):
     # scene data
     tpath, _ = os.path.splitext(tname)
     splits = tpath.split('_')
-    if len(splits) == 2:
+    if len(splits) == 3:
         base = True
-        scene, _ = splits
+        scene, _, door = splits
         furniture = None
         move = None
     else:
         base = False
-        scene, furniture, move = splits
+        scene, door, furniture, move = splits
 
     new_row = {
         'base' : base,
         'scene' : scene,
+        'door' : door,
         'furniture' : furniture,
         'move' : move}
     return new_row
@@ -85,19 +86,19 @@ def parse_row(tname):
 
 def main():
 
-    parser = argparse.ArgumentParser(description = "Parses MOT Exp:1 data",
+    parser = argparse.ArgumentParser(description = "Parses participants.db",
         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("--exp", type = str, help = "Path to trial dataset",
                         default = '2e_1p_30s')
     parser.add_argument("--table_name", type = str, default = "2e_1p_30s",
                         help = 'Table name')
-    parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["2.0"],
+    parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["1.0"],
                         help = 'Experiment version flag')
     parser.add_argument("--mode", type = str, default = "debug",
                         choices = ['debug', 'sandbox', 'live'],
                         help = 'Experiment mode')
-    parser.add_argument("--trialsbyp", type = int, default = 120,
+    parser.add_argument("--trialsbyp", type = int, default = 128,
                         help = 'Number of trials expected per subject')
     parser.add_argument("--trialdata", type = str,
                         default = '/experiments/pilot/parsed_trials.csv',
@@ -147,11 +148,11 @@ def main():
     out = os.path.join(exp_src, 'parsed_trials.csv')
     trs.to_csv(out, index=False)
 
-    cl_qs = cl_qs[cl_qs.WID.isin(good_wids)]
-    cl_qs["ID"] = cl_qs.WID.apply(lambda x: wid_translate[x])
+    # cl_qs = cl_qs[cl_qs.WID.isin(good_wids)]
+    # cl_qs["ID"] = cl_qs.WID.apply(lambda x: wid_translate[x])
 
-    out = os.path.join(exp_src, 'parsed_questions.csv')
-    cl_qs[["ID", "instructionloops", "comments"]].to_csv(out, index=False)
+    # out = os.path.join(exp_src, 'parsed_questions.csv')
+    # cl_qs[["ID", "instructionloops", "comments"]].to_csv(out, index=False)
 
 if __name__ == '__main__':
     main()

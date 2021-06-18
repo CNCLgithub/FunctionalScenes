@@ -6,7 +6,7 @@ using DataFrames
 using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
-experiment = "2e_1p_30s"
+experiment = "2e_1p_30s_matchedc3"
 
 function parse_commandline(vs)
     s = ArgParseSettings()
@@ -111,16 +111,9 @@ function main(cmd)
         path = "$(path)_$(furniture)_$(move)"
     end
 
-    # tracker_ps = zeros(12)
-    # tracker_ps[[10, 11,12]] .= 1.0
-    tracker_ps = ones(12)
-    # tracker_ps[[1,3,4,6]] .= 0.
     query = query_from_params(room, args["gm"],
                               img_size = (240, 360),
-                              # dims = (3,3),
-                              # offset = (0, 4),
-                              default_tracker_p = 1.0,
-                              # tracker_ps = tracker_ps
+                              dims = (6,6),
                               )
 
     selections = FunctionalScenes.selections(first(query.args))

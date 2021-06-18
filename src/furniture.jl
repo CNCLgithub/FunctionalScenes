@@ -1,8 +1,10 @@
+export add, remove, Furniture, furniture, strongly_connected
+
 const Furniture = Set{Tile}
 
+furniture(r::Room)::Array{Furniture} = furniture(pathgraph(r))
 
-function furniture(r::Room)::Array{Furniture}
-    g = pathgraph(r)
+function furniture(g::PathGraph)::Array{Furniture}
     vs = @>> g begin
         connected_components
         filter(c -> istype(g, first(c), :furniture))
@@ -11,19 +13,31 @@ function furniture(r::Room)::Array{Furniture}
     end
 end
 
+"""
+Adds the furniture of `src` to `dest`
+"""
+function add(src::Room, dest::Room)::Room
+    @>> src begin
+        furniture
+        fs -> foldl(add, fs; init = dest)
+    end
+end
+
 function add(r::Room, f::Furniture)::Room
-    g = copy(pathgraph(r))
+    g = deepcopy(pathgraph(r))
     # assign furniture status
     foreach(v -> set_prop!(g, v, :type, :furniture), f)
     # ensure that furniture is only connected to itself
     # returns a list of edges connected each furniture vertex
-    es = @>> f begin
-        collect
-        map(v -> @>> v neighbors(g) map(n -> Edge(v, n)))
-        x -> vcat(x...)
+    @>> f begin
+        collect(Tile)
+        foreach(v -> @>> v begin
+                    neighbors(g)
+                    collect(Tile) # must collect for compete iteration
+                    # removes any extraneous edges
+                    foreach(x -> !in(x, f) && rem_edge!(g, Edge(x, v)))
+                end)
     end
-    # removes any edge that is no longer valid in the neighborhood (ie :furniture <-> :floor)
-    foreach(e -> !matched_type(g, e) && rem_edge!(g, e), es)
     Room(r.steps, r.bounds, r.entrance, r.exits, g)
 end
 
@@ -69,15 +83,6 @@ function shift_furniture(r::Room, f::Furniture, move::Symbol)
 
     fid = findfirst(x -> !isempty(intersect(f, x)), fs)
     return shift_furniture(r, fid, move)
-    # add shifted tiles to room
-    # new_r = add(r, shifted)
-    # new_g = pathgraph(new_r)
-    # # clear newly empty tiles
-    # @>> setdiff(f, shifted) foreach(v -> set_prop!(new_g, v, :type, :floor))
-    # # patch edges to tiles that are now empty
-    # spots = setdiff(move_map, [move])
-    # foreach(t -> patch!(new_r, t, spots), f)
-    # return new_r
 end
 
 
@@ -162,4 +167,54 @@ function valid_moves(r::Room, f::Furniture)
     @>> moves eachcol lazymap(m -> valid_move(g,f,m)) collect(Float64)
 end
 
-export add, remove, Furniture, furniture
+function strongly_connected(r::Room, f::Furniture, move::Symbol)
+
+    f_inds = collect(Int64, f)
+    shifted = @>> f_inds begin
+        map(v -> shift_tile(r, v, move))
+        collect(Tile)
+    end
+
+    h, _ = steps(r)
+    g = grid(steps(r))
+    gs = gdistances(g, f_inds)
+    shifted_gs = gdistances(g, shifted)
+
+    fs = furniture(r)
+    other_inds = map(x -> collect(Int64, x), fs)
+
+    connected = Int64[]
+    gaps = BitVector(zeros(h))
+    for i = 1:length(fs)
+
+        # skip rest if same as f
+        fs[i] == f && continue
+
+        # fill in gaps
+        gaps[(other_inds[i] .- 1) .% h .+ 1] .= 1
+
+        touching1 = any(d -> d == 1, gs[other_inds[i]])
+        touching2 = any(d -> d == 1, shifted_gs[other_inds[i]])
+
+        # not touching
+        (!touching1 && !touching2)  && continue
+
+        # weakly connected
+        xor(touching1, touching2) && return Int64[]
+
+        # strongly connected
+        push!(connected, i)
+
+    end
+
+    # check to see if `f` is in the front
+    !all(gaps[(f_inds .- 1) .% h .+ 1]) && return Int64[]
+
+    # location after move
+    gaps[(shifted .- 1) .% h .+ 1] .= 1
+
+    # gap was made with shift, reject
+    !all(gaps[(f_inds .- 1) .% h .+ 1]) && return Int64[]
+
+    return connected
+end

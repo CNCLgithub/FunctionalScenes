@@ -2,6 +2,7 @@ using CSV
 using Lazy
 using JLD2
 using FileIO
+using ArgParse
 using FunctionalScenes
 
 import FunctionalScenes: shift_furniture, functional_scenes, translate,
@@ -11,37 +12,54 @@ using DataFrames
 
 device = _load_device()
 
-function render_base(bases::Vector{Int64}, name::String)
-    out = "/renders/$(name)_new"
-    isdir(out) || mkdir(out)
-    for id in bases
-        base_p = "/scenes/$(name)/$(id).jld2"
-        base = load(base_p)["r"]
-        p = "$(out)/$(id)"
-        display(base)
-        # render(base, p, mode = "none", threads = 4, navigation = true)
-        render(base, p, mode = "full",threads = 4,  navigation = false)
-    end
-end
+cycles_args = Dict(
+    :mode => "full",
+    # :mode => "none"
+    :navigation => true
+)
 
-function render_stims(df::DataFrame, name::String)
-    out = "/renders/$(name)_new"
+# function render_base(bases::Vector{Int64}, name::String;
+#                      spheres = false)
+#     out = spheres ? "spheres" : "cubes"
+#     out = "/renders/$(name)_cycles_$(out)"
+#     isdir(out) || mkdir(out)
+#     for id in bases
+#         base_p = "/scenes/$(name)/$(id).jld2"
+#         base = load(base_p)["r"]
+#         p = "$(out)/$(id)"
+#         display(base)
+#         render(base, p;
+#                cycles_args...,
+#                spheres = spheres)
+#     end
+# end
+
+function render_stims(df::DataFrame, name::String;
+                      spheres = false,
+                      threads = Sys.CPU_THREADS)
+    out = spheres ? "spheres" : "cubes"
+    out = "/renders/$(name)_cycles_$(out)"
     isdir(out) || mkdir(out)
     for r in eachrow(df)
         base_p = "/scenes/$(name)/$(r.id).jld2"
-        base = load(base_p)["r"]
-        p = "$(out)/$(r.id)_$(r.furniture)_$(r.move)"
+        base = load(base_p)["rs"][r.door]
+        p = "$(out)/$(r.id)_$(r.door)"
+        render(base, p;
+               cycles_args...,
+               spheres = spheres)
         room = shift_furniture(base,
                                furniture(base)[r.furniture],
                                Symbol(r.move))
-        # render(room, p, mode = "none", threads = 4, navigation = true)
-        render(room, p, mode = "full",threads = 4,  navigation = false)
+        p = "$(out)/$(r.id)_$(r.door)_$(r.furniture)_$(r.move)"
+        render(room, p;
+               cycles_args...,
+               spheres = spheres)
     end
 end
 
 
 function render_torch(bases::Vector{Int64}, name::String)
-    out = "/renders/$(name)"
+    out = "/renders/$(name)_torch3d"
     isdir(out) || mkdir(out)
     for id in bases
         base_p = "/scenes/$(name)/$(id).jld2"
@@ -56,7 +74,7 @@ function render_torch(bases::Vector{Int64}, name::String)
 end
 
 function render_torch_stims(df::DataFrame, name::String)
-    out = "/renders/$(name)"
+    out = "/renders/$(name)_torch3d"
     isdir(out) || mkdir(out)
     for r in eachrow(df)
         base_p = "/scenes/$(name)/$(r.id).jld2"
@@ -72,19 +90,62 @@ function render_torch_stims(df::DataFrame, name::String)
     end
 end
 function main()
-    #name = "pytorch_rep"
-    name = "2e_1p_30s_matchedc3_cycles"
+    args = Dict(
+        # "scene" => 0,
+        "scene" => 29,
+        "threads" => Sys.CPU_THREADS
+    )
+    # args = parse_commandline()
+
+    name = "1_exit_22x40_doors"
     src = "/scenes/$(name)"
     df = DataFrame(CSV.File("$(src).csv"))
     seeds = unique(df.id)
-    render_torch(seeds, name)
-    render_torch_stims(df, name)
+    # render_torch(seeds, name)
+    # render_torch_stims(df, name)
+    if args["scene"] == 0
+        seeds = unique(df.id)
+    else
+        seeds = [args["scene"]]
+        df = df[df.id .== args["scene"], :]
+    end
 
-    # seeds = [1]
-    # df = df[df.id .== 1, :]
-    # render_base(seeds, name)
-    # render_stims(df, name)
+    # render_base(seeds, name,
+    #             spheres = true
+    #             )
+    # render_stims(df, name,
+    #              spheres = true,
+    #              )
+    # render_base(seeds, name,
+    #             spheres = false
+    #             )
+    render_stims(df, name,
+                 spheres = false,
+                 threads = args["threads"]
+                 )
     return nothing
 end
+
+
+
+function parse_commandline()
+    s = ArgParseSettings()
+
+    @add_arg_table! s begin
+        "scene"
+        help = "Which scene to run"
+        arg_type = Int64
+        required = true
+
+
+        "--threads"
+        help = "Number of threads for cycles"
+        arg_type = Int64
+        default = 4
+    end
+    return parse_args(s)
+end
+
+
 
 main();

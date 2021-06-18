@@ -2,6 +2,7 @@ using CSV
 using Lazy
 using JLD2
 using Statistics
+using LinearAlgebra: norm
 using FunctionalScenes
 
 using DataFrames
@@ -10,138 +11,177 @@ import Random:shuffle
 
 import FunctionalScenes: expand, furniture, valid_moves,
     shift_furniture, move_map, labelled_categorical,
-    translate, k_shortest_paths, entrance, exits
-
-import FunctionalScenes: torch, functional_scenes
+    translate, k_shortest_paths, entrance, exits, wsd
 
 import Gen:categorical
 
-features = Dict(
-    "features.6" => "c3",
-)
-
-if torch.cuda.is_available()
-    device = torch.device("cuda:0")
-    torch.cuda.set_device(device)
-else
-    device = torch.device("cpu")
-end
+using Profile
+using StatProfilerHTML
 
 
-model = functional_scenes.init_alexnet("/datasets/alexnet_places365.pth.tar", device)
-graphics = functional_scenes.SimpleGraphics((480, 720), device)
-
-
-function feat_pred(a_img, x)
-    b_d = translate(x, false)
-    b_img = functional_scenes.render_scene_pil(b_d, graphics)
-    feats = functional_scenes.nn_features.compare_features(model, features, a_img, b_img)
-    feats["c3"] < 0.97
-end
-
-function predicate(x)
-    any(iszero.(x.d)) && any((!iszero).(x.d))
-end
-
-
-function digest(df::DataFrame, base)
-    base_d = translate(base, false)
-    graphics.set_from_scene(base_d)
-    base_img = functional_scenes.render_scene_pil(base_d, graphics)
-    @>> DataFrames.groupby(df, :furniture) begin
-        filter(g -> nrow(g) >= 2)
-        map(g -> g[1:2, :])
-        filter(predicate)
-        filter(g -> all(
-                        map(x -> feat_pred(base_img, x), 
-                        g.room)))
-        x -> isempty(x) ? x : labelled_categorical(x)
-        DataFrame
-    end
-end
-
-function search(r::Room)
+function examine_moves(r::Room, move_set::Vector{Symbol})
     # avoid furniture close to camera
-    fs = furniture(r)[4:end]
+    fs = furniture(r)
     data = DataFrame()
+    base_og = occupancy_grid(r; sigma = 0., decay = 0.)
     for (i,f) in enumerate(fs)
         moves = collect(Bool, valid_moves(r, f))
         moves = move_map[moves]
-        # moves = intersect(moves, [:up, :down])
+        moves = intersect(moves, move_set)
         for m in moves
+            # only consider strongly connected moves
+            connected = strongly_connected(r, f, m)
+            isempty(connected) && continue
+
             shifted = shift_furniture(r,f,m)
-            d = mean(compare(r, shifted))
-            append!(data, DataFrame(furniture = i+3,
-                                    move = m,
-                                    d = d,
-                    room = shifted))
+            shifted_og = occupancy_grid(shifted; sigma = 0., decay = 0.)
+            d = norm(base_og - shifted_og)
+            append!(data,
+                    DataFrame(furniture = i,
+                              move = m,
+                              d = d,
+                              room = shifted))
         end
     end
-    isempty(data) && return  DataFrame()
-    result = @> data sort([:furniture, :d]) digest(r)
-    isempty(result) && return  DataFrame()
-    select(result, [:furniture, :move, :d])
+    data
 end
 
-# TODO: fill in the blanks 
-function build(r::Room; k = 12, factor = 1)
+function change_in_path(x)
+    min_i = argmin(x[:, :d])
+    c1 = x[min_i, :d] == 0.0 && x[min_i, :door] == 1
+
+    max_i = argmax(x[:, :d])
+    c2 = x[max_i, :d] > 10.0 && x[max_i, :door] == 2
+
+    c1 && c2
+end
+
+function digest(df::DataFrame)::DataFrame
+    df = @>> DataFrames.groupby(df, [:furniture, :move]) begin
+        # look find change for one but not another door
+        filter(change_in_path)
+        # get the largest and smallest (0) change
+        map(g -> sort(g, :d)[[1,end], :])
+    end
+    isempty(df) && return DataFrame()
+
+    df = vcat(df...)
+end
+
+function build(rooms::Vector{Room};
+               k::Int64 = 16, factor::Int64 = 1,
+               pct_open::Float64 = 0.5,
+               moves::Vector{Symbol} = move_map)
+    # assuming all rooms have the same entrance and dimensions
+    r = first(rooms)
+    r = expand(r, factor)
     weights = zeros(steps(r))
     # ensures that there is no furniture near the observer
-    start_x = Int(last(steps(r)) * 0.4)
-    stop_x = last(steps(r)) - 2
+    start_x = Int64(last(steps(r)) * pct_open)
+    stop_x = last(steps(r)) - 4 # nor blocking the exit
     start_y = 2
     stop_y = first(steps(r)) - 1
     weights[start_y:stop_y, start_x:stop_x] .= 1.0
-    #entrance = entrance(r)
-    #exits = exits(r)
-    paths = k_shortest_paths(r,10,entrance(r)[1],exits(r)[1])
-    probs = fill(1.0 / 10, 10)
-    index = categorical(probs)
-    path = paths[index] # hint you can use Gen.categorical
-    weights[path] .= 0.0
+
+    new_rooms = Vector{Room}(undef, length(rooms))
     new_r = last(furniture_chain(k, r, weights))
-    new_r = FunctionalScenes.expand(new_r, factor)
-    dist = search(new_r)
-    (new_r, dist)
+    results = DataFrame()
+    for (i, ri) in enumerate(rooms)
+        new_r = i > 1 ? add(new_r, expand(ri, factor)) : new_r
+        # expanded = expand(new_r, factor)
+        # _df = examine_moves(expanded, moves)
+        _df = examine_moves(new_r, moves)
+        isempty(_df) && continue
+        _df[!, :door] .= i
+        append!(results, _df)
+        # new_rooms[i] = expanded
+        new_rooms[i] = new_r
+    end
+    results = isempty(results) ? results : digest(results)
+    (new_rooms, results)
 end
 
-function saver(id::Int64, r::Room, out::String)
-    @save "$(out)/$(id).jld2" r
-end
 
-
-function create(base::Room; n::Int64 = 15)
-    seeds = Vector{Room}(undef, n)
+function create(room_dims::Tuple{Int64, Int64},
+                entrance::Int64,
+                doors::Vector{Int64};
+                n::Int64 = 8)
     df = DataFrame()
-    i = 1
-    while i <= n
-        @time seed, _df = build(base, factor = 2)
-        if !isempty(_df)
-            seeds[i] = seed
-            _df[!, :id] .= i
-            append!(df, _df)
+    moves = [:down, :up]
+    max_count = Int64(ceil(n / length(moves)))
+
+    println("starting room")
+    r = Room(room_dims, room_dims, [entrance], Int64[])
+    display(r)
+
+    templates = @>> doors begin
+        map(d -> Room(room_dims, room_dims, [entrance], [d]))
+        collect(Room)
+    end
+    seeds = Matrix{Vector{Room}}(undef, max_count, length(moves))
+    ids = LinearIndices(seeds)
+    for (idx, move) in enumerate(moves)
+        i = 1
+        while i <= max_count
+            (seed, _df) = build(templates, factor = 2, moves = [move])
+            isempty(_df) && continue
+
+            grps = DataFrames.groupby(_df, [:furniture, :move])
+            selected_i = @>> grps begin
+                gs -> combine(gs, :d => maximum)
+                gs -> sortperm(gs, :d_maximum)
+                last
+            end
+            selected = @>> grps[selected_i] DataFrame
+            seeds[i, idx] = seed
+            selected[!, :id] .= ids[i, idx]
+            selected[!, :flip] .= i % 2
+            @show selected
+            append!(df, selected)
             i += 1
             println("$(i)/$(n)")
+
+            # visualize the accepted room pair
+            # println("seed")
+            # display((seed, FunctionalScenes.all_shortest_paths(seed)))
+            # og_a = occupancy_grid(seed, sigma = 0.)
+            # for row in eachrow(_df)
+            #     shifted = shift_furniture(seed,
+            #                             row.furniture,
+            #                             row.move)
+            #     @show row
+            #     display((shifted, FunctionalScenes.all_shortest_paths(shifted)))
+            #     # og_b = occupancy_grid(shifted, sigma = 0.)
+            #     # FunctionalScenes.viz_ocg(og_a - og_b)
+            # end
         end
     end
+    @show df
     return seeds, df
+end
+
+# function saver(id::Int64, r::Room, out::String)
+function saver(id::Int64, rs::Vector{Room}, out::String)
+    @save "$(out)/$(id).jld2" rs
 end
 
 
 function main()
-    name = "pytorch_rep"
-    #name = "2e_1p_30s_matchedc3"
-    n = 30
+    name = "1_exit_22x40_doors"
     room_dims = (11,20)
-    entrance = [6]
-    exits = [215]
-    r = Room(room_dims, room_dims, entrance, exits)
-    display(r)
-    @time seeds, df = create(r, n = n)
+    entrance = 6
+    inds = LinearIndices(room_dims)
+    doors = [3, 9]
+    doors = @>> doors map(d -> inds[d, room_dims[2]]) collect(Int64)
+    n = 32
+    seeds, df = create(room_dims, entrance, doors; n = n)
     out = "/scenes/$(name)"
     CSV.write("$(out).csv", df)
     isdir(out) || mkdir(out)
+
+    # save base rooms
     @>> seeds enumerate foreach(x -> saver(x..., out))
+
     return seeds, df
 end
 

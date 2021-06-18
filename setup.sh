@@ -30,10 +30,7 @@ SING="${ENV['path']}"
     python3.8 -m pip install --upgrade pip && \
     cd functional_scenes && poetry install" && \
     export MAX_JOBS="${ENV['max_jobs']}" && \
-    #./run.sh python3.8 -m pip install torch==1.8.0+cu111 torchvision==0.9.0+cu111 torchaudio==0.8.0 -f https://download.pytorch.org/whl/torch_stable.html
     ./run.sh python3.8 -m pip install torch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2
-    # ./run.sh python3.8 -m pip install  torch==1.7.1+cu101 torchvision==0.8.2+cu101  -f https://download.pytorch.org/whl/torch_stable.html && \
-     #./run.sh python3.8 -m pip install -v pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py38_cu102_pyt171/download.html
     ./run.sh python3.8 -m pip install -v git+https://github.com/facebookresearch/pytorch3d.git
 
 # julia setup

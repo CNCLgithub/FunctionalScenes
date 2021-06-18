@@ -25,12 +25,12 @@ r2g = pathgraph(r2);
     @test Set(neighbors(g, 7)) == Set([2, 8, 12])
     @test Set(neighbors(g, 8)) == Set([7,9])
     @test Set(neighbors(g, 9)) == Set([8])
-    p = furniture_prior(r,5.0)
-    @test p[1,1] > -4
-    q = coordinates_to_camera([20,20,20],[0,0,30],[pi/4,0,0])
-    @test q[1] == 20.0
-    j = bitmap_render(r)
-    imgg = Gray.(j)
+    # p = furniture_prior(r,5.0)
+    # @test p[1,1] > -4
+    # q = coordinates_to_camera([20,20,20],[0,0,30],[pi/4,0,0])
+    # @test q[1] == 20.0
+    # j = bitmap_render(r)
+    # imgg = Gray.(j)
     #save("test1.png",colorview(Gray,j))
     
 end;
@@ -41,17 +41,10 @@ end;
     @test Set(neighbors(g, 8)) == Set([7, 9])
     r = add(r, Set([7]))
     g = pathgraph(r)
-    j = bitmap_render(r)
-    save("test1.png",colorview(Gray,j))
     @test Set(neighbors(g, 8)) == Set([9])
     r = add(r, Set([8]))
     g = pathgraph(r)
-    j = bitmap_render(r)
-    #println(sum(j))
-    save("test2.png",colorview(Gray,j))
     r = add(r,Set([1]))
-    j = bitmap_render(r)
-    save("test3.png",colorview(Gray,j))
     @test Set(neighbors(g, 9)) == Set([])
 end;
 
@@ -59,10 +52,10 @@ end;
 @testset "Removing" begin
     x = Room((4,10), (4, 10), [2], [38]);
     y = add(x, Set([14,15]));
-    z = remove(y, Set([14,15]));
+    # z = remove(y, Set([14,15]));
     @test navigability(x) != navigability(y);
-    @test navigability(y) != navigability(z);
-    @test navigability(x) == navigability(z);
+    # @test navigability(y) != navigability(z);
+    # @test navigability(x) == navigability(z);
 end;
 
 @testset "Furnishing" begin
@@ -90,4 +83,10 @@ end;
     r = Room((10,10), (10,10), [5], [22]);
     p = k_shortest_paths(r, 5, 1, 1)
     @show (r, first(p))
+end;
+
+@testset "gdistances" begin
+    r = Room((10,10), (10,10), [5], [95]);
+    paths = FunctionalScenes.all_shortest_paths(r)
+    @show paths
 end;

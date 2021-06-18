@@ -2,8 +2,10 @@ import os
 import shlex
 import subprocess
 
+ffmpeg = 'ffmpeg -hide_banner -loglevel error'
+
 def continous(source, out, start, vframes, fps):
-    cmd = ('ffmpeg -y -start_number {0:d} -framerate {2:d} -i {1!s} -hide_banner -crf 5 '+ \
+    cmd = (ffmpeg + ' -y -start_number {0:d} -framerate {2:d} -i {1!s} -hide_banner -crf 5 '+ \
            '-preset slow -c:v libx264  -pix_fmt yuv420p')
     cmd = cmd.format(start, source, fps)
     if not vframes is None:
@@ -12,12 +14,12 @@ def continous(source, out, start, vframes, fps):
     return cmd
 
 def extend(source, out, dur, fps):
-    cmd = ('ffmpeg -y -i {0!s} -vf tpad=stop_mode=clone:' + \
+    cmd = (ffmpeg + ' -y -i {0!s} -vf tpad=stop_mode=clone:' + \
            'stop_duration={1:f} {2!s}').format(source, dur, out)
     return cmd
 
 def concat(b, out, a, reverse = False):
-    cmd = 'ffmpeg -y -f concat -safe 0 -i ' +\
+    cmd = ffmpeg + ' -y -f concat -safe 0 -i ' +\
         '<(for f in \'{0!s}\' \'{1!s}\'; do echo \"file \'$f\'\"; done) ' + \
         '-c copy {2!s}'
     if reverse:
@@ -26,13 +28,19 @@ def concat(b, out, a, reverse = False):
         cmd = cmd.format(a, b, out)
     return cmd
 
+def vflip(source, out, flip):
+    cmd = 'cp {0!s} {1!s}'.format(source, out)
+    if flip:
+        cmd = ffmpeg + ' -i {0!s} -vf hflip -c:a copy {1!s}'.format(source, out)
+    return cmd
+
 def still(src, out, dur, fps):
-    cmd = 'ffmpeg -loop 1 -r {0:d} -i {1!s} -c:v libx264 -t {2:f} -pix_fmt yuv420p {3!s}'
+    cmd = ffmpeg + ' -loop 1 -r {0:d} -i {1!s} -c:v libx264 -t {2:f} -pix_fmt yuv420p {3!s}'
     cmd = cmd.format(fps,src,dur,out)
     return cmd
 
 def blank(src, out, dur, fps):
-    cmd = 'ffmpeg -y -f lavfi -r {0:d} -i color=white:600x400:d={1:f} -pix_fmt yuv420p {2!s}'
+    cmd = ffmpeg + ' -y -f lavfi -r {0:d} -i color=white:600x400:d={1:f} -pix_fmt yuv420p {2!s}'
     cmd = cmd.format(fps, dur, out)
     return cmd
 
@@ -48,7 +56,8 @@ def chain(cmds, args, source, out, suffix):
         src = out_i
 
     cmd_chain.append('mv {0!s} {1!s}.mp4'.format(to_remove[-1], out))
-    cmd_chain.append(('rm ' + ' '.join(to_remove[:-1])))
+    if len(to_remove) > 1:
+        cmd_chain.append(('rm ' + ' '.join(to_remove[:-1])))
     return cmd_chain
 
 
