@@ -20,7 +20,9 @@ function test()
                          base_sigma = 10.0)
 
     @show params
-    trace, ll = generate(model, (params,))
+
+    constraints = choicemap((:trackers => 1 => :level, 3))
+    trace, ll = generate(model, (params,), constraints)
 
     println("ORIGINAL TRACE")
     display(trace[:trackers => 1 => :state])

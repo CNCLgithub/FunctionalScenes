@@ -336,20 +336,25 @@ function coarsen_state(params::ModelParams, state, lvl::Int64)
 end
 
 function coarsen_state(mat::Array{T}, dims::Tuple{Int64, Int64}) where {T}
-    mus = zeros(T, dims[1], dims[2])
     m_dims = size(mat)
-
     ref = CartesianIndices(dims)
-    kdim = Int64.(size(mat) ./ dims)
+    lref = LinearIndices(ref)
+    kdim = Int64.(m_dims ./ dims)
+    # steps = Int64.(size(mat) ./ dims)
     k = prod(kdim)
+    kc = 1.0 / k
     kern = CartesianIndices(kdim)
+    lkern = LinearIndices(kern)
+
+    mus = zeros(T, dims[1], dims[2])
+
     for outer in ref
         c = CartesianIndex((Tuple(outer) .- (1, 1)) .* kdim)
         for inner in kern
             idx = c + inner
             mus[outer] += mat[idx]
         end
-        mus[outer] /= k
+        mus[outer] *= kc
     end
     mus
 end
