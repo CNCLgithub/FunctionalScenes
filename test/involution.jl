@@ -1,5 +1,6 @@
 using Gen
 using FunctionalScenes
+using FunctionalScenes: select_from_model
 
 
 function test()
@@ -21,7 +22,8 @@ function test()
 
     @show params
 
-    constraints = choicemap((:trackers => 1 => :level, 3))
+    constraints = choicemap()
+    # constraints = choicemap((:trackers => 1 => :level, 3))
     trace, ll = generate(model, (params,), constraints)
 
     println("ORIGINAL TRACE")
@@ -31,13 +33,16 @@ function test()
     # mh(trace, split_merge_proposal, (1,), split_merge_involution)
 
     println("\n\n\nNEW TRACE")
-    trace_translator = Gen.SymmetricTraceTranslator(split_merge_proposal, (1,), split_merge_involution)
-    (new_trace, log_weight) = trace_translator(trace; check = false)
+
+    selection = select_from_model(params, 1)
+    translator = Gen.SymmetricTraceTranslator(split_merge_proposal, (1,), split_merge_involution)
+    (new_trace, log_weight) = tracker_kernel(trace, translator, 1, selection)
+    # (new_trace, log_weight) = trace_translator(trace; check = false)
 
     display(new_trace[:trackers => 1 => :state])
 
     new_lvl, new_state = new_trace[:trackers => 1]
-    @show log_weight
+    # @show log_weight
 
 
 

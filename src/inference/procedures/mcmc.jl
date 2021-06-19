@@ -6,8 +6,8 @@ export AttentionMH
     # inference parameters
     samples::Int64 = 10
     smoothness::Float64 = 1.0
-    explore::Float64 = 0.30
-    burnin::Int64 = 10
+    explore::Float64 = 0.30 # probability of sampling random tracker
+    burnin::Int64 = 10 # number of steps per tracker
 
     # task objective
     objective::Function = batch_og
@@ -56,9 +56,8 @@ function Gen_Compose.mc_step!(state::AMHTrace,
                               proc::AttentionMH,
                               query::StaticQuery)
 
-    prev_objective = state.current_objective
     # draw proposal
-    addr = ancestral_kernel_move!(proc, state)
+    addr = kernel_move!(state, proc)
     update_weights!(state, proc)
 
     # viz_render(state.current_trace)
@@ -71,7 +70,7 @@ function Gen_Compose.mc_step!(state::AMHTrace,
     aux_state = Dict(
         :objective => state.current_objective,
         :weights => state.weights,
-        :sensitivities => copy(state.sensitivities),
+        :sensitivities => deepcopy(state.sensitivities),
         :addr => addr)
 end
 
@@ -97,14 +96,11 @@ function sweep(proc::AttentionMH,
 
 end
 
-function ancestral_kernel_move!(proc::AttentionMH,
-                               state::AMHTrace)
+function kernel_move!(state::AMHTrace, proc::AttentionMH)
 
+    @unpack current_trace, current_objective, weights = state
 
-    trace = state.current_trace
-    prev_objective = state.current_objective
-    weights = state.weights
-    # select addr to rejuv
+    # select tracker to rejuv
     # chance to ingnore weights
     n = length(weights)
     unvisited = findfirst(state.counters .== 0)
@@ -116,30 +112,43 @@ function ancestral_kernel_move!(proc::AttentionMH,
         end
         idx = categorical(weights)
     end
+
+    # update record of attended trackers
     state.counters[idx] += 1
     addr = proc.nodes[idx]
-    println(addr)
-    selection = proc.selections[addr]
 
-    current_trace = trace
-    distances = Vector{Float64}(undef, proc.burnin)
-    lls = Vector{Float64}(undef, proc.burnin)
+    @unpack burnin, objective, selections, distance = proc
+    selection = selections[addr]
+
+    translator = Gen.SymmetricTraceTranslator(split_merge_proposal,
+                                              (idx,),
+                                              split_merge_involution)
+    distances = zeros(burnin)
+    lls = Vector{Float64}(undef, burnin)
     for i = 1:proc.burnin
-        (new_tr, lls[i], _) = regenerate(trace, selection)
-        new_objective = proc.objective(new_tr)
-        distances[i] = proc.distance(prev_objective, new_objective)
-        accepted = log(rand()) < lls[i]
-        current_trace = accepted ? new_tr : current_trace
+        (_trace, weight) = tracker_kernel(current_trace, translator, idx, selection)
+        @debug "kernel proposal weight $(weight)"
+        if log(rand()) < weight
+            # accept
+            @debug "accepted"
+            new_objective = objective(_trace)
+            distances[i] = distance(current_objective, new_objective)
+            current_objective = new_objective
+            current_trace = _trace
+        end
+
     end
 
-    lws = exp.(lls .- logsumexp(lls))
-    println(lls)
-    println(lws)
-    println(distances)
-    exp_dist = sum(distances .* lws)
-    println(exp_dist)
+    # compute expectation over sensitivities
+    @debug "distances: $(distances)"
+    exp_dist = mean(distances)
+
+    # update references
     state.sensitivities[idx] = exp_dist
+    @show state.sensitivities
     state.current_trace = current_trace
-    state.current_objective = proc.objective(current_trace)
+    state.current_objective = current_objective
+
+    # return attended tracker
     return addr
 end

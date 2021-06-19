@@ -21,7 +21,7 @@ function __init__()
     copy!(torch, pyimport("torch"))
     copy!(functional_scenes, pyimport("functional_scenes"))
     # needed to deal with Gen static functions
-    @load_generated_functions
+    # @load_generated_functions
 end
 
 include("utils.jl")
@@ -33,4 +33,5 @@ include("blender/blender.jl")
 include("paths.jl")
 include("inference/inference.jl")
 
+@load_generated_functions
 end # module

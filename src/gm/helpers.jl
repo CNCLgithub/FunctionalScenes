@@ -1,5 +1,5 @@
 using UnicodePlots
-using Images
+# using Images
 using ImageInTerminal
 using Statistics
 using Parameters: @unpack
@@ -57,7 +57,8 @@ function _init_graphics(r, img_size, device)
     return graphics
 end
 
-function _tracker_ref(r::Room, dims, offset)
+function _tracker_ref(r::Room, dims::Tuple{Int64, Int64},
+                      offset::CartesianIndex{2})
     offset = Tuple(offset) .* 2
     space = (steps(r) .- offset) ./ dims
     space = Int64.(space)
@@ -125,10 +126,11 @@ function room_from_state_args(params::ModelParams, gs::Array{Float64, 3})
 end
 
 function add_from_state_flip(params::ModelParams, occupied)::Room
-    r = params.template
+    @unpack dims, template, tracker_size, n_trackers = params
+    occupied = reshape(occupied, (dims[1], dims[2], n_trackers))
     vs = findall(occupied)
     fs = state_to_room(params, vs)
-    add(r, Set{Int64}(fs))
+    add(template, Set{Int64}(fs))
 end
 
 function tracker_to_state(params::ModelParams, tracker::Int64)
@@ -156,7 +158,12 @@ function state_to_room(params::ModelParams, vs::Vector{CartesianIndex{3}})
 end
 
 function project_state_weights(params::ModelParams, state)
-    state_to_room(params, CartesianIndices(size(state)))
+    @>> state begin
+        CartesianIndices
+        collect(CartesianIndex{3})
+        vec
+        state_to_room(params)
+    end
 end
 
 function viz_global_state(trace::Gen.Trace)
@@ -261,7 +268,7 @@ function select_from_model(params::ModelParams, tracker::Int64)
     # associated rooms samples
     idxs = tracker_to_state(params, tracker)
     for i = 1:params.instances, j in idxs
-        ph!(s, :instances => i => :furniture => j => :flip)
+        push!(s, :instances => i => :furniture => j => :flip)
     end
     StaticSelection(s)
 end
@@ -300,14 +307,15 @@ function batch_og(tr::Gen.Trace)
     @>> get_retval(tr) begin
         last
         collect(Room)
-        map(x -> occupancy_grid(x, sigma = 0.7, decay = 0.0001))
+        map(x -> occupancy_grid(x, sigma = 0.0, decay = 0.0))
         mean
     end
 end
 
 function batch_compare_og(og_a, og_b)
-    cor(vec(mean(og_a)), vec(mean(og_b)))
-    # map(wsd, og_a, og_b) |> sum
+    viz_ocg(og_a)
+    viz_ocg(og_b)
+    wsd(og_a, og_b)
 end
 
 function refine_state(params::ModelParams, state, lvl::Int64)

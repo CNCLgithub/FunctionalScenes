@@ -6,7 +6,7 @@ using DataFrames
 using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
-experiment = "2e_1p_30s_matchedc3"
+experiment = "1_exit_22x40_doors"
 
 function parse_commandline(vs)
     s = ArgParseSettings()
@@ -45,6 +45,10 @@ function parse_commandline(vs)
         arg_type = Int64
         required = true
 
+        "door"
+        help = "door"
+        arg_type = Int64
+        required = true
 
         "chain"
         help = "The number of chains to run"
@@ -79,13 +83,15 @@ function parse_commandline(vs)
     return parse_args(vs, s)
 end
 
-load_base_scene(path::String) = load(path)["r"]
+
+load_base_scene(path::String, door::Int64) = load(path)["rs"][door]
 
 
 function load_moved_scene(base_p::String, args)
     move = args["move"]
     furn = args["furniture"]
-    base = load_base_scene(base_p)
+    door = args["door"]
+    base = load_base_scene(base_p, door)
     room = shift_furniture(base,
                            furniture(base)[furn],
                            move)
@@ -103,12 +109,13 @@ function main(cmd)
 
     base_p = "/scenes/$(experiment)/$(scene).jld2"
     if isnothing(args["move"])
-        room = load_base_scene(base_p)
+        room = load_base_scene(base_p, args["door"])
     else
         room = load_moved_scene(base_p, args)
         move = args["move"]
         furn = args["furniture"]
-        path = "$(path)_$(furniture)_$(move)"
+        door = args["door"]
+        path = "$(path)_$(door)_$(furniture)_$(move)"
     end
 
     query = query_from_params(room, args["gm"],
@@ -151,14 +158,17 @@ end
 
 
 df = DataFrame(CSV.File("/scenes/$(experiment).csv"))
-for i = 1:30
-    cmd = ["$(i)", "1", "A"]
+# for i = 1:32
+for i in [1]
+    cmd = ["$(i)","1", "1", "A"]
+    main(cmd);
+    cmd = ["$(i)", "2", "1", "A"]
     main(cmd);
     for r in eachrow(df[df.id  .== i, :])
         cmd = [
             "-f=$(r.furniture)",
             "-m=$(r.move)",
-            "$(i)", "1", "A",
+            "$(i)", "(r.door)", "1", "A",
                # ("furniture", "$(r.furniture)"),
                # ("move", "$(r.move)"),
         ]
