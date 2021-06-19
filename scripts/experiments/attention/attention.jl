@@ -21,6 +21,16 @@ function parse_commandline(vs)
         help = "Inference procedure params"
         arg_type = String
         default = "$(@__DIR__)/proc.json"
+        
+        "--vae"
+        help = "DDP VAE weights"
+        arg_type = String
+        default = "/checkpoints/vae"
+
+        "--ddp"
+        help = "DDP decoder weights"
+        arg_type = String
+        default = "/checkpoints/ddp"
 
         "--restart", "-r"
         help = "Whether to resume inference"
@@ -123,9 +133,9 @@ function main(cmd)
                               dims = (6,6),
                               )
 
-    selections = FunctionalScenes.selections(first(query.args))
-    proc = FunctionalScenes.load(AttentionMH, selections,
-                                 args[att_mode]["params"])
+    model_params = first(query.args)
+    proc = FunctionalScenes.proc_from_params(model_params, args[att_mode]["params"],
+                                             args["vae"], args["ddp"];)
 
     try
         isdir(base_path) || mkpath(base_path)

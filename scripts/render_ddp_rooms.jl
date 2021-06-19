@@ -22,6 +22,7 @@ end
 function render_torch(rooms::Vector{Room}, out::String)
     for (i, r) in enumerate(rooms)
         path = "$(out)/$(i)"
+        @show path
         isdir(path) || mkdir(path)
 
         # render image
@@ -40,7 +41,8 @@ function render_torch(rooms::Vector{Room}, out::String)
 end
 
 function main()
-    name = "train_ddp_1_exit_22x40_doors"
+    ##name = "train_ddp_1_exit_22x40_doors"
+    name = "test_ddp_1_exit_22x40_doors"
     src = "/scenes/$(name)/rooms.jld2"
     rooms = load(src)["rs"]
 

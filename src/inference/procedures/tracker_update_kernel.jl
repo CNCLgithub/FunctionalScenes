@@ -33,6 +33,14 @@ function apply_random_walk(trace::Gen.Trace, proposal, proposal_args)
     (new_trace, weight)
 end
 
+function ddp_init_kernel(trace::Gen.Trace, prop_args, selected)
+
+    (new_trace, w1) = apply_random_walk(trace,
+                                        dd_state_proposal,
+                                        prop_args)
+    (new_trace, w2) = regenerate(new_trace, selected)
+    (new_trace, w1 + w2)
+end
 function tracker_kernel(trace::Gen.Trace,
                         translator::Gen.SymmetricTraceTranslator,
                         tracker::Int64,

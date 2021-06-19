@@ -104,7 +104,7 @@ function create_obs(params::ModelParams, r::Room)
     mu, _ = graphics_from_instances([r], params)
     constraints = Gen.choicemap()
     constraints[:viz] = mu
-    return constraints
+    constraints, img
 end
 
 function consolidate_local_states(params::ModelParams, states)::Array{Float64, 3}
@@ -243,6 +243,15 @@ function viz_gt(query)
 end
 
 # or pass average image to alexnet
+function image_from_instances(instances, params)
+    g = params.graphics
+    if length(instances) > 1
+        instances = [instances[1]]
+    end
+    instances = map(r -> translate(r, false, cubes=true), instances)
+    batch = @pycall functional_scenes.render_scene_batch(instances, g)::Array{Float64, 4}
+end
+
 function graphics_from_instances(instances, params)
     g = params.graphics
     if length(instances) > 1
@@ -261,6 +270,19 @@ function graphics_from_instances(instances, params)
         sigma = fill(params.base_sigma, size(mu))
     end
     (mu[1, :, :, :], sigma[1, :, :, :])
+end
+
+
+function all_selections_from_model(params::ModelParams)
+    s = select()
+    # associated rooms samples
+    for tracker in 1:params.n_trackers
+        idxs = tracker_to_state(params, tracker)
+        for i = 1:params.instances, j in idxs
+            push!(s, :instances => i => :furniture => j => :flip)
+        end
+    end
+    StaticSelection(s)
 end
 
 function select_from_model(params::ModelParams, tracker::Int64)

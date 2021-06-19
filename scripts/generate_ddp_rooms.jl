@@ -8,18 +8,12 @@ import FunctionalScenes: expand, furniture, labelled_categorical, entrance, exit
 function build(templates::Vector{Room};
                k::Int64 = 16, factor::Int64 = 1,
                pct_open::Float64 = 0.5)
+    println("generating room")
     # randomly sample a door
     # assuming all rooms have the same entrance and dimensions
     r = labelled_categorical(templates)
     r = expand(r, factor)
-    weights = zeros(steps(r))
-    # ensures that there is no furniture near the observer
-    start_x = Int64(last(steps(r)) * pct_open)
-    stop_x = last(steps(r)) - 4 # nor blocking the exit
-    start_y = 2
-    stop_y = first(steps(r)) - 1
-    weights[start_y:stop_y, start_x:stop_x] .= 1.0
-
+    weights = ones(steps(r))
     # populate with furniture
     last(furniture_chain(k, r, weights))
 end

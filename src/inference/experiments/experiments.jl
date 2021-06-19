@@ -32,11 +32,19 @@ function query_from_params(room::Room, path::String; kwargs...)
                   kwargs...)
     obs = create_obs(gm_params, room)
 
+
     # compiling further observations for the model
     query = Gen_Compose.StaticQuery(latent_map,
                                     model,
                                     (gm_params,),
                                     obs)
 end
+
+function proc_from_params(model_params::ModelParams, proc_path::String, 
+                          vae::String, ddp::String; kwargs...)
+    selections = FunctionalScenes.selections(model_params)
+    all_selection = FunctionalScenes.all_selections_from_model(model_params)
+    proc = FunctionalScenes.load(AttentionMH, selections,
+                                 args[att_mode]["params"])
 
 export run_inference, query_from_params

@@ -9,6 +9,10 @@ export AttentionMH
     explore::Float64 = 0.30 # probability of sampling random tracker
     burnin::Int64 = 10 # number of steps per tracker
 
+    # data driven initialization
+    ddp::Function = dd_init_kernel
+    ddp_args::Tuple 
+
     # task objective
     objective::Function = batch_og
     # destance metrics for two task objectives
@@ -40,8 +44,9 @@ function Gen_Compose.initialize_procedure(proc::AttentionMH,
     trace,_ = Gen.generate(query.forward_function,
                            query.args,
                            query.observations)
+    trace,_ = proc.ddp(trace, proc.ddp_args...)
+
     n = length(proc.nodes)
-    # sensitivities = fill(-Inf, n)
     sensitivities = zeros(n)
     weights = fill(1.0/n, n)
     counters = zeros(n)
