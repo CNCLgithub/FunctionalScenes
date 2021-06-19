@@ -14,9 +14,9 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torchvision.utils import make_grid, save_image
 
-from utils import cuda
-from model import BetaVAE_H, BetaVAE_B, BetaVAE_OG
-from dataset import return_data
+from .utils import cuda
+from .model import BetaVAE_H, BetaVAE_B, BetaVAE_OG
+from .dataset import return_data
 
 from torchvision import transforms
 

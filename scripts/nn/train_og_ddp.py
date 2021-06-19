@@ -5,8 +5,8 @@ import argparse
 import numpy as np
 import torch
 
-from solver import Solver
-from utils import str2bool
+from functional_scenes.og_proposal.solver import Solver
+from functional_scenes.og_proposal.utils import str2bool
 
 torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True

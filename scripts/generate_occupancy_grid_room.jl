@@ -100,9 +100,7 @@ end
 
 
 function main()
-    #name = "pytorch_rep"
-    #name = "2e_1p_30s_matchedc3"
-    name = "test_occupancy_grid_data_driven_twodoors"
+    name = "train_ddp_1_exit_22x40"
     n = 10
     room_dims = (11,20)
     entrance = [6]
