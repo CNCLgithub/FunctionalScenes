@@ -22,44 +22,28 @@ class CustomImageFolder(ImageFolder):
 
 
 def return_data(args):
-    name = args.dataset
-    dset_dir = args.dset_dir
     batch_size = args.batch_size
     num_workers = args.num_workers
     image_size = args.image_size
     assert image_size == 64, 'currently only image size of 64 is supported'
 
-    if name.lower() == 'occupancy_grid_data_driven_twodoors':
-        #root = os.path.join(dset_dir, 'occupancygrid')
-        root = os.path.join(dset_dir,'occupancy_grid_data_driven_twodoors')
-        transform = transforms.Compose([
-             transforms.Resize((image_size, image_size)),
-             transforms.ToTensor(),])
-        train_kwargs = {'root':root, 'transform':transform}
-        dset = CustomImageFolder
+    # TODO: refine this logic
 
-    elif name.lower() == 'test_occupancy_grid_data_driven_twodoors':
-        root = os.path.join(dset_dir,'test_occupancy_grid_data_driven_twodoors')
-        transform = transforms.Compose([
-             transforms.Resize((image_size, image_size)),
-             transforms.ToTensor(),])
-        train_kwargs = {'root':root, 'transform':transform}
-        dset = CustomImageFolder
+    root = os.path.join(args.dset_dir, args.dataset)
+    transform = transforms.Compose([
+            transforms.Resize((image_size, image_size)),
+            transforms.ToTensor(),])
+    train_kwargs = {'root':root, 'transform':transform}
 
-    else:
-        raise NotImplementedError
+    train_data = CustomImageFolder(**train_kwargs)
+    loader = DataLoader(train_data,
+                        batch_size=batch_size,
+                        shuffle=True,
+                        num_workers=num_workers,
+                        pin_memory=True,
+                        drop_last=True)
 
-    train_data = dset(**train_kwargs)
-    train_loader = DataLoader(train_data,
-                              batch_size=batch_size,
-                              shuffle=True,
-                              num_workers=num_workers,
-                              pin_memory=True,
-                              drop_last=True)
-
-    data_loader = train_loader
-
-    return data_loader
+    return loader
 
 if __name__ == '__main__':
     transform = transforms.Compose([

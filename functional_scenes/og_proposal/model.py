@@ -145,12 +145,9 @@ class BetaVAE_B(BetaVAE_H):
         return self.decoder(z)
 
 class BetaVAE_OG(nn.Module):
-    def __init__(self, encoder, z_dim=10, nc=1):
+    def __init__(self, encoder, z_dim=10):
         super(BetaVAE_OG, self).__init__()
-        self.nc = nc
         self.z_dim = z_dim
-        #self.net.load_state_dict(checkpoint['model_states']['net'])
-        #self.encoder = self.net.encoder
         self.encoder = encoder
         for p in self.encoder.parameters():
             p.requires_grad = False
@@ -169,7 +166,6 @@ class BetaVAE_OG(nn.Module):
             nn.ReLU(True),
             nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32, 32, 32
             nn.ReLU(True),
-            #nn.ConvTranspose2d(32, nc, 4, 2, 1), # change to the dimension of occupancy grid
             nn.ConvTranspose2d(32, 1, [9,3], 1, [0,6]),
         )
         

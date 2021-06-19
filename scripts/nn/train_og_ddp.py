@@ -12,12 +12,17 @@ torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
 
 
+solver_modes = ["train_vae", "train_ddp",
+                "test_vae", "test_ddp"]
+
 def main():
 
-    parser = argparse.ArgumentParser(description='toy Beta-VAE')
+    parser = argparse.ArgumentParser(description='train or test components of ddp',
+                                     formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('--train', default=True, type=str2bool, help='train beta-VAE or train following occupancy grid')
-    parser.add_argument('--test', default=False, type=str2bool, help='test following occupancy grid')
+
+    parser.add_argument('mode', type=str, choices = solver_modes,
+                        help='Mode to run solver')
 
     parser.add_argument('--seed', default=1, type=int, help='random seed')
     parser.add_argument('--cuda', default=True, type=str2bool, help='enable cuda')
@@ -35,7 +40,7 @@ def main():
     parser.add_argument('--beta1', default=0.9, type=float, help='Adam optimizer beta1')
     parser.add_argument('--beta2', default=0.999, type=float, help='Adam optimizer beta2')
 
-    parser.add_argument('--dset_dir', default='output/datasets', type=str, help='dataset directory')
+    parser.add_argument('--dset_dir', default='/datasets', type=str, help='dataset directory')
     parser.add_argument('--dataset', default='occupancy_grid_data_driven', type=str, help='dataset name')
     parser.add_argument('--image_size', default=64, type=int, help='image size. now only (64,64) is supported')
     parser.add_argument('--num_workers', default=2, type=int, help='dataloader num_workers')
@@ -50,9 +55,9 @@ def main():
     parser.add_argument('--display_step', default=10000, type=int, help='number of iterations after which loss data is printed and visdom is updated')
     parser.add_argument('--save_step', default=10000, type=int, help='number of iterations after which a checkpoint is saved')
 
-    parser.add_argument('--ckpt_dir', default='checkpoints', type=str, help='checkpoint directory')
-    parser.add_argument('--ckpt_name', default='last', type=str, help='load previous checkpoint. insert checkpoint filename')
-    parser.add_argument('--ckpt_name_og', default='og', type=str, help='load previous checkpoint. insert checkpoint filename')
+    parser.add_argument('--ckpt_dir', default='/checkpoints', type=str, help='checkpoint directory')
+    parser.add_argument('--ckpt_name', default='last', type=str, help='load previous checkpoint for vae. insert checkpoint filename')
+    parser.add_argument('--ckpt_name_og', default='og', type=str, help='load previous checkpoint for ddp. insert checkpoint filename')
 
     args = parser.parse_args()
 
@@ -62,16 +67,15 @@ def main():
     np.random.seed(seed)
     net = Solver(args)
 
-    if args.train:
+    if args.mode == 'train_vae':
         net.train_vae()
-        #net.train_OG()
-    else:
-        #net.test_vae()
+    elif args.mode == 'train_ddp':
         net.train_OG()
-    
-    if not args.train and args.test:
+    elif args.mode == 'test_vae':
+        net.test_vae()
+    else:
         net.test_OG()
-
+    
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,4 @@
-export broadcasted_bernoulli, broadcasted_uniform
+export broadcasted_bernoulli, broadcasted_uniform, labelled_categorical
 
 @dist function labelled_categorical(xs)
     n = length(xs)
