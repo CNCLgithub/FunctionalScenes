@@ -6,7 +6,7 @@ import argparse
 from slurmpy import sbatch
 
 script = 'bash {0!s}/run.sh julia -C "generic" ' + \
-        '/project/scripts/experiments/attention/attention.jl'
+        '/project/scripts/experiments/attention/run.jl'
 # script = 'bash {0!s}/run.sh julia -C "generic" ' + \
 #          '/project/scripts/experiments/exp1/run.jl'
 

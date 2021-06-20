@@ -160,8 +160,6 @@ function main(cmd)
     println("running chain $c")
     results = run_inference(query, proc, out )
     FunctionalScenes.viz_gt(room)
-
-
     return nothing
 end
 
