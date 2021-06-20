@@ -8,6 +8,7 @@ using LinearAlgebra:norm
 using Statistics: mean, std
 using Distributions
 using UnicodePlots
+using Parameters: @unpack
 
 import FunctionalScenes: Room, furniture, shift_furniture, navigability, wsd,
     occupancy_grid, diffuse_og, safe_shortest_path, shift_tile, room_to_tracker,
@@ -149,16 +150,19 @@ function load_map_chain(chain_p)
     chain = load(chain_p)
     k = length(chain) 
 
-    current_step = chain["13"]
+    # first 18 steps are deterministic
+    current_step = chain["18"]
     n = length(chain)
     weight_history = []
-    for i = 14:n
+    cycles = Vector{Int64}(undef, 18)
+    for i = 19:n
         new_step = chain["$(i)"]
         sens = new_step["aux_state"][:sensitivities]
         push!(weight_history, sens)
+        cycles = new_step["aux_state"][:cycles]
         current_step = current_step["log_score"] < new_step["log_score"] ? new_step : current_step
     end
-    return current_step, weight_history
+    return current_step, weight_history, cycles
 end
 
 function viz_trace_history(history)
@@ -185,94 +189,66 @@ function lv_distance(a::Room, b::Room)
     lvd = sum(map(lv_distance, paths_a, paths_b))
 end
 
-function compare_model_predictions(base_p::String, base_chain, move_chain,
-                       fid, move)
-    og_gt = occupancy_grid(base) 
-    viz_ocg(og_gt)
-    
-    # ab, ba = 0,0
-    base_query = query_from_params(base,
-                                   "/project/scripts/experiments/attention/gm.json";
-                                   instances = 20,
-                                   # offset = (0, 0),
-                                   img_size = (240, 360),
-                                   tile_window = 10.0, # must be high enough due to gt prior
-                                   active_bias = 10.0, # must be high enough due to gt prior
-                                   default_tracker_p = 1.0
-                              )
-    move_query = query_from_params(room,
-                                   "/project/scripts/experiments/attention/gm.json";
-                                   instances = 20,
-                                   # offset = (0,0),
-                                   img_size = (240, 360),
-                                   tile_window = 10.0, # must be high enough due to gt prior
-                                   active_bias = 10.0, # must be high enough due to gt prior
-                                   default_tracker_p = 1.0
-                              )
-    params = first(move_query.args)
+function extract_attention(chain::String, r::Room, f::Furniture)
 
-    base_steps, base_weights = sample_steps(base_chain, 1)
-    move_steps, move_weights = sample_steps(move_chain, 1)
+    map_step, weights, cycles = load_map_chain(chain)
 
-    bparams = first(base_query.args) 
+    query = query_from_params(r,
+                              "/project/scripts/experiments/attention/gm.json";
+                              instances = 20,
+                              dims = (6,6),
+                              img_size = (240, 360))
 
-    base_ids = room_to_tracker(first(base_query.args), f)
-    move_ids = room_to_tracker(first(move_query.args), shifted)
-    joined_ids = union(base_ids, move_ids)
-    # joined_ids = collect(1:length(base_weights))    
+    trackers = Int64[]
 
-    base_target_att = sum(base_weights[base_ids])
-    move_target_att = sum(move_weights[move_ids])
-   
-    base_total_att = sum(base_weights)
-    move_total_att = sum(move_weights)
+    @unpack dims, n_trackers = params
 
-    f = (a,b) -> cross_predict(move_query,
-                       a["estimates"][:trace],
-                       b["estimates"][:trace],
-                       joined_ids) - b["log_score"]
-    g = (a,b) -> cross_predict(base_query,
-                       a["estimates"][:trace],
-                       b["estimates"][:trace],
-                       joined_ids) - b["log_score"]
+    # find which trackers correspond to the furniture
+    state_ref = CartesianIndices((dims..., n_trackers))
+    for t = 1:params.n_trackers
+        vs = state_to_room(params, vec(state_ref[:, :, t]))
+        if !isempty(intersect(vs, f))
+            push!(trackers, t)
+        end
+    end
 
-    ab = @>> map(f, base_steps, move_steps) mean
-    ba = @>> map(g, move_steps, base_steps) mean
-
-    base_og = @>> base_steps map(s -> og_from_step(base_query, s)) mean
-    move_og = @>> move_steps map(s -> og_from_step(move_query, s)) mean
-    mogd = batch_compare_og(base_og, move_og)
-
-
-    (lvd, ogd, ab, ba, mogd, base_target_att, move_target_att,
-     base_total_att, move_total_att)
+    tracker_cycles = mean(cycles[trackers])
+    total_cycles = sum(cycles)
+    (tracker_cycles, total_cycles)
 end
 
 
-function main(exp::String)
+function main(exp::String, render::String)
 
     df = DataFrame(CSV.File("/scenes/$(exp).csv"))
-    new_df = DataFrame(id = Int64[], furniture = Int64[], move = String[],
+    new_df = DataFrame(id = Int64[],
+                       door = Int64[],
+                       furniture = Int64[],
+                       move = String[],
                        pixeld = Float64[], # image features
-                       lvd = Float64[], ogd = Float64[], ogc = Float64[],  # ideal navigational affordances
+                       lvd = Float64[],
+                       ogd = Float64[],
+                       ogc = Float64[],  # ideal navigational affordances
                        # model based inferences and attention
-                       base_sense = Float64[], move_sense = Float64[],
-                       mogd = Float64[],
-                       base_target_att = Float64[],
-                       move_target_att = Float64[], 
-                       base_total_att = Float64[],
-                       move_total_att = Float64[],
+                       base_cycles_furniture = Int64[],
+                       base_cycles_total = Int64[],
+                       move_cycles_furniture = Int64[],
+                       move_cycles_total = Int64[],
                        )
 
+    render_base = "/renders/$(exp)_$(render)"
     for r in eachrow(df)
-        base = "/renders/$(exp)/$(r.id).png"
-        img = "/renders/$(exp)/$(r.id)_$(r.furniture)_$(r.move).png"
+
+        # calculate pixel distance
+        base = "$(render_base)/$(r.id)_$(r.door).png"
+        img = "$(render_base)/$(r.id)_$(r.door)_$(r.furniture)_$(r.move).png"
         pixeld = compare_pixels(base, img)
 
+        # simulated model covariates
 
         base_p = "/scenes/$(exp)/$(r.id).jld2"
 
-        base = load(base_p)["r"]
+        base = load(base_p)["rs"][r.door]
         f = furniture(base)[r.furniture]
         move = Symbol(r.move)
         room = shift_furniture(base, r.furniture, move)
@@ -285,8 +261,11 @@ function main(exp::String)
         move_chain = "/experiments/$(exp)_attention/$(r.id)_furniture_$(r.move)/1.jld2"
         # pred = compare_model_predictions(base, base_chain, move_chain,
         #                                  r.furniture, r.move)
-        # `zeros` pads the ignored columns for now
-        row = (r.id, r.furniture, r.move, pixeld, lvd, ogd, ogr, zeros(7)...) 
+        base_att = extract_attention(base_chain, r.furniture)
+        move_att = extract_attention(move_chain, r.furniture)
+        row = (r.id, r.door, r.furniture, r.move,
+               pixeld, lvd, ogd, ogr,
+               base_att..., move_att...)
         push!(new_df, row)
     end
     display(new_df)
@@ -295,4 +274,4 @@ function main(exp::String)
 end
 
 
-main("2e_1p_30s_matchedc3");
+main("1_exit_22x40_doors");

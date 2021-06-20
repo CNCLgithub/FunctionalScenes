@@ -1,17 +1,17 @@
 export split_merge_proposal, split_merge_involution
 
-@gen function refinement_step(t, temp, n)
-    l = max(0.0, temp - (n - t))
-    u = min(1.0, temp)
+@gen function refinement_step(t::Int64, temp::Float64, n::Int64, upper::Float64)
+    u = min(upper, temp)
+    l = max(0.0, temp - upper*(n - t))
     x = {:x} ~ uniform(l, u)
     return temp - x
 end
 
-@gen function refine_kernel(mu, kdim)
+@gen function refine_kernel(mu::Float64, kdim::Tuple, upper::Float64)
     n = prod(kdim)
     k = n - 1
     temp = mu * n
-    {:inner} ~ Gen.Unfold(refinement_step)(k, temp, n)
+    {:inner} ~ Gen.Unfold(refinement_step)(k, temp, n, upper)
 end
 
 @gen function split_merge_proposal(trace, tracker)
@@ -22,14 +22,16 @@ end
     # what moves are possible?
     w = refine_weight(params, lvl)
 
-    # refine or coarsen?
+    # refine?
     if ({:refine} ~ bernoulli(w))
+        upper_bound = params.tracker_ps[tracker]
         cur_dims = level_dims(params, lvl)
         up_dims = level_dims(params, lvl + 1)
         state = trace[:trackers => tracker => :state]
         kdim = Int64.(up_dims ./ cur_dims)
         kdim = fill(kdim, size(state))
-        {:outer} ~ Gen.Map(refine_kernel)(state, kdim)
+        upper_bounds = fill(upper_bound, size(state))
+        {:outer} ~ Gen.Map(refine_kernel)(state, kdim, upper_bounds)
     end
 end
 
@@ -121,10 +123,9 @@ epsilon = 1E-10
         for outer in outer_ref
             i = outer_lref[outer]
             c = CartesianIndex((Tuple(outer) .- (1, 1)) .* kdim)
-            for inner in kern
+            for inner in kern[1 : end-1]
                 idx = c + inner # cartesian coordinates in full state
                 j = lkern[inner]
-                j == kp && continue # dont write the last value
                 @write(u_prime[:outer => i => :inner => j => :x],
                        state[idx],
                        :continuous)

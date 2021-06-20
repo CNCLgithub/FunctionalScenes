@@ -10,7 +10,7 @@ export AttentionMH
     burnin::Int64 = 10 # number of steps per tracker
 
     # data driven initialization
-    ddp::Function = dd_init_kernel
+    ddp::Function = ddp_init_kernel
     ddp_args::Tuple 
 
     # task objective
@@ -27,7 +27,8 @@ end
 function load(::Type{AttentionMH}, selections, path::String; kwargs...)
     nodes = @>> keys(selections) collect(Symbol)
     loaded = read_json(path)
-    AttentionMH(; nodes = nodes, selections = selections, loaded...)
+    AttentionMH(; nodes = nodes, selections = selections, loaded...,
+                kwargs...)
 end
 
 
@@ -76,6 +77,7 @@ function Gen_Compose.mc_step!(state::AMHTrace,
         :objective => state.current_objective,
         :weights => state.weights,
         :sensitivities => deepcopy(state.sensitivities),
+        :cycles => deepcopy(state.counters),
         :addr => addr)
 end
 
@@ -118,6 +120,7 @@ function kernel_move!(state::AMHTrace, proc::AttentionMH)
         idx = categorical(weights)
     end
 
+    @debug "Attending to tracker $(idx)"
     # update record of attended trackers
     state.counters[idx] += 1
     addr = proc.nodes[idx]
@@ -131,26 +134,28 @@ function kernel_move!(state::AMHTrace, proc::AttentionMH)
     distances = zeros(burnin)
     lls = Vector{Float64}(undef, burnin)
     for i = 1:proc.burnin
-        (_trace, weight) = tracker_kernel(current_trace, translator, idx, selection)
-        @debug "kernel proposal weight $(weight)"
-        if log(rand()) < weight
+        (_trace, lls[i]) = tracker_kernel(current_trace, translator, idx, selection)
+        lls[i] = isnan(lls[i]) ? 0 : lls[i]
+        new_objective = objective(_trace)
+        distances[i] = distance(current_objective, new_objective)
+        @debug "kernel proposal weight $(lls[i])"
+        if log(rand()) < lls[i]
             # accept
             @debug "accepted"
-            new_objective = objective(_trace)
-            distances[i] = distance(current_objective, new_objective)
             current_objective = new_objective
             current_trace = _trace
         end
 
     end
 
+    clamp!(lls, -Inf, 0.)
     # compute expectation over sensitivities
     @debug "distances: $(distances)"
-    exp_dist = mean(distances)
+    exp_dist = sum(distances .* exp.((lls .- logsumexp(lls))))
+    exp_dist = isinf(exp_dist) ? 0. : exp_dist # clean up -Inf
 
     # update references
-    state.sensitivities[idx] = exp_dist
-    @show state.sensitivities
+    state.sensitivities[idx] = 0.5 * (state.sensitivities[idx] + exp_dist)
     state.current_trace = current_trace
     state.current_objective = current_objective
 

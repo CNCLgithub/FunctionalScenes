@@ -7,10 +7,10 @@ end
 
 
 
-@gen (static) function tracker_prior(params::ModelParams)
+@gen (static) function tracker_prior(params::ModelParams, tid::Int64)
     level = @trace(categorical(params.level_weights), :level)
     # a vec of tuples for each tile
-    lp = level_prior(params, level)
+    lp = level_prior(params, tid, level)
     state = @trace(broadcasted_uniform(lp), :state)
     return (level, state)
 end
@@ -31,8 +31,8 @@ end
 
 @gen (static) function model(params::ModelParams)
     # initialize trackers
-    prior_args = tracker_prior_args(params)
-    states = @trace(Gen.Map(tracker_prior)(prior_args), :trackers)
+    (prior_args, tids) = tracker_prior_args(params)
+    states = @trace(Gen.Map(tracker_prior)(prior_args, tids), :trackers)
 
     # a global room matrix
     global_state = consolidate_local_states(params, states)

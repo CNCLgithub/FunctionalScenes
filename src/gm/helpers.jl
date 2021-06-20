@@ -20,7 +20,9 @@ export ModelParams
     tracker_ref::CartesianIndices = _tracker_ref(template, dims, offset)
     n_trackers::Int64 = length(tracker_ref)
     linear_ref::LinearIndices = _linear_ref(template)
-    default_tracker_p::Float64 = 0.5
+    # default spread for a given tracker
+    default_tracker_p::Float64 = 1.0
+    # spread for each tracker
     tracker_ps::Vector{Float64} = fill(default_tracker_p,
                                        length(tracker_ref))
     tracker_size::Int64 = prod(dims)
@@ -89,22 +91,50 @@ function level_dims(params::ModelParams, lvl::Int64)
     level_dims(base, factor, lvl)
 end
 
+# TODO play with using `size(tracker_ref)`
 function tracker_prior_args(params::ModelParams)
-    fill(params, length(params.tracker_ref))
+    @unpack tracker_ref, n_trackers = params
+    _params = fill(params, n_trackers)
+    tids = collect(Int64, 1:n_trackers)
+    (_params, tids)
 end
 
-function level_prior(params::ModelParams, lvl::Int64)
-    @unpack base, bounds, factor = params
+function level_prior(params::ModelParams, tid::Int64, lvl::Int64)
+    @unpack base, tracker_ps = params
     d = level_dims(params, lvl)
+    spread = tracker_ps[tid]
+    bounds = (0., spread)
     fill(bounds, d)
 end
-
 
 function create_obs(params::ModelParams, r::Room)
     mu, _ = graphics_from_instances([r], params)
     constraints = Gen.choicemap()
     constraints[:viz] = mu
-    constraints, img
+    constraints
+end
+
+
+function add_init_constraints!(cm::Gen.ChoiceMap, params::ModelParams, r::Room)
+    @unpack n_trackers, instances = params
+    state = occupancy_position(r)
+    # first column in room that has furniture
+    frontier = findfirst(vec(sum(state, dims = 1) .!= 0)) - 6
+    state_ref = CartesianIndices(steps(r))
+    constraints = Gen.choicemap()
+    for t = 1 : n_trackers
+        for idx in tracker_to_state(params, t)
+            # tracker is out of view
+            last(Tuple(state_ref[idx])) < frontier || continue
+            cm[:trackers => t => :level] = 1
+            cm[:trackers => t => :state] = zeros((1, 1))
+
+            # for i = 1 : instances
+            #     cm[:instances => i => :furniture => idx => :flip] = false
+            # end
+        end
+    end
+    return nothing
 end
 
 function consolidate_local_states(params::ModelParams, states)::Array{Float64, 3}
@@ -181,12 +211,20 @@ function viz_global_state(trace::Gen.Trace)
     return nothing
 end
 
+function viz_ddp_state(grid::Matrix{Float64})
+    grid = reverse(grid, dims = 1)
+    println(heatmap(grid, border = :none,
+                    title = "ddp geometry",
+                    colorbar_border = :none,
+                    colormap = :inferno))
+    return nothing
+end
 
-function viz_ocg(ocg)
+function viz_ocg(ocg; title = "occupancy grid")
     # ocg = mean(ocg)
     ocg = reverse(ocg, dims = 1)
     println(heatmap(ocg,
-                    title = "occupancy grid",
+                    title = title,
                     border = :none,
                     colorbar_border = :none,
                     colormap = :inferno
@@ -232,14 +270,10 @@ function viz_render(trace::Gen.Trace)
 end
 
 
-function viz_gt(query)
-    params = first(query.args)
-    g = params.graphics
-    display(params.gt)
-    translated = translate(params.gt, false, cubes = true)
-    batch = @pycall functional_scenes.render_scene_batch([translated], g)::PyObject
-    batch = Array{Float64, 4}(batch.cpu().numpy())
-    display(colorview(RGB, batch[1, :, :, :]))
+function viz_gt(gt::Room; kwargs...)
+    grid = occupancy_position(gt)
+    viz_ocg(grid; title = "gt state", kwargs...)
+    display(gt)
 end
 
 # or pass average image to alexnet
@@ -249,7 +283,8 @@ function image_from_instances(instances, params)
         instances = [instances[1]]
     end
     instances = map(r -> translate(r, false, cubes=true), instances)
-    batch = @pycall functional_scenes.render_scene_batch(instances, g)::Array{Float64, 4}
+    batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
+    batch = Array{Float64, 4}(batch.cpu().numpy())
 end
 
 function graphics_from_instances(instances, params)
@@ -259,9 +294,10 @@ function graphics_from_instances(instances, params)
     end
     instances = map(r -> translate(r, false, cubes=true), instances)
     batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
-    features = @pycall functional_scenes.nn_features.single_feature(params.model,
-                                                                    "features.6",
-                                                                    batch)::Array{Float64, 4}
+    features = Array{Float64, 4}(batch.cpu().numpy())
+    # features = @pycall functional_scenes.nn_features.single_feature(params.model,
+    #                                                                 "features.6",
+    #                                                                 batch)::Array{Float64, 4}
     mu = mean(features, dims = 1)
     if length(instances) > 1
         sigma = std(features, mean = mu, dims = 1)
@@ -335,8 +371,6 @@ function batch_og(tr::Gen.Trace)
 end
 
 function batch_compare_og(og_a, og_b)
-    viz_ocg(og_a)
-    viz_ocg(og_b)
     wsd(og_a, og_b)
 end
 

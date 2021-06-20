@@ -5,10 +5,10 @@ import os
 import argparse
 from slurmpy import sbatch
 
-#script = 'bash {0!s}/run.sh julia -C "generic" -J /project/image.so ' + \
-#         '/project/scripts/experiments/attention/attention.jl'
 script = 'bash {0!s}/run.sh julia -C "generic" ' + \
-         '/project/scripts/experiments/exp1/run.jl'
+        '/project/scripts/experiments/attention/attention.jl'
+# script = 'bash {0!s}/run.sh julia -C "generic" ' + \
+#          '/project/scripts/experiments/exp1/run.jl'
 
 def att_tasks(args):
     tasks = [(t, ) for t in range(1, args.scenes+1)]
@@ -20,11 +20,11 @@ def main():
         formatter_class = argparse.ArgumentDefaultsHelpFormatter
     )
 
-    parser.add_argument('--scenes', type = int, default = 30,
-                        help = 'number of scenes')
+    parser.add_argument('--scenes', type = int, default = 32,
+                        help = 'number of scenes') ,
     parser.add_argument('--chains', type = int, default = 1,
                         help = 'number of chains')
-    parser.add_argument('--duration', type = int, default = 30,
+    parser.add_argument('--duration', type = int, default = 60,
                         help = 'job duration (min)')
 
 

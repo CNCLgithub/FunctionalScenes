@@ -115,7 +115,8 @@ function main(cmd)
 
     base_path = "/experiments/$(experiment)_$(att_mode)"
     scene = args["scene"]
-    path = joinpath(base_path, "$(scene)")
+    door = args["door"]
+    path = joinpath(base_path, "$(scene)_$(door)")
 
     base_p = "/scenes/$(experiment)/$(scene).jld2"
     if isnothing(args["move"])
@@ -125,16 +126,21 @@ function main(cmd)
         move = args["move"]
         furn = args["furniture"]
         door = args["door"]
-        path = "$(path)_$(door)_$(furniture)_$(move)"
+        path = "$(path)_$(move)_$(furniture)_$(move)"
     end
 
+    tracker_ps = ones(3, 6)
+    tracker_ps[:, 1:2] .= 0.01
+    tracker_ps = vec(tracker_ps)
     query = query_from_params(room, args["gm"],
                               img_size = (240, 360),
                               dims = (6,6),
+                              tracker_ps = tracker_ps
                               )
 
     model_params = first(query.args)
-    proc = FunctionalScenes.proc_from_params(model_params, args[att_mode]["params"],
+    proc = FunctionalScenes.proc_from_params(room, model_params,
+                                             args[att_mode]["params"],
                                              args["vae"], args["ddp"];)
 
     try
@@ -145,6 +151,7 @@ function main(cmd)
     end
     c = args["chain"]
     out = joinpath(path, "$(c).jld2")
+
     if isfile(out) && !args["restart"]
         println("chain $c complete")
         return
@@ -152,16 +159,8 @@ function main(cmd)
 
     println("running chain $c")
     results = run_inference(query, proc, out )
-    FunctionalScenes.viz_gt(query)
-    # if (args["viz"])
-    #     visualize_inference(results, gt_causal_graphs, gm_params, att, path;
-    #                         render_tracker_masks=true)
-    # end
+    FunctionalScenes.viz_gt(room)
 
-    # df = MOT.analyze_chain(results)
-    # df[!, :scene] .= args["scene"]
-    # df[!, :chain] .= c
-    # CSV.write(joinpath(path, "$(c).csv"), df)
 
     return nothing
 end
@@ -178,9 +177,7 @@ for i in [1]
         cmd = [
             "-f=$(r.furniture)",
             "-m=$(r.move)",
-            "$(i)", "(r.door)", "1", "A",
-               # ("furniture", "$(r.furniture)"),
-               # ("move", "$(r.move)"),
+            "$(i)", "$(r.door)", "1", "A",
         ]
 
         display(cmd)

@@ -32,7 +32,7 @@ def init_dd_state(enc_path:str, dec_path:str, device,
    dec.decoder.load_state_dict(dec_weights)
    return dec
 
-def dd_state(nn,img):
+def dd_state(nn, img, device):
    """ dd_state
 
    Proposes an furniture occupancy grid given an model and an image
@@ -45,8 +45,7 @@ def dd_state(nn,img):
        A 1xMxN matrix containting probability of occupancy for each
        cell in the room
    """
-   device = nn.device()
-   img_tensor = torch.from_numpy(img)
+   img_tensor = torch.from_numpy(img).float()
    img_tensor = Variable(img_tensor).to(device)
    z, mu, logvar = nn(img_tensor)
    z = z.cpu().detach().numpy()

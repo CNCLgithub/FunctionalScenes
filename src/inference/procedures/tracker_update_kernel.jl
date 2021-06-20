@@ -2,12 +2,14 @@ export tracker_kernel
 
 
 @gen function random_walk_proposal(trace, tracker)
+    params = first(get_args(trace))
+    tracker_bound = params.tracker_ps[tracker]
     addr = :trackers => tracker => :state
     mus = trace[addr]
     args = Array{Tuple{Float64, Float64}}(undef, size(mus))
     for i in eachindex(mus)
         bounds = (mus[i] - 0.05, mus[i] + 0.05)
-        args[i] = clamp.(bounds, 0., 1.0)
+        args[i] = clamp.(bounds, 0., tracker_bound)
     end
     {addr} ~ broadcasted_uniform(args)
 end
@@ -34,17 +36,21 @@ function apply_random_walk(trace::Gen.Trace, proposal, proposal_args)
 end
 
 function ddp_init_kernel(trace::Gen.Trace, prop_args, selected)
-
+    # @debug "initial trace score $(get_score(trace))"
     (new_trace, w1) = apply_random_walk(trace,
                                         dd_state_proposal,
                                         prop_args)
+    # @debug "w1: $(w1)"
     (new_trace, w2) = regenerate(new_trace, selected)
+    # @debug "w2: $(w2)"
     (new_trace, w1 + w2)
 end
+
 function tracker_kernel(trace::Gen.Trace,
                         translator::Gen.SymmetricTraceTranslator,
                         tracker::Int64,
                         selected)
+    # @debug "initial trace score $(get_score(trace))"
     (new_trace, w1) = translator(trace; check = false)
     # @debug "w1: $(w1)"
     (new_trace, w2) = apply_random_walk(new_trace,
