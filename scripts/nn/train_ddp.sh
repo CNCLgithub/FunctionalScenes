@@ -6,7 +6,7 @@ python scripts/nn/train_og_ddp.py --beta 4 \
     --z_dim 20 \
     --objective "H" \
     --model "H" \
-    --max_iter 16000 \
+    --max_iter 20000 \
     --display_step 1000 \
     --save_step 1000 \
     --num_workers 8 \
