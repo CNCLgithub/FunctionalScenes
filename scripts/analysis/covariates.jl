@@ -146,17 +146,15 @@ function sens_from_chain(chain, m, n)
     end
 end
 
-function load_map_chain(chain_p)
-    chain = load(chain_p)
-    k = length(chain) 
+function load_map_chain(chain_p, steps::Int64, k::Int64)
 
     # first 18 steps are deterministic
-    current_step = chain["18"]
-    n = length(chain)
+    current_step = load(chain_p, "$(steps - k)")
     weight_history = []
     cycles = Vector{Int64}(undef, 18)
-    for i = 19:n
+    for i = (steps - k):steps
         new_step = chain["$(i)"]
+        new_step = load(chain_p, "$(i)")
         sens = new_step["aux_state"][:sensitivities]
         push!(weight_history, sens)
         cycles = new_step["aux_state"][:cycles]
