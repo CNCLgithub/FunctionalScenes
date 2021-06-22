@@ -10,8 +10,9 @@ using Distributions
 using UnicodePlots
 using Parameters: @unpack
 
+using FunctionalScenes
 import FunctionalScenes: Room, furniture, shift_furniture, navigability, wsd,
-    occupancy_grid, diffuse_og, safe_shortest_path, shift_tile, room_to_tracker,
+    occupancy_grid, diffuse_og,  shift_tile, 
     viz_ocg, model, select_from_model, batch_og, batch_compare_og, viz_global_state
 
 function compare_pixels(a::String, b::String)
@@ -71,12 +72,12 @@ function lv_distance(a, b)
 end
 
 function compare_og(a,b)
-    og_a = occupancy_grid(a, decay = 0.0001, sigma = 0.7)
-    og_b = occupancy_grid(b, decay = 0.0001, sigma = 0.7)
+    og_a = occupancy_grid(a, decay = 0.01, sigma = 0.1)
+    og_b = occupancy_grid(b, decay = 0.01, sigma = 0.1)
     viz_ocg(og_a)
     viz_ocg(og_b)
-    r = cor(vec(mean(og_a)), vec(mean(og_b)))
-    d = map(wsd, og_a, og_b) |> sum
+    r = cor(vec(og_a), vec(og_b))
+    d = wsd(og_a, og_b)
     (r, d)
 end
 
@@ -153,7 +154,6 @@ function load_map_chain(chain_p, steps::Int64, k::Int64)
     weight_history = []
     cycles = Vector{Int64}(undef, 18)
     for i = (steps - k):steps
-        new_step = chain["$(i)"]
         new_step = load(chain_p, "$(i)")
         sens = new_step["aux_state"][:sensitivities]
         push!(weight_history, sens)
@@ -180,16 +180,13 @@ function viz_trace_history(history)
     println(plt)
 end
 
-function lv_distance(a::Room, b::Room)
-    es = exits(a)
-    paths_a = @>> es map(e -> safe_shortest_path(a,e)) map(relative_path)
-    paths_b = @>> es map(e -> safe_shortest_path(b,e)) map(relative_path)
-    lvd = sum(map(lv_distance, paths_a, paths_b))
-end
-
 function extract_attention(chain::String, r::Room, f::Furniture)
 
-    map_step, weights, cycles = load_map_chain(chain)
+    map_step, weights, cycles = load_map_chain(chain, 150, 1)
+    weights = weights[end]
+    display(reshape(weights, (3,6)))
+
+    display(reshape(cycles, (3,6)))    
 
     query = query_from_params(r,
                               "/project/scripts/experiments/attention/gm.json";
@@ -197,6 +194,7 @@ function extract_attention(chain::String, r::Room, f::Furniture)
                               dims = (6,6),
                               img_size = (240, 360))
 
+    params = first(query.args)
     trackers = Int64[]
 
     @unpack dims, n_trackers = params
@@ -204,15 +202,18 @@ function extract_attention(chain::String, r::Room, f::Furniture)
     # find which trackers correspond to the furniture
     state_ref = CartesianIndices((dims..., n_trackers))
     for t = 1:params.n_trackers
-        vs = state_to_room(params, vec(state_ref[:, :, t]))
+        vs = FunctionalScenes.state_to_room(params, vec(state_ref[:, :, t]))
         if !isempty(intersect(vs, f))
             push!(trackers, t)
         end
     end
 
-    tracker_cycles = mean(cycles[trackers])
-    total_cycles = sum(cycles)
-    (tracker_cycles, total_cycles)
+    # tracker_cycles = mean(cycles[trackers])
+    # total_cycles = sum(cycles)
+    # (tracker_cycles, total_cycles)
+    tracker_weights = mean(weights[trackers])
+    total_weights = sum(weights)
+    (tracker_weights, total_weights)
 end
 
 
@@ -224,14 +225,14 @@ function main(exp::String, render::String)
                        furniture = Int64[],
                        move = String[],
                        pixeld = Float64[], # image features
-                       lvd = Float64[],
+                       # lvd = Float64[],
                        ogd = Float64[],
                        ogc = Float64[],  # ideal navigational affordances
                        # model based inferences and attention
-                       base_cycles_furniture = Int64[],
-                       base_cycles_total = Int64[],
-                       move_cycles_furniture = Int64[],
-                       move_cycles_total = Int64[],
+                       base_cycles_furniture = Float64[],
+                       base_cycles_total = Float64[],
+                       move_cycles_furniture = Float64[],
+                       move_cycles_total = Float64[],
                        )
 
     render_base = "/renders/$(exp)_$(render)"
@@ -252,17 +253,17 @@ function main(exp::String, render::String)
         room = shift_furniture(base, r.furniture, move)
         shifted = @>> f collect map(v -> shift_tile(base, v, move)) collect Set
 
-        lvd = lv_distance(base, room)
         ogr, ogd = compare_og(base, room)
 
-        base_chain = "/experiments/$(exp)_attention/$(r.id)/1.jld2"
-        move_chain = "/experiments/$(exp)_attention/$(r.id)_furniture_$(r.move)/1.jld2"
+        chain_base = "/experiments/$(exp)_attention"
+        base_chain = "$(chain_base)/$(r.id)_$(r.door)/1.jld2"
+        move_chain = "$(chain_base)/$(r.id)_$(r.door)_$(r.move)_furniture_$(r.move)/1.jld2"
         # pred = compare_model_predictions(base, base_chain, move_chain,
         #                                  r.furniture, r.move)
-        base_att = extract_attention(base_chain, r.furniture)
-        move_att = extract_attention(move_chain, r.furniture)
+        base_att = extract_attention(base_chain, base,  f)
+        move_att = extract_attention(move_chain, room, shifted)
         row = (r.id, r.door, r.furniture, r.move,
-               pixeld, lvd, ogd, ogr,
+               pixeld, ogd, ogr,
                base_att..., move_att...)
         push!(new_df, row)
     end
@@ -272,4 +273,4 @@ function main(exp::String, render::String)
 end
 
 
-main("1_exit_22x40_doors");
+main("1_exit_22x40_doors", "cycles_cubes");

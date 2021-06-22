@@ -39,7 +39,7 @@ def main():
         'cpus-per-task' : '4',
         'mem-per-cpu' : '2GB',
         'time' : '{0:d}'.format(args.duration),
-        'partition' : 'gpu',
+        'partition' : 'psych_gpu',
         'gres' : 'gpu:1',
         'requeue' : None,
         'job-name' : 'rooms',

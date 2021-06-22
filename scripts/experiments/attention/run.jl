@@ -165,8 +165,8 @@ end
 
 
 function outer()
-    # args = parse_outer()
-    args = Dict("scene" => 1)
+    # args = Dict("scene" => 1)
+    args = parse_outer()
     i = args["scene"]
     df = DataFrame(CSV.File("/scenes/$(experiment).csv"))
     cmd = ["$(i)","1", "1", "A"]
