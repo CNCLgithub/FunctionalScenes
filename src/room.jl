@@ -1,11 +1,21 @@
-
 export Room, pathgraph, entrance, exits, bounds, steps, expand
 
+#################################################################################
+# Type aliases
+#################################################################################
+
+# Floor tiles are vertices in a graph
 const Tile = Int64
+# Scenes contain a lattice graph over the paths in the room
 const PathGraph = MetaGraphs.MetaGraph{Int64, Float64}
 
+
+#################################################################################
+# Room
+#################################################################################
+
 """
-Defines a room
+
 """
 struct Room
     steps::Tuple{Int64, Int64}

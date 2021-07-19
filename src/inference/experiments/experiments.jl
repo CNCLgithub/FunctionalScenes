@@ -2,15 +2,15 @@ function run_inference(query::StaticQuery,
                        proc::AttentionMH)
 
     results = static_monte_carlo(proc, query,
-                                     buffer_size = proc.samples)
+                                 buffer_size = proc.samples)
 end
 function run_inference(query::StaticQuery,
                        proc::AttentionMH,
                        path::String)
 
     results = static_monte_carlo(proc, query,
-                                     buffer_size = proc.samples,
-                                     path = path)
+                                 buffer_size = proc.samples,
+                                 path = path)
 end
 
 function ex_choicemap(tr::Gen.Trace)
@@ -21,11 +21,9 @@ end
 
 function query_from_params(room::Room, path::String; kwargs...)
 
-    # TODO Extract attention stats
     _lm = Dict{Symbol, Any}(
         :trace => ex_choicemap
     )
-
     latent_map = LatentMap(_lm)
 
     gm_params = load(ModelParams, path; gt = room,

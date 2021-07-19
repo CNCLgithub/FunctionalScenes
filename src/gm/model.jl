@@ -1,44 +1,56 @@
 export model
 
+#################################################################################
+# Helpers
+#################################################################################
+
 @gen (static) function tile_flip(p::Float64)::Bool
     f = @trace(bernoulli(p), :flip)
     return f
 end
 
 
+#################################################################################
+# Generative Model
+#################################################################################
 
+"""
+Sample a level and tiles for a tracker
+"""
 @gen (static) function tracker_prior(params::ModelParams, tid::Int64)
-    level = @trace(categorical(params.level_weights), :level)
-    # a vec of tuples for each tile
+    level = {:level} ~ categorical(params.level_weights)
+    # Sample state for each tile in the tracker
     lp = level_prior(params, tid, level)
-    state = @trace(broadcasted_uniform(lp), :state)
+    state = {:state} ~ broadcasted_uniform(lp)
     return (level, state)
 end
 
 """
-Take a room and place a random set of objects in an xy plane
+Given a global state, sample furniture according to bernoulli weights
 """
 @gen (static) function room_from_state(state::Array{Float64, 3},
                                        params::ModelParams)::Room
     cleaned = clean_state(state)
-    occupied = @trace(Gen.Map(tile_flip)(cleaned),
-                      :furniture)
+    occupied = {:furniture} ~ Gen.Map(tile_flip)(cleaned)
     result = add_from_state_flip(params, occupied)
     return result
 end
 
-## Model
+#################################################################################
+# Generative Model
+#################################################################################
 
 @gen (static) function model(params::ModelParams)
     # initialize trackers
     (prior_args, tids) = tracker_prior_args(params)
-    states = @trace(Gen.Map(tracker_prior)(prior_args, tids), :trackers)
+    states = {:trackers} ~ Gen.Map(tracker_prior)(prior_args, tids)
 
     # a global room matrix
     global_state = consolidate_local_states(params, states)
     (gs, ps) = room_from_state_args(params, global_state)
-    room_instances = @trace(Gen.Map(room_from_state)(gs, ps),
-                            :instances)
+
+    # empirical estimation of multigranular predictions
+    room_instances = {:instances} ~ Gen.Map(room_from_state)(gs, ps)
     result = (global_state, room_instances)
 
     # mean and variance of observation

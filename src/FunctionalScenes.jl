@@ -1,5 +1,9 @@
 module FunctionalScenes
 
+#################################################################################
+# Dependencies
+#################################################################################
+
 using Gen
 using JSON
 using GenRFS
@@ -15,14 +19,20 @@ using Parameters: @with_kw
 using Base.Iterators: take
 using Lazy: @>, @>>, lazymap, flatten
 
+#################################################################################
+# Runtime configuration
+#################################################################################
+
 const torch = PyNULL()
 const functional_scenes = PyNULL()
 function __init__()
     copy!(torch, pyimport("torch"))
     copy!(functional_scenes, pyimport("functional_scenes"))
-    # needed to deal with Gen static functions
-    # @load_generated_functions
 end
+
+#################################################################################
+# Module imports
+#################################################################################
 
 include("utils.jl")
 include("dists.jl")
@@ -33,5 +43,10 @@ include("blender/blender.jl")
 include("paths.jl")
 include("inference/inference.jl")
 
+#################################################################################
+# Load Gen functions
+#################################################################################
+
 @load_generated_functions
+
 end # module

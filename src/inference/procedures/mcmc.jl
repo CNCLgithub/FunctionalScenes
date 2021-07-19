@@ -2,25 +2,46 @@ using Base.Iterators: take
 
 export AttentionMH
 
-@with_kw struct AttentionMH <: Gen_Compose.MCMC
-    # inference parameters
-    samples::Int64 = 10
-    smoothness::Float64 = 1.0
-    explore::Float64 = 0.30 # probability of sampling random tracker
-    burnin::Int64 = 10 # number of steps per tracker
+#################################################################################
+# Attention MCMC
+#################################################################################
 
-    # data driven initialization
+@with_kw struct AttentionMH <: Gen_Compose.MCMC
+
+    #############################################################################
+    # Inference Paremeters
+    #############################################################################
+
+    # chain length
+    samples::Int64 = 10
+
+
+    #############################################################################
+    # Data driven proposal
+    #############################################################################
+
     ddp::Function = ddp_init_kernel
     ddp_args::Tuple 
 
-    # task objective
+    #############################################################################
+    # Attention
+    #############################################################################
+
+    # Goal driven belief
     objective::Function = batch_og
     # destance metrics for two task objectives
     distance::Function = batch_compare_og
 
-    # adress schema
+    # address schema for IOT sensitivity
     nodes::Vector{Symbol}
     selections::LittleDict{Symbol, Gen.Selection}
+
+    # smoothing relative sensitivity for each tracker
+    smoothness::Float64 = 1.0
+    # probability of sampling random tracker
+    explore::Float64 = 0.30
+    # number of steps per tracker
+    tracker_cycles::Int64 = 10
 end
 
 
@@ -125,15 +146,15 @@ function kernel_move!(state::AMHTrace, proc::AttentionMH)
     state.counters[idx] += 1
     addr = proc.nodes[idx]
 
-    @unpack burnin, objective, selections, distance = proc
+    @unpack tracker_cycles, objective, selections, distance = proc
     selection = selections[addr]
 
     translator = Gen.SymmetricTraceTranslator(split_merge_proposal,
                                               (idx,),
                                               split_merge_involution)
-    distances = zeros(burnin)
-    lls = Vector{Float64}(undef, burnin)
-    for i = 1:proc.burnin
+    distances = zeros(tracker_cycles)
+    lls = Vector{Float64}(undef, tracker_cycles)
+    for i = 1:tracker_cycles
         (_trace, lls[i]) = tracker_kernel(current_trace, translator, idx, selection)
         lls[i] = isnan(lls[i]) ? 0 : lls[i]
         new_objective = objective(_trace)

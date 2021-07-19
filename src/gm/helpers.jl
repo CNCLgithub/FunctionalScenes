@@ -6,44 +6,76 @@ using Parameters: @unpack
 
 export ModelParams
 
+#################################################################################
+# Model specification
+#################################################################################
+
 @with_kw struct ModelParams
 
+    #############################################################################
+    # Room geometry
+    #############################################################################
+    # Ground truth room
     gt::Room
+    # An empty room that has the same size as `gt`
     template::Room = template_from_room(gt)
 
     # thickness of walls
     offset::CartesianIndex{2} = CartesianIndex(2, 2)
 
-    # tracker parameters
-    dims::Tuple{Int64, Int64} = (6, 6) # size of each tracker
+    #############################################################################
+    # Tracker parameters
+    #############################################################################
+
+    # maximum resolution of each tracker
+    dims::Tuple{Int64, Int64} = (6, 6)
+    tracker_size::Int64 = prod(dims)
+
+    # tracker reference coordinates
     inner_ref::CartesianIndices = CartesianIndices(dims)
     tracker_ref::CartesianIndices = _tracker_ref(template, dims, offset)
-    n_trackers::Int64 = length(tracker_ref)
     linear_ref::LinearIndices = _linear_ref(template)
-    # default spread for a given tracker
+
+    # number of trackers
+    n_trackers::Int64 = length(tracker_ref)
+
+    #############################################################################
+    # Tracker coarse-to-fine prior
+    #############################################################################
+
+    # default state spread for each tracker: uniform(0, 1)
     default_tracker_p::Float64 = 1.0
     # spread for each tracker
     tracker_ps::Vector{Float64} = fill(default_tracker_p,
                                        length(tracker_ref))
-    tracker_size::Int64 = prod(dims)
 
+    # coarse to fine steps
     base::Tuple{Int64, Int64} = (3, 3)
     factor::Int64 = 2
     levels::Int64 = _count_levels(dims, base, factor)
 
-    # tracker prior
+    # prior over coarse to fine moves; uniform
     level_weights::Vector{Float64} = fill(1.0/levels, levels)
     bounds::Tuple{Float64, Float64} = (0., 1.) # range of bernoulli weights
 
-    # simulation
+    #############################################################################
+    # Multigranular empirical estimation
+    #############################################################################
+
+    # number of draws from stochastic scene state
     instances::Int64 = 10
 
-    # graphics
-    feature_weights::String
-    device = _load_device()
+    #############################################################################
+    # Graphics
+    #############################################################################
+
     img_size::Tuple{Int64, Int64} = (480, 720)
-    graphics = _init_graphics(template, img_size, device)
+    device = _load_device()
+    # initialize scene alexnet
+    feature_weights::String
     model = functional_scenes.init_alexnet(feature_weights, device)
+    # configure pytorch3d render
+    graphics = _init_graphics(template, img_size, device)
     # minimum variance in prediction
     base_sigma::Float64 = 0.1
 end
@@ -273,7 +305,7 @@ end
 function viz_gt(gt::Room; kwargs...)
     grid = occupancy_position(gt)
     viz_ocg(grid; title = "gt state", kwargs...)
-    display(gt)
+    # display(gt)
 end
 
 # or pass average image to alexnet
@@ -292,6 +324,9 @@ function graphics_from_instances(instances, params)
     if length(instances) > 1
         instances = [instances[1]]
     end
+    # println("printing instances")
+    # foreach(viz_gt, instances)
+
     instances = map(r -> translate(r, false, cubes=true), instances)
     batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
     features = Array{Float64, 4}(batch.cpu().numpy())

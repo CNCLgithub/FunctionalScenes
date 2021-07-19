@@ -36,9 +36,7 @@ end
 
     state_ref = CartesianIndices((dims..., n_trackers))
 
-    # TODO: find better way to exclude trackers
     for i = 1:n_trackers
-    # for i = 4:n_trackers
 
         lvl = tr[:trackers => i => :level]
 
@@ -55,7 +53,6 @@ end
             args[i] = clamp.(prop_bounds, 0., tracker_spread)
         end
 
-        # some number of steps..
         @trace(broadcasted_uniform(args),
                :trackers => i => :state)
     end

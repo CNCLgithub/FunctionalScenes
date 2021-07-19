@@ -22,7 +22,7 @@ end
     # what moves are possible?
     w = refine_weight(params, lvl)
 
-    # refine?
+    # refine or coarsen?
     if ({:refine} ~ bernoulli(w))
         upper_bound = params.tracker_ps[tracker]
         cur_dims = level_dims(params, lvl)

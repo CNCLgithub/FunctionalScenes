@@ -1,5 +1,9 @@
 export broadcasted_bernoulli, broadcasted_uniform, labelled_categorical
 
+#################################################################################
+# Generic distributions
+#################################################################################
+
 @dist function labelled_categorical(xs)
     n = length(xs)
     probs = fill(1.0 / n, n)
@@ -14,12 +18,20 @@ end
     xs[index]
 end
 
+#################################################################################
+# Broadcasted Distributions for efficiency
+#################################################################################
+
 struct BroadcastedBernoulli <: Gen.Distribution{AbstractArray{Bool}} end
 
 const broadcasted_bernoulli = BroadcastedBernoulli()
 
 function Gen.random(::BroadcastedBernoulli, ws::Array{Float64})
-    bernoulli.(ws)
+    result = BitArray(undef, size(ws))
+    for i in LinearIndices(ws)
+        result[i] = bernoulli(ws[i])
+    end
+    return result
 end
 
 function Gen.logpdf(::BroadcastedBernoulli, xs::AbstractArray{Bool},
@@ -41,8 +53,6 @@ Gen.has_output_grad(::BroadcastedBernoulli) = false
 Gen.logpdf_grad(::BroadcastedBernoulli, value::Set, args...) = (nothing,)
 
 
-
-
 struct BroadcastedUniform <: Gen.Distribution{AbstractArray{Float64}} end
 
 const broadcasted_uniform = BroadcastedUniform()
@@ -55,8 +65,6 @@ function Gen.random(::BroadcastedUniform, ws::AbstractArray{Tuple{Float64, Float
     end
     return result
 end
-
-
 
 function Gen.logpdf(::BroadcastedUniform,
                     xs::Float64,

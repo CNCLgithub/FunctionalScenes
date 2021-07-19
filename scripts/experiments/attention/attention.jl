@@ -166,7 +166,7 @@ end
 
 df = DataFrame(CSV.File("/scenes/$(experiment).csv"))
 # for i = 1:32
-for i in [1]
+for i in [29]
     cmd = ["$(i)","1", "1", "A"]
     main(cmd);
     cmd = ["$(i)", "2", "1", "A"]

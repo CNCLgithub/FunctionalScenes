@@ -50,14 +50,13 @@ function tracker_kernel(trace::Gen.Trace,
                         translator::Gen.SymmetricTraceTranslator,
                         tracker::Int64,
                         selected)
-    # @debug "initial trace score $(get_score(trace))"
+    # RJ-mcmc move over tracker resolution
     (new_trace, w1) = translator(trace; check = false)
-    # @debug "w1: $(w1)"
+    # random walk over tracker state (bernoulli weights)
     (new_trace, w2) = apply_random_walk(new_trace,
                                         random_walk_proposal,
                                         (tracker,))
-    # @debug "w2: $(w2)"
+    # update child addresses
     (new_trace, w3) = regenerate(new_trace, selected)
-    # @debug "w3: $(w3)"
     (new_trace, w1 + w2 + w3)
 end
