@@ -1,47 +1,81 @@
 using UnicodePlots
-using Images
+# using Images
 using ImageInTerminal
 using Statistics
 using Parameters: @unpack
 
 export ModelParams
 
+#################################################################################
+# Model specification
+#################################################################################
+
 @with_kw struct ModelParams
 
+    #############################################################################
+    # Room geometry
+    #############################################################################
+    # Ground truth room
     gt::Room
+    # An empty room that has the same size as `gt`
     template::Room = template_from_room(gt)
 
     # thickness of walls
     offset::CartesianIndex{2} = CartesianIndex(2, 2)
 
-    # tracker parameters
-    dims::Tuple{Int64, Int64} = (6, 6) # size of each tracker
-    inner_ref::CartesianIndices = CartesianIndices(dims)
-    tracker_ref::CartesianIndices = _tracker_ref(template, dims, offset)
-    n_trackers::Int64 = length(tracker_ref)
-    linear_ref::LinearIndices = _linear_ref(template)
-    default_tracker_p::Float64 = 0.5
-    tracker_ps::Vector{Float64} = fill(default_tracker_p,
-                                       length(tracker_ref))
+    #############################################################################
+    # Tracker parameters
+    #############################################################################
+
+    # maximum resolution of each tracker
+    dims::Tuple{Int64, Int64} = (6, 6)
     tracker_size::Int64 = prod(dims)
 
+    # tracker reference coordinates
+    inner_ref::CartesianIndices = CartesianIndices(dims)
+    tracker_ref::CartesianIndices = _tracker_ref(template, dims, offset)
+    linear_ref::LinearIndices = _linear_ref(template)
+
+    # number of trackers
+    n_trackers::Int64 = length(tracker_ref)
+
+    #############################################################################
+    # Tracker coarse-to-fine prior
+    #############################################################################
+
+    # default state spread for each tracker: uniform(0, 1)
+    default_tracker_p::Float64 = 1.0
+    # spread for each tracker
+    tracker_ps::Vector{Float64} = fill(default_tracker_p,
+                                       length(tracker_ref))
+
+    # coarse to fine steps
     base::Tuple{Int64, Int64} = (3, 3)
     factor::Int64 = 2
     levels::Int64 = _count_levels(dims, base, factor)
 
-    # tracker prior
+    # prior over coarse to fine moves; uniform
     level_weights::Vector{Float64} = fill(1.0/levels, levels)
     bounds::Tuple{Float64, Float64} = (0., 1.) # range of bernoulli weights
 
-    # simulation
+    #############################################################################
+    # Multigranular empirical estimation
+    #############################################################################
+
+    # number of draws from stochastic scene state
     instances::Int64 = 10
 
-    # graphics
-    feature_weights::String
-    device = _load_device()
+    #############################################################################
+    # Graphics
+    #############################################################################
+
     img_size::Tuple{Int64, Int64} = (480, 720)
-    graphics = _init_graphics(template, img_size, device)
+    device = _load_device()
+    # initialize scene alexnet
+    feature_weights::String
     model = functional_scenes.init_alexnet(feature_weights, device)
+    # configure pytorch3d render
+    graphics = _init_graphics(template, img_size, device)
     # minimum variance in prediction
     base_sigma::Float64 = 0.1
 end
@@ -57,7 +91,8 @@ function _init_graphics(r, img_size, device)
     return graphics
 end
 
-function _tracker_ref(r::Room, dims, offset)
+function _tracker_ref(r::Room, dims::Tuple{Int64, Int64},
+                      offset::CartesianIndex{2})
     offset = Tuple(offset) .* 2
     space = (steps(r) .- offset) ./ dims
     space = Int64.(space)
@@ -88,22 +123,50 @@ function level_dims(params::ModelParams, lvl::Int64)
     level_dims(base, factor, lvl)
 end
 
+# TODO play with using `size(tracker_ref)`
 function tracker_prior_args(params::ModelParams)
-    fill(params, length(params.tracker_ref))
+    @unpack tracker_ref, n_trackers = params
+    _params = fill(params, n_trackers)
+    tids = collect(Int64, 1:n_trackers)
+    (_params, tids)
 end
 
-function level_prior(params::ModelParams, lvl::Int64)
-    @unpack base, bounds, factor = params
+function level_prior(params::ModelParams, tid::Int64, lvl::Int64)
+    @unpack base, tracker_ps = params
     d = level_dims(params, lvl)
+    spread = tracker_ps[tid]
+    bounds = (0., spread)
     fill(bounds, d)
 end
-
 
 function create_obs(params::ModelParams, r::Room)
     mu, _ = graphics_from_instances([r], params)
     constraints = Gen.choicemap()
     constraints[:viz] = mu
-    return constraints
+    constraints
+end
+
+
+function add_init_constraints!(cm::Gen.ChoiceMap, params::ModelParams, r::Room)
+    @unpack n_trackers, instances = params
+    state = occupancy_position(r)
+    # first column in room that has furniture
+    frontier = findfirst(vec(sum(state, dims = 1) .!= 0)) - 6
+    state_ref = CartesianIndices(steps(r))
+    constraints = Gen.choicemap()
+    for t = 1 : n_trackers
+        for idx in tracker_to_state(params, t)
+            # tracker is out of view
+            last(Tuple(state_ref[idx])) < frontier || continue
+            cm[:trackers => t => :level] = 1
+            cm[:trackers => t => :state] = zeros((1, 1))
+
+            # for i = 1 : instances
+            #     cm[:instances => i => :furniture => idx => :flip] = false
+            # end
+        end
+    end
+    return nothing
 end
 
 function consolidate_local_states(params::ModelParams, states)::Array{Float64, 3}
@@ -125,10 +188,11 @@ function room_from_state_args(params::ModelParams, gs::Array{Float64, 3})
 end
 
 function add_from_state_flip(params::ModelParams, occupied)::Room
-    r = params.template
+    @unpack dims, template, tracker_size, n_trackers = params
+    occupied = reshape(occupied, (dims[1], dims[2], n_trackers))
     vs = findall(occupied)
     fs = state_to_room(params, vs)
-    add(r, Set{Int64}(fs))
+    add(template, Set{Int64}(fs))
 end
 
 function tracker_to_state(params::ModelParams, tracker::Int64)
@@ -156,7 +220,12 @@ function state_to_room(params::ModelParams, vs::Vector{CartesianIndex{3}})
 end
 
 function project_state_weights(params::ModelParams, state)
-    state_to_room(params, CartesianIndices(size(state)))
+    @>> state begin
+        CartesianIndices
+        collect(CartesianIndex{3})
+        vec
+        state_to_room(params)
+    end
 end
 
 function viz_global_state(trace::Gen.Trace)
@@ -174,12 +243,20 @@ function viz_global_state(trace::Gen.Trace)
     return nothing
 end
 
+function viz_ddp_state(grid::Matrix{Float64})
+    grid = reverse(grid, dims = 1)
+    println(heatmap(grid, border = :none,
+                    title = "ddp geometry",
+                    colorbar_border = :none,
+                    colormap = :inferno))
+    return nothing
+end
 
-function viz_ocg(ocg)
+function viz_ocg(ocg; title = "occupancy grid")
     # ocg = mean(ocg)
     ocg = reverse(ocg, dims = 1)
     println(heatmap(ocg,
-                    title = "occupancy grid",
+                    title = title,
                     border = :none,
                     colorbar_border = :none,
                     colormap = :inferno
@@ -225,27 +302,37 @@ function viz_render(trace::Gen.Trace)
 end
 
 
-function viz_gt(query)
-    params = first(query.args)
-    g = params.graphics
-    display(params.gt)
-    translated = translate(params.gt, false, cubes = true)
-    batch = @pycall functional_scenes.render_scene_batch([translated], g)::PyObject
-    batch = Array{Float64, 4}(batch.cpu().numpy())
-    display(colorview(RGB, batch[1, :, :, :]))
+function viz_gt(gt::Room; kwargs...)
+    grid = occupancy_position(gt)
+    viz_ocg(grid; title = "gt state", kwargs...)
+    # display(gt)
 end
 
 # or pass average image to alexnet
-function graphics_from_instances(instances, params)
+function image_from_instances(instances, params)
     g = params.graphics
     if length(instances) > 1
         instances = [instances[1]]
     end
     instances = map(r -> translate(r, false, cubes=true), instances)
     batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
-    features = @pycall functional_scenes.nn_features.single_feature(params.model,
-                                                                    "features.6",
-                                                                    batch)::Array{Float64, 4}
+    batch = Array{Float64, 4}(batch.cpu().numpy())
+end
+
+function graphics_from_instances(instances, params)
+    g = params.graphics
+    if length(instances) > 1
+        instances = [instances[1]]
+    end
+    # println("printing instances")
+    # foreach(viz_gt, instances)
+
+    instances = map(r -> translate(r, false, cubes=true), instances)
+    batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
+    features = Array{Float64, 4}(batch.cpu().numpy())
+    # features = @pycall functional_scenes.nn_features.single_feature(params.model,
+    #                                                                 "features.6",
+    #                                                                 batch)::Array{Float64, 4}
     mu = mean(features, dims = 1)
     if length(instances) > 1
         sigma = std(features, mean = mu, dims = 1)
@@ -256,12 +343,21 @@ function graphics_from_instances(instances, params)
     (mu[1, :, :, :], sigma[1, :, :, :])
 end
 
+
+function all_selections_from_model(params::ModelParams)
+    s = select()
+    # associated rooms samples
+    for tracker in 1:params.n_trackers
+        idxs = tracker_to_state(params, tracker)
+        for i = 1:params.instances, j in idxs
+            push!(s, :instances => i => :furniture => j => :flip)
+        end
+    end
+    StaticSelection(s)
+end
+
 function select_from_model(params::ModelParams, tracker::Int64)
     s = select()
-    # tracker state
-    for i = 1:params.tracker_size
-        push!(s, :trackers => tracker => :state )
-    end
     # associated rooms samples
     idxs = tracker_to_state(params, tracker)
     for i = 1:params.instances, j in idxs
@@ -304,14 +400,13 @@ function batch_og(tr::Gen.Trace)
     @>> get_retval(tr) begin
         last
         collect(Room)
-        map(x -> occupancy_grid(x, sigma = 0.7, decay = 0.0001))
+        map(x -> occupancy_grid(x, sigma = 0.0, decay = 0.0))
         mean
     end
 end
 
 function batch_compare_og(og_a, og_b)
-    cor(vec(mean(og_a)), vec(mean(og_b)))
-    # map(wsd, og_a, og_b) |> sum
+    wsd(og_a, og_b)
 end
 
 function refine_state(params::ModelParams, state, lvl::Int64)
@@ -381,15 +476,6 @@ end
 function clean_state(state::AbstractArray;
                      sigma = 1E-5)
     clamp.(state, sigma, 1.0 - sigma)
-    # m = mean(state)
-    # center around 0
-    # x = state .- m
-    # # scale to (-0.5, 0.5)
-    # s = (2.0 + sigma) * maximum(abs.(x))
-    # x ./= s
-    # # re-shift to [0, 1]
-    # x .+= (m / s)
-    # x
 end
 
 # # stable softmax

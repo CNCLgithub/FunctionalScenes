@@ -2,28 +2,54 @@ using Base.Iterators: take
 
 export AttentionMH
 
-@with_kw struct AttentionMH <: Gen_Compose.MCMC
-    # inference parameters
-    samples::Int64 = 10
-    smoothness::Float64 = 1.0
-    explore::Float64 = 0.30
-    burnin::Int64 = 10
+#################################################################################
+# Attention MCMC
+#################################################################################
 
-    # task objective
+@with_kw struct AttentionMH <: Gen_Compose.MCMC
+
+    #############################################################################
+    # Inference Paremeters
+    #############################################################################
+
+    # chain length
+    samples::Int64 = 10
+
+
+    #############################################################################
+    # Data driven proposal
+    #############################################################################
+
+    ddp::Function = ddp_init_kernel
+    ddp_args::Tuple 
+
+    #############################################################################
+    # Attention
+    #############################################################################
+
+    # Goal driven belief
     objective::Function = batch_og
     # destance metrics for two task objectives
     distance::Function = batch_compare_og
 
-    # adress schema
+    # address schema for IOT sensitivity
     nodes::Vector{Symbol}
     selections::LittleDict{Symbol, Gen.Selection}
+
+    # smoothing relative sensitivity for each tracker
+    smoothness::Float64 = 1.0
+    # probability of sampling random tracker
+    explore::Float64 = 0.30
+    # number of steps per tracker
+    tracker_cycles::Int64 = 10
 end
 
 
 function load(::Type{AttentionMH}, selections, path::String; kwargs...)
     nodes = @>> keys(selections) collect(Symbol)
     loaded = read_json(path)
-    AttentionMH(; nodes = nodes, selections = selections, loaded...)
+    AttentionMH(; nodes = nodes, selections = selections, loaded...,
+                kwargs...)
 end
 
 
@@ -40,8 +66,9 @@ function Gen_Compose.initialize_procedure(proc::AttentionMH,
     trace,_ = Gen.generate(query.forward_function,
                            query.args,
                            query.observations)
+    trace,_ = proc.ddp(trace, proc.ddp_args...)
+
     n = length(proc.nodes)
-    # sensitivities = fill(-Inf, n)
     sensitivities = zeros(n)
     weights = fill(1.0/n, n)
     counters = zeros(n)
@@ -56,9 +83,8 @@ function Gen_Compose.mc_step!(state::AMHTrace,
                               proc::AttentionMH,
                               query::StaticQuery)
 
-    prev_objective = state.current_objective
     # draw proposal
-    addr = ancestral_kernel_move!(proc, state)
+    addr = kernel_move!(state, proc)
     update_weights!(state, proc)
 
     # viz_render(state.current_trace)
@@ -71,7 +97,8 @@ function Gen_Compose.mc_step!(state::AMHTrace,
     aux_state = Dict(
         :objective => state.current_objective,
         :weights => state.weights,
-        :sensitivities => copy(state.sensitivities),
+        :sensitivities => deepcopy(state.sensitivities),
+        :cycles => deepcopy(state.counters),
         :addr => addr)
 end
 
@@ -97,14 +124,11 @@ function sweep(proc::AttentionMH,
 
 end
 
-function ancestral_kernel_move!(proc::AttentionMH,
-                               state::AMHTrace)
+function kernel_move!(state::AMHTrace, proc::AttentionMH)
 
+    @unpack current_trace, current_objective, weights = state
 
-    trace = state.current_trace
-    prev_objective = state.current_objective
-    weights = state.weights
-    # select addr to rejuv
+    # select tracker to rejuv
     # chance to ingnore weights
     n = length(weights)
     unvisited = findfirst(state.counters .== 0)
@@ -116,30 +140,46 @@ function ancestral_kernel_move!(proc::AttentionMH,
         end
         idx = categorical(weights)
     end
+
+    @debug "Attending to tracker $(idx)"
+    # update record of attended trackers
     state.counters[idx] += 1
     addr = proc.nodes[idx]
-    println(addr)
-    selection = proc.selections[addr]
 
-    current_trace = trace
-    distances = Vector{Float64}(undef, proc.burnin)
-    lls = Vector{Float64}(undef, proc.burnin)
-    for i = 1:proc.burnin
-        (new_tr, lls[i], _) = regenerate(trace, selection)
-        new_objective = proc.objective(new_tr)
-        distances[i] = proc.distance(prev_objective, new_objective)
-        accepted = log(rand()) < lls[i]
-        current_trace = accepted ? new_tr : current_trace
+    @unpack tracker_cycles, objective, selections, distance = proc
+    selection = selections[addr]
+
+    translator = Gen.SymmetricTraceTranslator(split_merge_proposal,
+                                              (idx,),
+                                              split_merge_involution)
+    distances = zeros(tracker_cycles)
+    lls = Vector{Float64}(undef, tracker_cycles)
+    for i = 1:tracker_cycles
+        (_trace, lls[i]) = tracker_kernel(current_trace, translator, idx, selection)
+        lls[i] = isnan(lls[i]) ? 0 : lls[i]
+        new_objective = objective(_trace)
+        distances[i] = distance(current_objective, new_objective)
+        @debug "kernel proposal weight $(lls[i])"
+        if log(rand()) < lls[i]
+            # accept
+            @debug "accepted"
+            current_objective = new_objective
+            current_trace = _trace
+        end
+
     end
 
-    lws = exp.(lls .- logsumexp(lls))
-    println(lls)
-    println(lws)
-    println(distances)
-    exp_dist = sum(distances .* lws)
-    println(exp_dist)
-    state.sensitivities[idx] = exp_dist
+    clamp!(lls, -Inf, 0.)
+    # compute expectation over sensitivities
+    @debug "distances: $(distances)"
+    exp_dist = sum(distances .* exp.((lls .- logsumexp(lls))))
+    exp_dist = isinf(exp_dist) ? 0. : exp_dist # clean up -Inf
+
+    # update references
+    state.sensitivities[idx] = 0.5 * (state.sensitivities[idx] + exp_dist)
     state.current_trace = current_trace
-    state.current_objective = proc.objective(current_trace)
+    state.current_objective = current_objective
+
+    # return attended tracker
     return addr
 end

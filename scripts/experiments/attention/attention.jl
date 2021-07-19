@@ -6,7 +6,7 @@ using DataFrames
 using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
-experiment = "2e_1p_30s_matchedc3"
+experiment = "1_exit_22x40_doors"
 
 function parse_commandline(vs)
     s = ArgParseSettings()
@@ -21,6 +21,16 @@ function parse_commandline(vs)
         help = "Inference procedure params"
         arg_type = String
         default = "$(@__DIR__)/proc.json"
+        
+        "--vae"
+        help = "DDP VAE weights"
+        arg_type = String
+        default = "/checkpoints/vae"
+
+        "--ddp"
+        help = "DDP decoder weights"
+        arg_type = String
+        default = "/checkpoints/ddp"
 
         "--restart", "-r"
         help = "Whether to resume inference"
@@ -45,6 +55,10 @@ function parse_commandline(vs)
         arg_type = Int64
         required = true
 
+        "door"
+        help = "door"
+        arg_type = Int64
+        required = true
 
         "chain"
         help = "The number of chains to run"
@@ -79,13 +93,15 @@ function parse_commandline(vs)
     return parse_args(vs, s)
 end
 
-load_base_scene(path::String) = load(path)["r"]
+
+load_base_scene(path::String, door::Int64) = load(path)["rs"][door]
 
 
 function load_moved_scene(base_p::String, args)
     move = args["move"]
     furn = args["furniture"]
-    base = load_base_scene(base_p)
+    door = args["door"]
+    base = load_base_scene(base_p, door)
     room = shift_furniture(base,
                            furniture(base)[furn],
                            move)
@@ -99,26 +115,33 @@ function main(cmd)
 
     base_path = "/experiments/$(experiment)_$(att_mode)"
     scene = args["scene"]
-    path = joinpath(base_path, "$(scene)")
+    door = args["door"]
+    path = joinpath(base_path, "$(scene)_$(door)")
 
     base_p = "/scenes/$(experiment)/$(scene).jld2"
     if isnothing(args["move"])
-        room = load_base_scene(base_p)
+        room = load_base_scene(base_p, args["door"])
     else
         room = load_moved_scene(base_p, args)
         move = args["move"]
         furn = args["furniture"]
-        path = "$(path)_$(furniture)_$(move)"
+        door = args["door"]
+        path = "$(path)_$(move)_$(furniture)_$(move)"
     end
 
+    tracker_ps = ones(3, 6)
+    tracker_ps[:, 1:2] .= 0.01
+    tracker_ps = vec(tracker_ps)
     query = query_from_params(room, args["gm"],
                               img_size = (240, 360),
                               dims = (6,6),
+                              tracker_ps = tracker_ps
                               )
 
-    selections = FunctionalScenes.selections(first(query.args))
-    proc = FunctionalScenes.load(AttentionMH, selections,
-                                 args[att_mode]["params"])
+    model_params = first(query.args)
+    proc = FunctionalScenes.proc_from_params(room, model_params,
+                                             args[att_mode]["params"],
+                                             args["vae"], args["ddp"];)
 
     try
         isdir(base_path) || mkpath(base_path)
@@ -128,6 +151,7 @@ function main(cmd)
     end
     c = args["chain"]
     out = joinpath(path, "$(c).jld2")
+
     if isfile(out) && !args["restart"]
         println("chain $c complete")
         return
@@ -135,32 +159,23 @@ function main(cmd)
 
     println("running chain $c")
     results = run_inference(query, proc, out )
-    FunctionalScenes.viz_gt(query)
-    # if (args["viz"])
-    #     visualize_inference(results, gt_causal_graphs, gm_params, att, path;
-    #                         render_tracker_masks=true)
-    # end
-
-    # df = MOT.analyze_chain(results)
-    # df[!, :scene] .= args["scene"]
-    # df[!, :chain] .= c
-    # CSV.write(joinpath(path, "$(c).csv"), df)
-
+    FunctionalScenes.viz_gt(room)
     return nothing
 end
 
 
 df = DataFrame(CSV.File("/scenes/$(experiment).csv"))
-for i = 1:30
-    cmd = ["$(i)", "1", "A"]
+# for i = 1:32
+for i in [29]
+    cmd = ["$(i)","1", "1", "A"]
+    main(cmd);
+    cmd = ["$(i)", "2", "1", "A"]
     main(cmd);
     for r in eachrow(df[df.id  .== i, :])
         cmd = [
             "-f=$(r.furniture)",
             "-m=$(r.move)",
-            "$(i)", "1", "A",
-               # ("furniture", "$(r.furniture)"),
-               # ("move", "$(r.move)"),
+            "$(i)", "$(r.door)", "1", "A",
         ]
 
         display(cmd)

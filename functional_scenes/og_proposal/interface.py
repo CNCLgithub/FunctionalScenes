@@ -17,9 +17,6 @@ from torch.utils.data import Dataset, DataLoader
 from . dataset import CustomImageFolder
 from . model import BetaVAE_H, BetaVAE_OG
 
-# neural network details
-z_dim = 20
-nc = 3
 
 # intialization of neural network
 def init_dd_state(enc_path:str, dec_path:str, device,
@@ -27,15 +24,15 @@ def init_dd_state(enc_path:str, dec_path:str, device,
    # first load encoder
    enc = BetaVAE_H(z_dim, nc).to(device)
    enc_weights = torch.load(enc_path)['model_states']['net']
-   enc.encoder.load_state_dict(enc_weights)
+   enc.load_state_dict(enc_weights)
 
    # then load decoder
-   dec = BetaVAE_OG(enc.encoder,z_dim, nc).to(device)
+   dec = BetaVAE_OG(enc.encoder,z_dim).to(device)
    dec_weights = torch.load(dec_path)['model_states']['net']
    dec.decoder.load_state_dict(dec_weights)
    return dec
 
-def dd_state(nn,img):
+def dd_state(nn, img, device):
    """ dd_state
 
    Proposes an furniture occupancy grid given an model and an image
@@ -48,8 +45,7 @@ def dd_state(nn,img):
        A 1xMxN matrix containting probability of occupancy for each
        cell in the room
    """
-   device = nn.device()
-   img_tensor = torch.from_numpy(img)
+   img_tensor = torch.from_numpy(img).float()
    img_tensor = Variable(img_tensor).to(device)
    z, mu, logvar = nn(img_tensor)
    z = z.cpu().detach().numpy()

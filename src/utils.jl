@@ -1,5 +1,9 @@
 using JSON
 
+#################################################################################
+# IO
+#################################################################################
+
 function _load_device()
     if torch.cuda.is_available()
         device = torch.device("cuda:0")
@@ -8,15 +12,6 @@ function _load_device()
         device = torch.device("cpu")
     end
     return device
-end
-
-
-function softmax(x)
-    x = x .- maximum(x)
-    exs = exp.(x)
-    sxs = sum(exs)
-    n = length(x)
-    isnan(sxs) || iszero(sxs) ? fill(1.0/n, n) : exs ./ sxs
 end
 
 """
@@ -38,12 +33,35 @@ function read_json(path)
     return sym_data
 end
 
+
+#################################################################################
+# Math
+#################################################################################
+
+function softmax(x)
+    x = x .- maximum(x)
+    exs = exp.(x)
+    sxs = sum(exs)
+    n = length(x)
+    isnan(sxs) || iszero(sxs) ? fill(1.0/n, n) : exs ./ sxs
+end
+
+#################################################################################
+# Room coordinate manipulation
+#################################################################################
+
+"""
+Is coordinate `a` adjacent to `b`?
+"""
 function is_next_to(a::CartesianIndex{2}, b::CartesianIndex{2})
     d = abs.(Tuple(a - b))
     # is either left,right,above,below
     d == (1, 0) || d == (0, 1)
 end
 
+"""
+Takes a tile in an `mxn` space and \"expands\" by `factor`
+"""
 function up_scale_inds(src::CartesianIndices{2}, dest::CartesianIndices{2},
                        factor::Int64, vs::Vector{Int64})
     result = Array{Int64, 3}(undef, factor, factor, length(vs))
@@ -52,7 +70,6 @@ function up_scale_inds(src::CartesianIndices{2}, dest::CartesianIndices{2},
     end
     vec(result)
 end
-
 function up_scale_inds(src::CartesianIndices{2}, dest::CartesianIndices{2},
                        factor::Int64, v::Int64)
     kern = CartesianIndices((1:factor, 1:factor))

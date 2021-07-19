@@ -14,24 +14,17 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torchvision.utils import make_grid, save_image
 
-from utils import cuda
-from model import BetaVAE_H, BetaVAE_B, BetaVAE_OG
-from dataset import return_data
+from .utils import cuda
+from .model import BetaVAE_H, BetaVAE_B, BetaVAE_OG
+from .dataset import return_data
 
 from torchvision import transforms
 
-def reconstruction_loss(x, x_recon, distribution):
+def reconstruction_loss(x, x_recon):
     batch_size = x.size(0)
     assert batch_size != 0
-
-    if distribution == 'bernoulli':
-        recon_loss = F.binary_cross_entropy_with_logits(x_recon, x, size_average=False).div(batch_size)
-    elif distribution == 'gaussian':
-        x_recon = F.sigmoid(x_recon)
-        recon_loss = F.mse_loss(x_recon, x, size_average=False).div(batch_size)
-    else:
-        recon_loss = None
-
+    x_recon = F.sigmoid(x_recon)
+    recon_loss = F.mse_loss(x_recon, x, size_average=False).div(batch_size)
     return recon_loss
 
 def l2_distance(og,og_recon):
@@ -95,15 +88,6 @@ class Solver(object):
         self.beta1 = args.beta1
         self.beta2 = args.beta2
 
-        if args.dataset.lower() == 'occupancy_grid_data_driven_twodoors':
-            self.nc = 3
-            self.decoder_dist = 'gaussian'
-        elif args.dataset.lower() == 'test_occupancy_grid_data_driven_twodoors':
-            self.nc = 3
-            self.decoder_dist = 'gaussian'
-        else:
-            raise NotImplementedError
-
         if args.model == 'H':
             net = BetaVAE_H
         elif args.model == 'B':
@@ -112,7 +96,7 @@ class Solver(object):
             raise NotImplementedError('only support model H or B')
 
         # optimizer for rendering room image
-        self.net = cuda(net(self.z_dim, self.nc), self.use_cuda)
+        self.net = cuda(net(self.z_dim), self.use_cuda)
         self.optim = optim.Adam(self.net.parameters(), lr=self.lr,
                                     betas=(self.beta1, self.beta2))
         
@@ -128,7 +112,7 @@ class Solver(object):
             self.viz = visdom.Visdom(port=self.viz_port)
 
         # load checkpoint if any
-        self.ckpt_dir = os.path.join(args.ckpt_dir, args.viz_name)
+        self.ckpt_dir = args.ckpt_dir
         if not os.path.exists(self.ckpt_dir):
             os.makedirs(self.ckpt_dir, exist_ok=True)
         self.ckpt_name = args.ckpt_name
@@ -136,7 +120,7 @@ class Solver(object):
             self.load_checkpoint(self.ckpt_name)
 
         self.save_output = args.save_output
-        self.output_dir = os.path.join(args.output_dir, args.viz_name)
+        self.output_dir = os.path.join(self.ckpt_dir, args.output_dir)
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
 
@@ -157,13 +141,11 @@ class Solver(object):
         self.ckpt_name_og = args.ckpt_name_og
 
         # whether to train occupancy grid or room 
-        self.train = args.train
-        if not self.train:
-            self.BetaVAE_OG = cuda(BetaVAE_OG(self.net.encoder,self.z_dim, self.nc), self.use_cuda)
-        #print(list(self.net.encoder.parameters()))
+        if 'ddp' in args.mode:
+            self.BetaVAE_OG = cuda(BetaVAE_OG(self.net.encoder,self.z_dim),
+                                   self.use_cuda)
 
     def train_OG(self):
-        out = False
         pbar = tqdm(total=self.max_iter)
         pbar.update(self.og_iter)
         file_path = os.path.join(self.ckpt_dir, self.ckpt_name)
@@ -173,30 +155,36 @@ class Solver(object):
         # load checkpoint for occupancy grid if any
         self.load_checkpoint_occupancygrid(self.ckpt_name_og)
         
-        # train decoder parameters only
-        #occupancy_grid_optimizer = optim.Adam(filter(lambda p: p.requires_grad, self.BetaVAE_OG.parameters()), lr=self.lr,
-        #                            betas=(self.beta1, self.beta2))
-        occupancy_grid_optimizer = optim.Adam(self.BetaVAE_OG.decoder.parameters(), lr=self.lr,
-                                    betas=(self.beta1, self.beta2))
-        while not out:
+        occupancy_grid_optimizer = optim.Adam(self.BetaVAE_OG.decoder.parameters(),
+                                              lr=self.lr,
+                                              betas=(self.beta1, self.beta2))
+
+        finished =  self.og_iter >= self.max_iter
+        while not finished:
             for x,path in self.data_loader:
+                # are we done?
+                finished =  self.og_iter >= self.max_iter
+                if finished:
+                    break
                 self.og_iter += 1
                 pbar.update(1)
                 x = Variable(cuda(x, self.use_cuda))
                 z_recon, mu, logvar = self.BetaVAE_OG(x)
                 og_true_batch = []
-                for occupancy_grid_path in path:
-                       with open(os.path.join(occupancy_grid_path.replace('/render.png',''),'og.json'),'r') as f:
-                              og_true = torch.FloatTensor(json.load(f)).unsqueeze(0)
-                              og_true_batch.append(og_true)
-                           
-                og_true_batch = torch.stack(og_true_batch,dim = 0) #tensor of dimension [batch_size, channel = 1, room_height, room_width]
+                for trial_path in path:
+                    _path = trial_path.replace('render.png','og.json')
+                    with open(_path,'r') as f:
+                        og_true = torch.FloatTensor(json.load(f)).unsqueeze(0)
+                        og_true_batch.append(og_true)
+
+                #tensor of dimension [batch_size, channel = 1, room_height, room_width]
+                og_true_batch = torch.stack(og_true_batch,dim = 0)
 
                 occupancy_grid_distance = l2_distance(og_true_batch.cuda(),z_recon)
                 occupancy_grid_optimizer.zero_grad()
                 occupancy_grid_distance.backward()
                 occupancy_grid_optimizer.step()
-              
+
                 if self.og_iter%self.display_step == 0:
                     pbar.write('[{}] occupancy_grid_distance:{:.3f}'.format(
                         self.og_iter, occupancy_grid_distance.item()))
@@ -206,34 +194,30 @@ class Solver(object):
                     self.save_checkpoint_occupancygrid(str(self.ckpt_name_og))
                     pbar.write('Saved checkpoint(iter:{})'.format(self.og_iter))
 
-                if self.og_iter >= self.max_iter:
-                    out = True 
-                    break
 
 
     def test_OG(self):
         file_path_og = os.path.join(self.ckpt_dir, self.ckpt_name_og)
         checkpoint_og = torch.load(file_path_og)
         self.load_checkpoint_occupancygrid(self.ckpt_name_og)
-        #self.BetaVAE_OG.decoder.load_state_dict(checkpoint_og['model_states']['net'])
 
         for x,path in self.data_loader:
-                self.test_og_iter += 1
-                x = Variable(cuda(x, self.use_cuda))
-                z_recon, mu, logvar = self.BetaVAE_OG(x)
-                og_true_batch = []
-                for occupancy_grid_path in path:
-                       with open(os.path.join(occupancy_grid_path.replace('/render.png',''),'og.json'),'r') as f:
-                              og_true = torch.FloatTensor(json.load(f)).unsqueeze(0)
-                              og_true_batch.append(og_true)
-                og_true_batch = torch.stack(og_true_batch,dim = 0)
-                self.reconstructed_z(og_true_batch,z_recon)
+            self.test_og_iter += 1
+            x = Variable(cuda(x, self.use_cuda))
+            z_recon, mu, logvar = self.BetaVAE_OG(x)
+            og_true_batch = []
+            for trial_path in path:
+                _path = trial_path.replace('render.png','og.json')
+                with open(_path,'r') as f:
+                    og_true = torch.FloatTensor(json.load(f)).unsqueeze(0)
+                    og_true_batch.append(og_true)
+            og_true_batch = torch.stack(og_true_batch,dim = 0)
+            self.reconstructed_z(og_true_batch,z_recon)
 
     def test_vae(self):
         file_path = os.path.join(self.ckpt_dir, self.ckpt_name)
         checkpoint = torch.load(file_path)
         self.net.load_state_dict(checkpoint['model_states']['net'])
-        #print(list(self.net.encoder.parameters()))
         print("checkpoint loaded for testing")
 
         for x,path in self.data_loader: 
@@ -248,17 +232,22 @@ class Solver(object):
     def train_vae(self):
         self.net_mode(train=True)
         self.C_max = Variable(cuda(torch.FloatTensor([self.C_max]), self.use_cuda))
-        out = False
         pbar = tqdm(total=self.max_iter)
         pbar.update(self.global_iter)
 
-        while not out:
+        finished =  self.global_iter >= self.max_iter
+        while not finished:
             for x,path in self.data_loader:
+                # are we done?
+                finished =  self.global_iter >= self.max_iter
+                if finished:
+                    break
+
                 self.global_iter += 1
                 pbar.update(1)
                 x = Variable(cuda(x, self.use_cuda))
                 x_recon, mu, logvar = self.net(x)
-                recon_loss = reconstruction_loss(x, x_recon, self.decoder_dist)
+                recon_loss = reconstruction_loss(x, x_recon)
                 total_kld, dim_wise_kld, mean_kld = kl_divergence(mu, logvar)
 
                 if self.objective == 'H':
@@ -273,9 +262,9 @@ class Solver(object):
 
                 if self.viz_on and self.global_iter%self.gather_step == 0:
                     self.gather.insert(iter=self.global_iter,
-                                       mu=mu.mean(0).data, var=logvar.exp().mean(0).data,
-                                       recon_loss=recon_loss.data, total_kld=total_kld.data,
-                                       dim_wise_kld=dim_wise_kld.data, mean_kld=mean_kld.data)
+                                        mu=mu.mean(0).data, var=logvar.exp().mean(0).data,
+                                        recon_loss=recon_loss.data, total_kld=total_kld.data,
+                                        dim_wise_kld=dim_wise_kld.data, mean_kld=mean_kld.data)
 
                 if self.global_iter%self.display_step == 0:
                     pbar.write('[{}] recon_loss:{:.3f} total_kld:{:.3f} mean_kld:{:.3f}'.format(
@@ -299,46 +288,42 @@ class Solver(object):
                         self.gather.flush()
 
                 if self.global_iter%self.save_step == 0:
-                    #self.save_checkpoint('last')
-                    self.save_checkpoint(str(self.ckpt_name))
+                    self.save_checkpoint(self.ckpt_name)
                     pbar.write('Saved checkpoint(iter:{})'.format(self.global_iter))
 
-                if self.global_iter%50000 == 0:
-                    self.save_checkpoint(str(self.global_iter))
 
-                if self.global_iter >= self.max_iter:
-                    out = True
-                    break
+        self.save_checkpoint(self.ckpt_name)
+        pbar.write('Saved checkpoint(iter:{})'.format(self.global_iter))
 
         pbar.write("[Training Finished]")
         pbar.close()
 
     def reconstructed_image(self):
         #self.net_mode(train=False)
-        output_dir = os.path.join(self.output_dir, str(self.global_iter)+str(self.model)+"image_test_twodoors")
+        output_dir = 'model_{0!s}_iter_{1:d}_reconstruction'.format(self.model,
+                                                                    self.global_iter)
+        output_dir = os.path.join(self.output_dir, output_dir)
         os.makedirs(output_dir, exist_ok=True)
         x = self.gather.data['images'][0][:100]
         x = make_grid(x, normalize=True)
         x_recon = self.gather.data['images'][1][:100]
         x_recon = make_grid(x_recon, normalize=True)
         images = torch.stack([x, x_recon], dim=0).cpu()
-        #images = x_recon.cpu()
         inv_transform = transforms.Resize((480, 720))
         images = inv_transform(images)
         save_image(tensor=images,
                       fp=os.path.join(output_dir, '{}.jpg'.format(self.test_iter)),
                                nrow=8, pad_value=1)
-        #self.net_mode(train=True)
 
     def reconstructed_z(self,og_true_batch,z_recon):
-        output_dir = os.path.join(self.output_dir, str(self.max_iter)+str(self.model)+"OG_test_twodoors")
+        output_dir = 'model_{0!s}_iter_{1:d}_ddp'.format(self.model,
+                                                         self.global_iter)
+        output_dir = os.path.join(self.output_dir, output_dir)
         os.makedirs(output_dir, exist_ok=True)
         inv_transform = transforms.Resize((480, 720))
         og_true_image = make_grid(og_true_batch.cuda(), normalize=True)
         z_recon_image = make_grid(z_recon, normalize=True)
         images = torch.stack([og_true_image,z_recon_image],dim = 0).cpu()
-        #images = z_recon_image.cpu()
-        #images = og_true_image.cpu()
         images = inv_transform(images)
         save_image(tensor=images,
                       fp=os.path.join(output_dir, '{}.jpg'.format(self.test_og_iter)),
