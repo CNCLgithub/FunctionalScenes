@@ -9,8 +9,7 @@ if [ -z "$project_dir" -a "$project_dir" != " " ]; then
     printf "\tNo project directory provided, using %s" "${project_dir}"
 fi
 
-cp "${sconfig_dir}/templates/*.sh" "${project_dir}/"
-cp "${sconfig_dir}/templates/*.conf" "${project_dir}/"
+cp ${sconfig_dir}/templates/* "${project_dir}/"
 printf "(\xE2\x9C\x94) Initializing config files\n"
 
 # chmod +x "$project_dir/*.sh"
