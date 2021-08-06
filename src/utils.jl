@@ -77,3 +77,43 @@ function up_scale_inds(src::CartesianIndices{2}, dest::CartesianIndices{2},
     dest_l = LinearIndices(dest)
     dest_l[(src[v] - offset) * factor .+ kern]
 end
+
+
+function refine_space(state, params)
+    lower_dims = size(state)
+    upper_dims = level_dims(params, next_lvl)
+    kernel_dims = Int64.(upper_dims ./ lower_dims)
+
+    lower_ref = CartesianIndices(lower_dims) # dimensions of coarse state
+    kernel_ref = CartesianIndices(kernel_dims) # dimensions of coarse state
+
+    upper_lref = LinearIndices(upper_dims)
+    lower_lref = LinearIndices(lower_dims)
+    kernel_lref = LinearIndices(kernel_dims)
+
+    kp = prod(kernel_dims) # number of elements in kernel
+
+    # iterate over coarse state kernel
+    next_state = zeros(T, upper_dims)
+    for lower in lower_ref
+        # map together kernel steps
+        i = lower_lref[lower]
+        c = CartesianIndex((Tuple(lower) .- (1, 1)) .* kernel_dims)
+        # @show c
+        # iterate over scalars for each kernel sweep
+        _sum = 0.
+        for inner in kernel_ref
+            # @show inner
+            j = kernel_lref[inner] # index of inner
+            idx = c + inner # cart index in refined space
+            if j < kp # still retreiving from prop
+                val = @read(u[:outer => i => :inner => j => :x],
+                            :continuous)
+                _sum += val
+            else # solving for the final value
+                val = state[lower] * kp - _sum
+            end
+            next_state[idx] = val
+        end
+    end
+end

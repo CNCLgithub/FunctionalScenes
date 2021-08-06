@@ -1,17 +1,25 @@
 export split_merge_proposal, split_merge_involution
 
-@gen function refinement_step(t::Int64, temp::Float64, n::Int64, upper::Float64)
-    u = min(upper, temp)
-    l = max(0.0, temp - upper*(n - t))
-    x = {:x} ~ uniform(l, u)
-    return temp - x
+@gen function refinement_step(i::Int64,
+                              temp::Float64,
+                              n::Int64,
+                              upper_bound::Float64)
+    hi = min(upper_bound, temp)
+    lo = max(0.0, temp - upper_bound*(n - i))
+    u_i = {:u} ~ uniform(lo, hi)
+    return temp - u_i
 end
 
-@gen function refine_kernel(mu::Float64, kdim::Tuple, upper::Float64)
+@gen function refine_kernel(mu::Float64,
+                            kdim::Tuple,
+                            upper_bound::Float64)
     n = prod(kdim)
     k = n - 1
     temp = mu * n
-    {:inner} ~ Gen.Unfold(refinement_step)(k, temp, n, upper)
+    {:inner} ~ Gen.Unfold(refinement_step)(k,
+                                           temp,
+                                           n,
+                                           upper_bound)
 end
 
 @gen function split_merge_proposal(trace, tracker)
@@ -34,9 +42,6 @@ end
         {:outer} ~ Gen.Map(refine_kernel)(state, kdim, upper_bounds)
     end
 end
-
-
-epsilon = 1E-10
 
 @transform split_merge_involution (t, u) to (t_prime, u_prime) begin
 

@@ -20,7 +20,9 @@ function average_path_length(g, s, e; n = 5)
 end
 
 function build_subpath(g::AbstractGraph, gd::Array{Int64}, v)::Vector{Int64}
-    path = @>> g nv zeros BitVector
+    # initialize a bit vector (`falses`) for each tile being on a
+    # shortest path to the entrance
+    path = @>> g nv falses
     build_subpath!(path, g, gd, v)
     findall(path)
 end
@@ -34,28 +36,24 @@ function build_subpath!(path::BitVector, g::AbstractGraph{T}, gd::Array{T}, v::T
     # add neighbors that are 1 unit closer to the src
     path[v] = 1
     d_next = gd[v] - 1
+
     subpath = @>> v begin
         neighbors(g)
         # only consider new tiles that are 1 unit closer
         filter(x -> !path[x] && gd[x] == d_next)
-        collect(Int64)
-    end
-
-    # left fold
-    # terminates once `subpath` is empty due to reaching src
-    @>> subpath begin
+        # left fold
+        # terminates once `subpath` is empty due to reaching src
         foreach(x -> build_subpath!(path, g, gd, x))
     end
-
-    return nothing
+    nothing
 end
 
 function all_shortest_paths(r::Room)
     all_shortest_paths(pathgraph(r), entrance(r), exits(r))
 end
 
-function all_shortest_paths(g::AbstractGraph, start::Tile, stop::Tile)
-end
+# function all_shortest_paths(g::AbstractGraph, start::Tile, stop::Tile)
+# end
 
 function all_shortest_paths(g::AbstractGraph{T}, start::Vector{T},
                             stop::Vector{T}) where {T}
