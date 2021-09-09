@@ -36,11 +36,9 @@ end
 
 include("utils.jl")
 include("dists.jl")
-include("room.jl")
-include("furniture.jl")
+include("rooms/room.jl")
 include("gm/gm.jl")
 include("blender/blender.jl")
-include("paths.jl")
 include("inference/inference.jl")
 
 #################################################################################

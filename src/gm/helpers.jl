@@ -131,6 +131,10 @@ function tracker_prior_args(params::ModelParams)
     (_params, tids)
 end
 
+"""
+Returns a matrix of tuples with each element describing the bounds
+for occupancy within a given cell of the tracker state
+"""
 function level_prior(params::ModelParams, tid::Int64, lvl::Int64)
     @unpack base, tracker_ps = params
     d = level_dims(params, lvl)
@@ -395,15 +399,6 @@ function template_from_room(r::Room)
     clear_room(r)
 end
 
-
-function batch_og(tr::Gen.Trace)
-    @>> get_retval(tr) begin
-        last
-        collect(Room)
-        map(x -> occupancy_grid(x, sigma = 0.0, decay = 0.0))
-        mean
-    end
-end
 
 function batch_compare_og(og_a, og_b)
     wsd(og_a, og_b)

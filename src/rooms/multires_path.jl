@@ -1,8 +1,55 @@
-using LightGraphs, MetaGraphs, SimpleWeightedGraphs
-using Profile, StatProfilerHTML
+using SimpleWeightedGraphs
+
+export a_star_path
+
+
+function a_star_path(r::Room, trackers)
+
+    tracker_nvs = map(length, trackers)
+    tracker_dims = map(size, trackers)
+    g = merge(trackers, tracker_nvs, tracker_dims)
+
+    total_vs = sum(tracker_nvs)
+    bs = vcat(trackers...)
+    edge_mx = repeat(bs'; outer = (total_vs, 1))
+
+    ent = @>> r entrance first
+    ext = @>> r exits first
+    a_star_path(g, edge_mx, ent, ext)
+end
+
+# after merge, apply a* algorithm to find the shortest path
+function a_star_path(g::SimpleWeightedGraph{Int64, Float64},
+                     bernweight::Matrix{Float64},
+                     ent::Int64, ext::Int64)
+    dist_mx = bernweight .* weights(g)
+    g = MetaGraph(g)
+    a_star(g, ent, ext, dist_mx)
+end
+
+# function that implement column merge and row merge together
+# pass in the matrix of trackers
+function merge(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
+               nvs::Matrix{Int64}, dims::Matrix{Int64})
+
+    @assert !isempty(trackers) "Tracker matrix is empty"
+
+    total_row, total_column = size(nvs)
+    # swap column and row merge
+    columns = Vector{SimpleWeightedGraph{Int64, Float64}}(undef,
+                                                          total_column)
+    # TODO: can we use @simb?
+    @inbounds for i = 1:total_column
+        columns[i] = merge_by_column(trackers[:, i])
+    end
+
+    rowmerge = merge_by_firstrow(columns,nvs,dims)
+    total_row === 1 && return rowmerge
+    merge_by_row(rowmerge, nvs, dims, total_column, total_row)
+    rowmerge
+end
 
 # first step: join by column
-
 # join every tracker within the column in sequence
 function merge_by_column(column::Vector{SimpleWeightedGraph{Int64, Float64}})
     dim = map(x -> floor(Int64,sqrt(nv(x))),column)
@@ -25,7 +72,6 @@ function merge_by_column!(up::SimpleWeightedGraph{Int64, Float64},
 end 
 
 # second step: join by first row
-
 # join the columns by their first row in sequence
 function merge_by_firstrow(columns::Vector{SimpleWeightedGraph{Int64, Float64}}, 
                            nvs::Matrix{Int64}, dims::Matrix{Int64})
@@ -59,14 +105,13 @@ function merge_by_row(graph::SimpleWeightedGraph{Int64, Float64},
         rightdim = dims[row_ind, (col_ind+1)]
         left_ind_k = sum(nvs[:,1:(col_ind-1)]) + sum(nvs[1:row_ind, col_ind]) - leftdim
         left_ind = collect((1 + left_ind_k):(leftdim + left_ind_k))
-        right_ind_k = sum(nvs[:,1:col_ind]) + sum(nvs[1:(row_ind-1),1:(col_ind+1)])
+        right_ind_k = sum(nvs[:,1:col_ind]) + sum(nvs[1:(row_ind-1),(col_ind+1)])
         right_ind = collect((1 + right_ind_k):(rightdim + right_ind_k))
         index_merge!(graph,left_ind,right_ind)
     end
 end
 
 # Helper function
-
 # add edges given index
 function index_merge!(graph::SimpleWeightedGraph{Int64, Float64},ind1::Vector{Int64},
                       ind2::Vector{Int64};
@@ -90,71 +135,44 @@ function index_merge!(graph::SimpleWeightedGraph{Int64, Float64},ind1::Vector{In
         end
     end
     graph
-end   
+end
 
-# function that implement column merge and row merge together
-# pass in the matrix of trackers
-function merge(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
-               nvs::Matrix{Int64}, dims::Matrix{Int64})
 
-    @assert !isempty(trackers) "Tracker matrix is empty"
+function transform(path_nodes::Vector{Int64},
 
-    total_row, total_column = size(nvs)
-    # swap column and row merge
-    columns = Vector{SimpleWeightedGraph{Int64, Float64}}(undef,
-                                                          total_column)
-    # TODO: can we use @simb?
-    @inbounds for i = 1:total_column
-        columns[i] = merge_by_column(trackers[:, i])
+
+end
+
+# transform to cartesian indexes x and y
+function transform(path_nodes::Vector{Int64},
+                   tracker_sizes::Vector{Int64},
+                   tracker_dims::Vector{Int64},
+                   room_dim::Tuple{Int64, Int64};
+                   scale::Int64 = 6)
+    nvs_sum = cumsum(tracker_sizes)
+    src_len = length(path_nodes)
+    row_axis = Vector{Float64}(undef,src_len)
+    col_axis = Vector{Float64}(undef,src_len)
+
+    @inbounds for i in 1:src_len
+        ind = path_nodes[i] .- nvs_sum
+        tracker_ind= floor(Int64, findfirst(y->y<=0,ind)) - 1 # start from 0
+        within_ind = floor(Int64, path_nodes[i] - sum(tracker_sizes[1:tracker_ind])) - 1 # start from 0
+        row_start = scale * floor(Int64,tracker_ind/nrow)
+        col_start = scale * floor(Int64,mod(tracker_ind,nrow))
+
+        tracker_dim = tracker_dims[(tracker_ind+1)]
+
+        # upper-left index of the partition within tracker (transform to starting index of 1)
+        row_within_start = floor(Int64,within_ind/tracker_dim) * scale/tracker_dim + 1
+        col_within_start = mod(within_ind,tracker_dim) * scale/tracker_dim  + 1
+
+        # get to the center position of the partition within the tracker
+        row_within = row_within_start + 0.5* (scale/tracker_dim-1)
+        col_within = col_within_start + 0.5* (scale/tracker_dim-1)
+
+        row_axis[i] = row_start + row_within
+        col_axis[i] = col_start + col_within
     end
-
-    total_row === 1 && return columns
-    rowmerge = merge_by_firstrow(columns,nvs,dims)
-    merge_by_row(rowmerge, nvs, dims, total_column, total_row)
-    rowmerge
+    return [row_axis,col_axis]
 end
-
-# planning graph type
-const PathGraph = SimpleWeightedGraph{Int64, Float64}
-
-# after merge, apply a* algorithm to find the shortest path
-function a_star_path(g::PathGraph, bernweight::Matrix{Float64},
-                     ent::Int64, ext::Int64)
-    dist_mx = bernweight .* weights(g)
-    g = MetaGraph(g)
-    a_star(g, ent, ext, dist_mx)
-end
-
-#test
-m1 = SimpleWeightedGraph(grid([6,6]),1.0)
-m2 = SimpleWeightedGraph(grid([3,3]),2.0)
-m3 = SimpleWeightedGraph(grid([1,1]),6.0)
-m4 = SimpleWeightedGraph(grid([1,1]),6.0)
-m5 = SimpleWeightedGraph(grid([6,6]),1.0)
-m6 = SimpleWeightedGraph(grid([6,6]),1.0)
-
-nvs = [[36,9,1]  [1,36,36]]
-dims = [[6,3,1] [1,6,6]]
-
-
-Profile.clear()
-# Profile.init()
-Profile.init(; n = 10^8, delay = 1E-9)
- @profilehtml merge([[m1,m2,m3] [m4,m5,m6]],nvs,dims)
- @profilehtml merge([[m1,m2,m3] [m4,m5,m6]],nvs,dims)
- g = merge([[m1,m2,m3] [m4,m5,m6]],nvs,dims)
-
-# assume the following bernoulli weights
-# distance between source and destination depend on the weighted average of funiture probability between source and desc vertices
-b = rand(Float64, sum(nvs))
-bernweight = ones(sum(nvs),sum(nvs))
-nvs_b = [fill(1.0,36);fill(2.0,9);fill(6.0,1);fill(6.0,1);fill(1.0,36);fill(1.0,36)]
-@inbounds for i in 1:sum(nvs), j in 1:sum(nvs)
-    bernweight[i,j] = (b[i]*nvs_b[i] + b[j]*nvs_b[j])/(nvs_b[i]+nvs_b[j]) #weighted average
-end
-
-#display(size(merge_by_column([m1,m2])))
-#dist_mx = bernweight .* weights(g)
-#display(enumerate_paths(dijkstra_shortest_paths(g, 1, dist_mx),119))
-#display(a_star(MetaGraph(g),1,119,dist_mx))
-display(a_star_path(g,bernweight,1,119))

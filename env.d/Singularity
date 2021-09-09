@@ -53,8 +53,8 @@ from: nvidia/cuda:11.1-cudnn8-devel-ubuntu18.04
     chmod +x /blender/blender
 
     # Set up Julia
-    JULIA_VER="1.5.2"
-    wget "https://julialang-s3.julialang.org/bin/linux/x64/1.5/julia-${JULIA_VER}-linux-x86_64.tar.gz"
+    JULIA_VER="1.6.2"
+    wget "https://julialang-s3.julialang.org/bin/linux/x64/1.6/julia-${JULIA_VER}-linux-x86_64.tar.gz"
     tar -xzf "julia-${JULIA_VER}-linux-x86_64.tar.gz"
     mv "julia-${JULIA_VER}" "/julia"
     chmod +x /julia/bin/*

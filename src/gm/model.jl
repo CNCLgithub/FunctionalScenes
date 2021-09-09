@@ -15,7 +15,8 @@ end
 #################################################################################
 
 """
-Sample a level and tiles for a tracker
+Sample a level and tiles for a tracker.
+Here `state` is a mxm matrix of bernoulli weights
 """
 @gen (static) function tracker_prior(params::ModelParams, tid::Int64)
     level = {:level} ~ categorical(params.level_weights)
@@ -43,6 +44,7 @@ end
 @gen (static) function model(params::ModelParams)
     # initialize trackers
     (prior_args, tids) = tracker_prior_args(params)
+    # a matrix of trackers
     states = {:trackers} ~ Gen.Map(tracker_prior)(prior_args, tids)
 
     # a global room matrix
@@ -51,11 +53,11 @@ end
 
     # empirical estimation of multigranular predictions
     room_instances = {:instances} ~ Gen.Map(room_from_state)(gs, ps)
-    result = (global_state, room_instances)
 
     # mean and variance of observation
     viz = graphics_from_instances(room_instances, params)
     pred = @trace(broadcasted_normal(viz[1], viz[2]), :viz)
 
+    result = (states, global_state, room_instances)
     return result
 end

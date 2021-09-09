@@ -27,7 +27,7 @@ examples:
 #################################################################################
 # Variable declarations
 #################################################################################
-cont_pull_url=""
+cont_pull_url="https://yale.box.com/shared/static/934sa3kkcl63aj0nwzmqwxtw25efgpj8.sif"
 SING="${SENV[sing]}"
 BUILD="${SENV[envd]}/${SENV[def]}"
 cont_dest="${SENV[envd]}/${SENV[cont]}"
