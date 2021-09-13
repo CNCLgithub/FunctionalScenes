@@ -1,21 +1,23 @@
 using SimpleWeightedGraphs
 
-export a_star_path
+export a_star_paths, transforms
 
 
-function a_star_path(r::Room, trackers)
-
-    tracker_nvs = map(length, trackers)
-    tracker_dims = map(size, trackers)
+function a_star_paths(r::Room, trackers::Matrix{SimpleWeightedGraph{Int64, Float64}})
+    #tracker_nvs = map(length, trackers)
+    #tracker_dims = map(size, trackers)
+    tracker_nvs = map(nv, trackers)
+    tracker_dims = map(x -> round(Int64,sqrt(nv(x))), trackers)
     g = merge(trackers, tracker_nvs, tracker_dims)
-
+    
     total_vs = sum(tracker_nvs)
-    bs = vcat(trackers...)
+    #bs = vcat(trackers...)
+    bs = rand(Float64, total_vs)
     edge_mx = repeat(bs'; outer = (total_vs, 1))
 
     ent = @>> r entrance first
     ext = @>> r exits first
-    a_star_path(g, edge_mx, ent, ext)
+    return a_star_path(g, edge_mx, ent, ext)
 end
 
 # after merge, apply a* algorithm to find the shortest path
@@ -34,10 +36,12 @@ function merge(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
 
     @assert !isempty(trackers) "Tracker matrix is empty"
 
+    #print(nvs)
     total_row, total_column = size(nvs)
     # swap column and row merge
     columns = Vector{SimpleWeightedGraph{Int64, Float64}}(undef,
                                                           total_column)
+ 
     # TODO: can we use @simb?
     @inbounds for i = 1:total_column
         columns[i] = merge_by_column(trackers[:, i])
@@ -52,7 +56,8 @@ end
 # first step: join by column
 # join every tracker within the column in sequence
 function merge_by_column(column::Vector{SimpleWeightedGraph{Int64, Float64}})
-    dim = map(x -> floor(Int64,sqrt(nv(x))),column)
+    #dim = map(x -> floor(Int64,sqrt(nv(x))),column)
+    dim = map(x -> round(Int64, sqrt(nv(x))), column)
     num = size(column,1)
     num === 1 && return column[1]
     merge_by_column!(merge_by_column(column[1:(num-1)]),
@@ -124,12 +129,14 @@ function index_merge!(graph::SimpleWeightedGraph{Int64, Float64},ind1::Vector{In
         end
     elseif dim1 > dim2
         # for each node in dim2, it is linked to multiple nodes in dim1
-        num_nodes = floor(Int64, dim1 / dim2)
+        #num_nodes = floor(Int64, dim1 / dim2)
+	num_nodes = round(Int64, dim1 / dim2)
         @inbounds for k = 1:dim2, j = ((k-1)*num_nodes+1):k*num_nodes
             add_edge!(graph, ind1[j],ind2[k], weight_numerator/dim2)
         end
     else
-        num_nodes = floor(Int64, dim2 / dim1)
+        #num_nodes = floor(Int64, dim2 / dim1)
+	num_nodes = round(Int64, dim2 / dim1)
         @inbounds for k = 1:dim1, j in ((k-1)*num_nodes+1):k*num_nodes
             add_edge!(graph, ind1[k],ind2[j],weight_numerator/dim1)
         end
@@ -138,12 +145,13 @@ function index_merge!(graph::SimpleWeightedGraph{Int64, Float64},ind1::Vector{In
 end
 
 
-function transform(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}}
+function transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
 		   path_nodes::Vector{Int64}, scale::Int64 = 6)
 	
     # size and dimension for each tracker
     tracker_sizes = vec(map(nv,trackers))
     tracker_dims = map(x -> floor(Int64, sqrt(x)), tracker_sizes)
+    #tracker_dims = map(x ->round(Int64, sqrt(x)), tracker_sizes)
     nrow = size(trackers)[1]
 
     nvs_sum = cumsum(tracker_sizes)

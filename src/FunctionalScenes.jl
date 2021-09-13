@@ -36,7 +36,7 @@ end
 
 include("utils.jl")
 include("dists.jl")
-include("rooms/room.jl")
+include("rooms/rooms.jl")
 include("gm/gm.jl")
 include("blender/blender.jl")
 include("inference/inference.jl")
