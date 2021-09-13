@@ -138,9 +138,40 @@ function index_merge!(graph::SimpleWeightedGraph{Int64, Float64},ind1::Vector{In
 end
 
 
-function transform(path_nodes::Vector{Int64},
+function transform(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}}
+		   path_nodes::Vector{Int64}, scale::Int64 = 6)
+	
+    # size and dimension for each tracker
+    tracker_sizes = vec(map(nv,trackers))
+    tracker_dims = map(x -> floor(Int64, sqrt(x)), tracker_sizes)
+    nrow = size(trackers)[1]
 
+    nvs_sum = cumsum(tracker_sizes)
+    src_len = length(path_nodes)
+    row_axis = Vector{Float64}(undef,src_len)
+    col_axis = Vector{Float64}(undef,src_len)
 
+    @inbounds for i in 1:src_len
+        ind = path_nodes[i] .- nvs_sum
+        tracker_ind= floor(Int64, findfirst(y->y<=0,ind)) - 1 # start from 0
+        within_ind = floor(Int64, path_nodes[i] - sum(tracker_sizes[1:tracker_ind])) - 1 # start from 0
+        row_start = scale * floor(Int64,tracker_ind/nrow)
+        col_start = scale * floor(Int64,mod(tracker_ind,nrow))
+
+        tracker_dim = tracker_dims[(tracker_ind+1)]
+
+        # upper-left index of the partition within tracker (transform to starting index of 1)
+        row_within_start = floor(Int64,within_ind/tracker_dim) * scale/tracker_dim + 1
+        col_within_start = mod(within_ind,tracker_dim) * scale/tracker_dim  + 1
+
+        # get to the center position of the partition within the tracker
+        row_within = row_within_start + 0.5* (scale/tracker_dim-1)
+        col_within = col_within_start + 0.5* (scale/tracker_dim-1)
+
+        row_axis[i] = row_start + row_within
+        col_axis[i] = col_start + col_within
+    end
+    return [row_axis,col_axis]
 end
 
 # transform to cartesian indexes x and y
