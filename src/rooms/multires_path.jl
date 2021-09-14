@@ -17,7 +17,10 @@ function a_star_paths(r::Room, trackers::Matrix{SimpleWeightedGraph{Int64, Float
 
     ent = @>> r entrance first
     ext = @>> r exits first
-    return a_star_path(g, edge_mx, ent, ext)
+
+    tracker_ent = inv_transforms(trackers, ent)
+    tracker_ext = inv_transforms(trackers, ext)
+    a_star_path(g, edge_mx, tracker_ent, tracker_ext)
 end
 
 # after merge, apply a* algorithm to find the shortest path
@@ -26,7 +29,9 @@ function a_star_path(g::SimpleWeightedGraph{Int64, Float64},
                      ent::Int64, ext::Int64)
     dist_mx = bernweight .* weights(g)
     g = MetaGraph(g)
-    a_star(g, ent, ext, dist_mx)
+    paths = a_star(g, ent, ext, dist_mx)
+    nodes = [map(src,paths); ext]
+    return nodes
 end
 
 # function that implement column merge and row merge together
@@ -144,14 +149,45 @@ function index_merge!(graph::SimpleWeightedGraph{Int64, Float64},ind1::Vector{In
     graph
 end
 
+# inverse-transform function from cartesian index to tracker index for entrance and destination
+function inv_transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}}, 
+                        node_ind::Int64, scale::Int64 = 6)
+
+    # size and dimension for each tracker
+    tracker_sizes = map(nv,trackers)
+    tracker_dims = map(x -> round(Int64, sqrt(x)), tracker_sizes)
+    nrow = size(trackers)[1]
+    
+    # transformation from cartesian to tracker index
+    col_ind = div((node_ind-1),(nrow * scale)) + 1 # start from index 1
+    row_ind = node_ind - nrow * scale * (col_ind - 1) # start from index 1
+    tracker_col_ind  = div((col_ind - 1), scale) + 1 # start from index 1
+    tracker_row_ind  = div((row_ind - 1), scale) + 1 # start from index 1
+    within_col_ind = (col_ind - 1) - scale * (tracker_col_ind - 1) + 1 # start from index 1
+    within_row_ind = (row_ind - 1) - scale * (tracker_row_ind - 1) + 1 # start from index 1
+    
+    # find the position within tracker
+    tracker_dim = tracker_dims[tracker_row_ind, tracker_col_ind]
+    tracker_within_col_ind = div((within_col_ind - 1), scale/tracker_dim) + 1 
+    tracker_within_row_ind = div((within_row_ind - 1), scale/tracker_dim) + 1  
+
+    # starting point for new index
+    starting_col_ind = sum(tracker_sizes[:,1:(tracker_col_ind-1)])
+    starting_row_ind = sum(tracker_sizes[1:(tracker_row_ind-1),tracker_col_ind])
+    starting_ind = starting_col_ind + starting_row_ind
+
+    # extra index within the tracker
+    extra_ind = tracker_dim * (tracker_within_col_ind - 1) + tracker_within_row_ind
+    new_ind = round(Int64, starting_ind + extra_ind)
+    return new_ind
+end
 
 function transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
 		   path_nodes::Vector{Int64}, scale::Int64 = 6)
 	
     # size and dimension for each tracker
     tracker_sizes = vec(map(nv,trackers))
-    tracker_dims = map(x -> floor(Int64, sqrt(x)), tracker_sizes)
-    #tracker_dims = map(x ->round(Int64, sqrt(x)), tracker_sizes)
+    tracker_dims = map(x -> round(Int64, sqrt(x)), tracker_sizes)
     nrow = size(trackers)[1]
 
     nvs_sum = cumsum(tracker_sizes)
@@ -161,15 +197,15 @@ function transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
 
     @inbounds for i in 1:src_len
         ind = path_nodes[i] .- nvs_sum
-        tracker_ind= floor(Int64, findfirst(y->y<=0,ind)) - 1 # start from 0
-        within_ind = floor(Int64, path_nodes[i] - sum(tracker_sizes[1:tracker_ind])) - 1 # start from 0
-        row_start = scale * floor(Int64,tracker_ind/nrow)
-        col_start = scale * floor(Int64,mod(tracker_ind,nrow))
+        tracker_ind= round(Int64, findfirst(y->y<=0,ind)) - 1 # start from 0
+        within_ind = round(Int64, path_nodes[i] - sum(tracker_sizes[1:tracker_ind])) - 1 # start from 0
+        row_start = scale * round(Int64,tracker_ind/nrow)
+        col_start = scale * round(Int64,mod(tracker_ind,nrow))
 
         tracker_dim = tracker_dims[(tracker_ind+1)]
 
         # upper-left index of the partition within tracker (transform to starting index of 1)
-        row_within_start = floor(Int64,within_ind/tracker_dim) * scale/tracker_dim + 1
+        row_within_start = round(Int64,within_ind/tracker_dim) * scale/tracker_dim + 1
         col_within_start = mod(within_ind,tracker_dim) * scale/tracker_dim  + 1
 
         # get to the center position of the partition within the tracker
@@ -179,7 +215,7 @@ function transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
         row_axis[i] = row_start + row_within
         col_axis[i] = col_start + col_within
     end
-    return [row_axis,col_axis]
+    hcat(row_axis,col_axis)
 end
 
 # transform to cartesian indexes x and y
@@ -213,5 +249,5 @@ function transform(path_nodes::Vector{Int64},
         row_axis[i] = row_start + row_within
         col_axis[i] = col_start + col_within
     end
-    return [row_axis,col_axis]
+    hcat(row_axis,col_axis)
 end

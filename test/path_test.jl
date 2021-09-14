@@ -1,6 +1,7 @@
 using FunctionalScenes
 using LightGraphs,SimpleWeightedGraphs
-#using Lazy: @>, @>>, lazymap, flatten
+using Distances
+using OptimalTransport
 
 import  FunctionalScenes:a_star_paths,transforms
  
@@ -20,12 +21,12 @@ end
 
 
 #function test()
-template_room = Room((18,12), (18,12), [9], [210])
+template_room = Room((18,12), (18,12), [1], [210])
 desc = exits(template_room)
 
 trackers_a = generate_trackers(template_room)
 trackers_b = generate_trackers(template_room)
-display(trackers_a)
+#display(trackers_a)
 
 #tracker_nvs = map(nv, trackers_a)
 #tracker_dims = map(x -> round(Int64,sqrt(nv(x))), trackers_a)
@@ -36,26 +37,28 @@ display(trackers_a)
 paths_a = a_star_paths(template_room, trackers_a)
 paths_b = a_star_paths(template_room, trackers_b)
 #display(paths_a)
-src_node = map(x -> src(x),paths_a)
-#points_a = transforms(trackers_a, src_node)
-#points_b = transform(template_room, trackers_b, src(paths_b))
-display(src_node)
+
+points_a = transforms(trackers_a, paths_a)
+points_b = transforms(trackers_b, paths_b)
+#display(points_a)
 
 # distance matrix
-#dm = pairwise(norm,eachrow(points_a),eachrow(points_b))
+dm = pairwise(Euclidean(), points_a, points_b, dims = 1)
+#display(dm)
 
 # number of vertices in paths
-#na = size(points_a,1)
-#nb = size(points_b,1)
+na = size(points_a,1)
+nb = size(points_b,1)
 
 # discrete measures
-#measure_a = fill(1.0/na,na)
-#measure_b = fill(1.0/nb,nb)
+measure_a = fill(1.0/na,na)
+measure_b = fill(1.0/nb,nb)
 λ = 1.0
 ε = 0.01
 
-#ot = sinkhorn_unbalanced(measure_a, measure_b, dm, λ, λ, ε)
-#d = sum(ot .* dm)
+ot = sinkhorn_unbalanced(measure_a, measure_b, dm, λ, λ, ε)
+d = sum(ot .* dm)
+display(d)
 
 
 #end
