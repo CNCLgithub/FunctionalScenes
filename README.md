@@ -3,6 +3,7 @@
 
 ## Setup and running
 
+1. Clone. Also don't forget submodules (`git submodule update --init --recursive`)
 1. Run `./setup.sh cont_build python julia` to build the container and setup enviroment
 2. Enter `./run.sh julia` to get into Julia REPL
 

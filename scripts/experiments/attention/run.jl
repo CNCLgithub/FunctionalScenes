@@ -140,7 +140,9 @@ function main(cmd)
     model_params = first(query.args)
     proc = FunctionalScenes.proc_from_params(room, model_params,
                                              args[att_mode]["params"],
-                                             args["vae"], args["ddp"];)
+                                             args["vae"], args["ddp"];
+                                             objective = multires_path,
+                                             distance = sinkhorn_div)
 
     try
         isdir(base_path) || mkpath(base_path)

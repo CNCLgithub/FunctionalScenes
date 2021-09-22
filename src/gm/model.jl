@@ -58,6 +58,8 @@ end
     viz = graphics_from_instances(room_instances, params)
     pred = @trace(broadcasted_normal(viz[1], viz[2]), :viz)
 
-    result = (states, global_state, room_instances)
+    result = (collect(Matrix{Float64}, states), # tracker matrix
+              global_state, # room matrix (for rendering?)
+              room_instances) # empirical distribution
     return result
 end
