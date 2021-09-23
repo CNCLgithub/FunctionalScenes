@@ -1,25 +1,40 @@
 using SimpleWeightedGraphs
 
-export a_star_paths, transforms
+export a_star_paths, transforms, trackers_tograph
 
+function trackers_tograph(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
+    trackers_row, trackers_col = size(trackers)
+    trackers_graphs = Matrix{SimpleWeightedGraph{Int64, Float64}}(undef, trackers_row, trackers_col)
+    @inbounds for col_ind = 1:trackers_col, row_ind = 1:trackers_row
+        tracker_dim = size(trackers[row_ind, col_ind])[1]
+        trackers_graphs[row_ind,col_ind] = SimpleWeightedGraph(grid([tracker_dim,tracker_dim]),scale/tracker_dim)
+    end
+    return trackers_graphs
+end
 
-function a_star_paths(r::Room, trackers::Matrix{SimpleWeightedGraph{Int64, Float64}})
-    #tracker_nvs = map(length, trackers)
-    #tracker_dims = map(size, trackers)
-    tracker_nvs = map(nv, trackers)
-    tracker_dims = map(x -> round(Int64,sqrt(nv(x))), trackers)
-    g = merge(trackers, tracker_nvs, tracker_dims)
+function a_star_paths(r::Room, trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
+    trackers_row = round(Int64,steps(r)[1] * 1/scale)
+    trackers_col = round(Int64,steps(r)[2] * 1/scale)
+    trackers_graphs = trackers_tograph(trackers)
+    trackers_weights = Vector{Float64}()
+
+    @inbounds for col_ind = 1:trackers_col, row_ind = 1:trackers_row
+            tracker_dim = size(trackers[row_ind, col_ind])[1]
+            trackers_weights = [trackers_weights; vec(trackers[row_ind, col_ind])]
+    end
+
+    tracker_nvs = map(nv, trackers_graphs)
+    tracker_dims = map(x -> round(Int64,sqrt(nv(x))), trackers_graphs)
+    g = merge(trackers_graphs, tracker_nvs, tracker_dims)
     
     total_vs = sum(tracker_nvs)
-    #bs = vcat(trackers...)
-    bs = rand(Float64, total_vs)
-    edge_mx = repeat(bs'; outer = (total_vs, 1))
+    edge_mx = repeat(trackers_weights'; outer = (total_vs, 1))
 
     ent = @>> r entrance first
     ext = @>> r exits first
+    tracker_ent = inv_transforms(trackers_graphs, ent)
+    tracker_ext = inv_transforms(trackers_graphs, ext)
 
-    tracker_ent = inv_transforms(trackers, ent)
-    tracker_ext = inv_transforms(trackers, ext)
     a_star_path(g, edge_mx, tracker_ent, tracker_ext)
 end
 
@@ -184,7 +199,7 @@ end
 
 function transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
 		   path_nodes::Vector{Int64}, scale::Int64 = 6)
-	
+    	
     # size and dimension for each tracker
     tracker_sizes = vec(map(nv,trackers))
     tracker_dims = map(x -> round(Int64, sqrt(x)), tracker_sizes)
@@ -199,13 +214,13 @@ function transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
         ind = path_nodes[i] .- nvs_sum
         tracker_ind= round(Int64, findfirst(y->y<=0,ind)) - 1 # start from 0
         within_ind = round(Int64, path_nodes[i] - sum(tracker_sizes[1:tracker_ind])) - 1 # start from 0
-        row_start = scale * round(Int64,tracker_ind/nrow)
+        row_start = scale * fld(tracker_ind,nrow)
         col_start = scale * round(Int64,mod(tracker_ind,nrow))
 
         tracker_dim = tracker_dims[(tracker_ind+1)]
 
         # upper-left index of the partition within tracker (transform to starting index of 1)
-        row_within_start = round(Int64,within_ind/tracker_dim) * scale/tracker_dim + 1
+        row_within_start = fld(within_ind,tracker_dim) * scale/tracker_dim + 1
         col_within_start = mod(within_ind,tracker_dim) * scale/tracker_dim  + 1
 
         # get to the center position of the partition within the tracker
@@ -231,7 +246,7 @@ function transform(path_nodes::Vector{Int64},
 
     @inbounds for i in 1:src_len
         ind = path_nodes[i] .- nvs_sum
-        tracker_ind= floor(Int64, findfirst(y->y<=0,ind)) - 1 # start from 0
+        tracker_ind = floor(Int64, findfirst(y->y<=0,ind)) - 1 # start from 0
         within_ind = floor(Int64, path_nodes[i] - sum(tracker_sizes[1:tracker_ind])) - 1 # start from 0
         row_start = scale * floor(Int64,tracker_ind/nrow)
         col_start = scale * floor(Int64,mod(tracker_ind,nrow))
