@@ -3,8 +3,6 @@ using LightGraphs,SimpleWeightedGraphs
 using Distances
 using OptimalTransport
 using Plots
-#using UnicodePlots
-#using PlotlyJS
 
 import  FunctionalScenes:a_star_paths,transforms
  
@@ -47,7 +45,7 @@ end
 
 
 #function test()
-template_room = Room((18,12), (18,12), [1], [210])
+template_room = Room((18,12), (18,12), [1], [216])
 desc = exits(template_room)
 
 trackers_a = generate_trackers(template_room)
@@ -57,7 +55,6 @@ trackers_b = generate_trackers(template_room)
 #tracker_dims = map(x -> round(Int64,sqrt(nv(x))), trackers_a)
 #display(tracker_nvs)
 #display(tracker_dims)
-#display(merge(trackers_a, tracker_nvs, tracker_dims))
 
 paths_a = a_star_paths(template_room, trackers_a)
 paths_b = a_star_paths(template_room, trackers_b)
@@ -67,7 +64,7 @@ display(trackers_tograph(trackers_a))
 
 points_a = transforms(trackers_tograph(trackers_a), paths_a)
 points_b = transforms(trackers_tograph(trackers_b), paths_b)
-display(points_a)
+#display(points_a)
 
 # distance matrix
 dm = pairwise(Euclidean(), points_a, points_b, dims = 1)
@@ -85,27 +82,50 @@ measure_b = fill(1.0/nb,nb)
 
 ot = sinkhorn_unbalanced(measure_a, measure_b, dm, λ, λ, ε)
 d = sum(ot .* dm)
-display(d)
+display(ot)
 #end
 
-gg = bern_plots(trackers_a)
-display(gg)
+ga = bern_plots(trackers_a)
+gb = bern_plots(trackers_b)
 row_axis_a = points_a[:,1]
 col_axis_a = points_a[:,2]
 row_axis_b = points_b[:,1]
 col_axis_b = points_b[:,2]
 
-#plot_ref = heatmap(1:1:13,1:1:19, gg, size=(600,900))
-#pgfplotsx()
-#plotly(ticks=:native)  
-#pyplot() 
 plotly()
-plot_ref = heatmap(1:1:12, 1:1:18, gg, color = :Greys_9,size=(900,600)) 
-scatter!(row_axis_a, col_axis_a, legend=false)
-plot!(row_axis_a, col_axis_a, legend=false)
-scatter!(row_axis_b, col_axis_b, legend=false)
-plot!(row_axis_b, col_axis_b, legend=false)
+plot_a = heatmap(1:1:12, 1:1:18, ga, color = :Greys_9,size=(600,900)) 
+scatter!(row_axis_a, col_axis_a, legend = false)
+plot!(row_axis_a, col_axis_a, legend = false)
 scatter!([row_axis_a[1],row_axis_a[na]],[col_axis_a[1],col_axis_a[na]], legend=false)
-savefig(plot_ref,"test/test_fig/fig_a.png")
 
+plot_b = heatmap(1:1:12, 1:1:18, gb, color = :Greys_9,size=(600,900), legend = false)
+scatter!(row_axis_b, col_axis_b, legend = false)
+plot!(row_axis_b, col_axis_b, legend = false)
+scatter!([row_axis_b[1],row_axis_b[nb]],[col_axis_b[1],col_axis_b[nb]], legend=false)
 
+plot_ref = plot(plot_a, plot_b, layout = (1, 2), legend = false)
+savefig(plot_ref,"test/test_fig/fig.png")
+
+#collect(eachrow(points_a))
+sinkhorn_plot = heatmap(
+    collect(1:na),
+    collect(1:nb),
+    ot';
+    title="Entropically regularised optimal transport",
+    titlefont=font(10,"Computer Modern"),
+    size=(na*30,nb*30),
+    xlabel="path_a",ylabel= "path_b"
+)
+
+cost_plot = heatmap(
+    collect(1:na),
+    collect(1:nb),
+    dm';
+    title="Cost Matrix",
+    titlefont=font(10,"Computer Modern"),
+    size=(na*30,nb*30),
+    xlabel="path_a",ylabel= "path_b"
+)
+
+savefig(sinkhorn_plot,"test/test_fig/sinkhorn_plot.png")
+savefig(cost_plot,"test/test_fig/cost_plot.png")
