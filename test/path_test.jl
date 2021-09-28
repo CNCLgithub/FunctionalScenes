@@ -21,6 +21,8 @@ function generate_trackers(room::Room, scale::Int64 = 6, dims::Vector{Int64} = [
 	return trackers
 end
 
+# transform every tracker to 6*6 matrix for heatmap visualization
+# TODO: generalize this function if the scale is not 6
 function bern_plots(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
         tracker_row, tracker_col = size(trackers)
         bern_weights = Matrix{Float64}(undef, tracker_row * scale, tracker_col * scale)
@@ -33,8 +35,10 @@ function bern_plots(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
                col_endind = scale * col_ind
 
                if size(tracker)[1] == 3
+                      # for each element in 3*3 matrix, turn it into a 2*2 matrix
                       bern_weights[row_startind:row_endind, col_startind:col_endind] = repeat(tracker, inner = (2,2), outer = (1,1))
                elseif size(tracker)[1] == 1
+                      # turn this float into a 6*6 matrix 
                       bern_weights[row_startind:row_endind, col_startind:col_endind]  = reshape(repeat(tracker,36),(6,6))
                else 
                       bern_weights[row_startind:row_endind, col_startind:col_endind]  = tracker
@@ -53,18 +57,12 @@ trackers_b = generate_trackers(template_room)
 
 #tracker_nvs = map(nv, trackers_a)
 #tracker_dims = map(x -> round(Int64,sqrt(nv(x))), trackers_a)
-#display(tracker_nvs)
-#display(tracker_dims)
 
 paths_a = a_star_paths(template_room, trackers_a)
 paths_b = a_star_paths(template_room, trackers_b)
-display(paths_a)
-
-display(trackers_tograph(trackers_a))
 
 points_a = transforms(trackers_tograph(trackers_a), paths_a)
 points_b = transforms(trackers_tograph(trackers_b), paths_b)
-#display(points_a)
 
 # distance matrix
 dm = pairwise(Euclidean(), points_a, points_b, dims = 1)
@@ -92,6 +90,7 @@ col_axis_a = points_a[:,2]
 row_axis_b = points_b[:,1]
 col_axis_b = points_b[:,2]
 
+# plots for multi-res path
 plotly()
 plot_a = heatmap(1:1:12, 1:1:18, ga, color = :Greys_9,size=(600,900)) 
 scatter!(row_axis_a, col_axis_a, legend = false)
@@ -106,7 +105,7 @@ scatter!([row_axis_b[1],row_axis_b[nb]],[col_axis_b[1],col_axis_b[nb]], legend=f
 plot_ref = plot(plot_a, plot_b, layout = (1, 2), legend = false)
 savefig(plot_ref,"test/test_fig/fig.png")
 
-#collect(eachrow(points_a))
+# plots for sinkhorn and cost matrix
 sinkhorn_plot = heatmap(
     collect(1:na),
     collect(1:nb),

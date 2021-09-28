@@ -2,6 +2,7 @@ using SimpleWeightedGraphs
 
 export a_star_paths, transforms, trackers_tograph
 
+# convert matrix of matrices of floats (Bernoulli weights for each tracker) to matrix of matrices of SimpleWeightedGraph
 function trackers_tograph(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
     trackers_row, trackers_col = size(trackers)
     trackers_graphs = Matrix{SimpleWeightedGraph{Int64, Float64}}(undef, trackers_row, trackers_col)
@@ -137,7 +138,7 @@ function merge_by_row(graph::SimpleWeightedGraph{Int64, Float64},
 end
 
 # Helper function
-# add edges given index
+# add edges between given indices
 function index_merge!(graph::SimpleWeightedGraph{Int64, Float64},ind1::Vector{Int64},
                       ind2::Vector{Int64};
                       weight_numerator::Int64 = 6)
@@ -233,36 +234,3 @@ function transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
     hcat(row_axis,col_axis)
 end
 
-# transform to cartesian indexes x and y
-function transform(path_nodes::Vector{Int64},
-                   tracker_sizes::Vector{Int64},
-                   tracker_dims::Vector{Int64},
-                   room_dim::Tuple{Int64, Int64};
-                   scale::Int64 = 6)
-    nvs_sum = cumsum(tracker_sizes)
-    src_len = length(path_nodes)
-    row_axis = Vector{Float64}(undef,src_len)
-    col_axis = Vector{Float64}(undef,src_len)
-
-    @inbounds for i in 1:src_len
-        ind = path_nodes[i] .- nvs_sum
-        tracker_ind = floor(Int64, findfirst(y->y<=0,ind)) - 1 # start from 0
-        within_ind = floor(Int64, path_nodes[i] - sum(tracker_sizes[1:tracker_ind])) - 1 # start from 0
-        row_start = scale * floor(Int64,tracker_ind/nrow)
-        col_start = scale * floor(Int64,mod(tracker_ind,nrow))
-
-        tracker_dim = tracker_dims[(tracker_ind+1)]
-
-        # upper-left index of the partition within tracker (transform to starting index of 1)
-        row_within_start = floor(Int64,within_ind/tracker_dim) * scale/tracker_dim + 1
-        col_within_start = mod(within_ind,tracker_dim) * scale/tracker_dim  + 1
-
-        # get to the center position of the partition within the tracker
-        row_within = row_within_start + 0.5* (scale/tracker_dim-1)
-        col_within = col_within_start + 0.5* (scale/tracker_dim-1)
-
-        row_axis[i] = row_start + row_within
-        col_axis[i] = col_start + col_within
-    end
-    hcat(row_axis,col_axis)
-end
