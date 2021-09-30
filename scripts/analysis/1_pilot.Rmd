@@ -20,7 +20,7 @@ header-includes:
 ```{r global-options, include=FALSE}
 knitr::opts_chunk$set(fig.pos = 'H', 
                       echo=TRUE, warning=FALSE, message=FALSE)
-knitr::opts_knit$set(root.dir = '~/output/experiments/')
+knitr::opts_knit$set(root.dir = '~/env.d/spaths/experiments/')
 
 ```
 
@@ -48,9 +48,9 @@ library(gghighcontrast)
 
 ```{r load}
 
-exp_name = "1_exit_22x40_doors"
+exp_name = "1_exit_22x40_doors_rep"
 
-parsed_trials <- read_csv("~/output/experiments/1_exit_22x40_doors/parsed_trials.csv") %>%
+parsed_trials <- read_csv("~/env.d/spaths/experiments/1_exit_22x40_doors_rep/parsed_trials.csv") %>%
     mutate(resp_same = Response == "j",
          correct = !xor(base, resp_same)) %>%
   # trying to remove extra responses at the end
@@ -71,7 +71,7 @@ exp_data <- read_csv("~/output/scenes/1_exit_22x40_doors.csv") %>%
   rename(scene = id) %>%
   left_join(gaps, by = c("scene"))
 
-covariates <- read_csv("~/output/experiments/1_exit_22x40_doors/covariates.csv") %>%
+covariates <- read_csv("~/env.d/spaths/experiments/1_exit_22x40_doors_rep/covariates.csv") %>%
   rename(scene = id) %>%
   mutate(summed_cycles = base_cycles_furniture + move_cycles_furniture,
          summed_cycles_total = base_cycles_total + move_cycles_total,
@@ -101,8 +101,8 @@ subject_performance <- hr_by_subj %>%
 # passed_subjects <- subject_performance
 passed_subjects <- subject_performance %>%
   # filter(hr >= 1.75 * fp)
-  filter(hr > 2.0 * fp, n == 64)
-  # filter(n == 64)
+  # filter(hr > 2.0 * fp, n == 64)
+  filter(n == 64)
 
 good_data <- passed_subjects %>%
   left_join(parsed_trials)
@@ -236,8 +236,8 @@ diff_in_path %>%
 ```
 
 ```{r}
-bar_fig1_df <- data.frame(mu = c(0.3713235	,0.4301471),
-                          std_err = c(0.0296, 0.0238),
+bar_fig1_df <- data.frame(mu = c(0.29375		,0.40625),
+                          std_err = c(0.04707953, 0.02976301),
                           x = factor(c("No Difference", "Difference"))) %>%
   mutate(conf.low = mu - std_err,
          conf.high = mu + std_err)

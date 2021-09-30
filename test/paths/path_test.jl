@@ -7,18 +7,18 @@ using Plots
 import  FunctionalScenes:a_star_paths,transforms
  
 function generate_trackers(room::Room, scale::Int64 = 6, dims::Vector{Int64} = [1,3,6])
-	tracker_row = floor(Int64,steps(room)[1] * 1/scale)
-	tracker_col = floor(Int64,steps(room)[2] * 1/scale)
-	#trackers = Matrix{SimpleWeightedGraph{Int64, Float64}}(undef,tracker_row,tracker_col)
+    tracker_row = floor(Int64,steps(room)[1] * 1/scale)
+    tracker_col = floor(Int64,steps(room)[2] * 1/scale)
+    #trackers = Matrix{SimpleWeightedGraph{Int64, Float64}}(undef,tracker_row,tracker_col)
         trackers = Matrix{Matrix{Float64}}(undef,tracker_row,tracker_col)
 
-	@inbounds for col_ind = 1:tracker_col, row_ind = 1:tracker_row
-		tracker_dim = rand(dims)
-		tracker_weight = rand(Float64,tracker_dim^2)
-		#trackers[row_ind,col_ind] = SimpleWeightedGraph(grid([tracker_dim,tracker_dim]),scale/tracker_dim) 
-	        trackers[row_ind,col_ind] = reshape(tracker_weight, (tracker_dim, tracker_dim)) 
+    @inbounds for col_ind = 1:tracker_col, row_ind = 1:tracker_row
+        tracker_dim = rand(dims)
+        tracker_weight = rand(Float64,tracker_dim^2)
+        #trackers[row_ind,col_ind] = SimpleWeightedGraph(grid([tracker_dim,tracker_dim]),scale/tracker_dim)
+            trackers[row_ind,col_ind] = reshape(tracker_weight, (tracker_dim, tracker_dim))
         end
-	return trackers
+    return trackers
 end
 
 # transform every tracker to 6*6 matrix for heatmap visualization
@@ -31,7 +31,7 @@ function bern_plots(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
                tracker = trackers[row_ind,col_ind]
                row_startind = 1 + scale * (row_ind - 1)
                row_endind = scale * row_ind
-	       col_startind = 1 + scale * (col_ind - 1)
+           col_startind = 1 + scale * (col_ind - 1)
                col_endind = scale * col_ind
 
                if size(tracker)[1] == 3

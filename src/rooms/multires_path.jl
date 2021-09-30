@@ -17,11 +17,19 @@ function a_star_paths(r::Room, trackers::Matrix{Matrix{Float64}}, scale::Int64 =
     trackers_row = round(Int64,steps(r)[1] * 1/scale)
     trackers_col = round(Int64,steps(r)[2] * 1/scale)
     trackers_graphs = trackers_tograph(trackers)
-    trackers_weights = Vector{Float64}()
 
-    @inbounds for col_ind = 1:trackers_col, row_ind = 1:trackers_row
-            tracker_dim = size(trackers[row_ind, col_ind])[1]
-            trackers_weights = [trackers_weights; vec(trackers[row_ind, col_ind])]
+    nw = @>> trackers begin
+        map(length)
+        sum
+    end
+    trackers_weights = Vector{Float64}(undef, nw)
+
+    # @inbounds for col_ind = 1:trackers_col, row_ind = 1:trackers_row
+    c = 0
+    @inbounds for i = 1:length(trackers)
+        nt = length(trackers[i])
+        trackers_weights[c:(c + nt)] = trackers[i]
+        c += nt
     end
 
     tracker_nvs = map(nv, trackers_graphs)
@@ -151,13 +159,13 @@ function index_merge!(graph::SimpleWeightedGraph{Int64, Float64},ind1::Vector{In
     elseif dim1 > dim2
         # for each node in dim2, it is linked to multiple nodes in dim1
         #num_nodes = floor(Int64, dim1 / dim2)
-	num_nodes = round(Int64, dim1 / dim2)
+    num_nodes = round(Int64, dim1 / dim2)
         @inbounds for k = 1:dim2, j = ((k-1)*num_nodes+1):k*num_nodes
             add_edge!(graph, ind1[j],ind2[k], weight_numerator/dim2)
         end
     else
         #num_nodes = floor(Int64, dim2 / dim1)
-	num_nodes = round(Int64, dim2 / dim1)
+    num_nodes = round(Int64, dim2 / dim1)
         @inbounds for k = 1:dim1, j in ((k-1)*num_nodes+1):k*num_nodes
             add_edge!(graph, ind1[k],ind2[j],weight_numerator/dim1)
         end
@@ -199,8 +207,8 @@ function inv_transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
 end
 
 function transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
-		   path_nodes::Vector{Int64}, scale::Int64 = 6)
-    	
+                    path_nodes::Vector{Int64}, scale::Int64 = 6)
+
     # size and dimension for each tracker
     tracker_sizes = vec(map(nv,trackers))
     tracker_dims = map(x -> round(Int64, sqrt(x)), tracker_sizes)

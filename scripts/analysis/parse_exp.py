@@ -108,7 +108,7 @@ def main():
                         help = 'Filename to dump parsed trial data')
     args = parser.parse_args()
 
-    exp_src = os.path.join('/experiments', args.exp)
+    exp_src = os.path.join('/spaths/experiments', args.exp)
     os.path.isdir(exp_src) or os.mkdir(args.exp)
 
     db = os.path.join(exp_src, 'participants.db')

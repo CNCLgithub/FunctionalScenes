@@ -31,7 +31,7 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
-mesh = load_objs_as_meshes(['/renders/test.obj'], device=device)
+mesh = load_objs_as_meshes(['/spaths/renders/cow.obj'], device=device)
 
 
 # Initialize a camera.
@@ -76,4 +76,4 @@ plt.figure(figsize=(10, 10))
 plt.imshow(images[0, ..., :3].cpu().numpy())
 plt.grid("off");
 plt.axis("off");
-plt.savefig('/renders/test.png')
+plt.savefig('/spaths/renders/test.png')

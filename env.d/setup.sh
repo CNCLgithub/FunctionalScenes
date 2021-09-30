@@ -62,7 +62,9 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
     python3.8 -m pip install --upgrade pip && \
     cd functional_scenes && poetry install" && \
     ./env.d/run.sh python3.8 -m pip install torch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 && \
-    ./env.d/run.sh python3.8 -m pip install -v git+https://github.com/facebookresearch/pytorch3d.git
+    ./env.d/run.sh curl -LO https://github.com/NVIDIA/cub/archive/1.10.0.tar.gz && \
+    ./env.d/run.sh tar xzf 1.10.0.tar.gz -C "${SENV[pyenv]}" && \
+    ./env.d/run.sh python3.8 -m pip install -v git+https://github.com/facebookresearch/pytorch3d.git@stable
 
 #################################################################################
 # Julia setup
@@ -78,14 +80,16 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
 #################################################################################
 [[ "${@}" =~ "datasets" ]] || [[ "${@}" =~ "datasets" ]] || \
     echo "Not touching datasets"
-[[ "${@}" =~ "all" ]] || [[ "${@}" =~ "datasets" ]] && echo "none yet"
-# [[ "${@}" =~ "all" ]] || [[ "${@}" =~ "datasets" ]] && \
-# echo "pulling datasets" && \
-# # fill in here
+[[ "${@}" =~ "all" ]] || [[ "${@}" =~ "datasets" ]] && \
+    echo "pulling datasets" && \
+    wget "https://yale.box.com/shared/static/6nfzj0i9wbhseduiy9n9kq53hiwdfd50.tar" \
+    -O "${SPATHS[datasets]}/alexnet_places365.pth.tar"
 
 [[ "${@}" =~ "checkpoints" ]] || [[ "${@}" =~ "checkpoints" ]] || \
     echo "Not touching checkpoints"
-[[ "${@}" =~ "all" ]] || [[ "${@}" =~ "checkpoints" ]] && echo "none yet"
-# [[ "${@}" =~ "all" ]] || [[ "${@}" =~ "checkpoints" ]] && \
-# echo "pulling checkpoints" && \
-# # fill in here
+[[ "${@}" =~ "all" ]] || [[ "${@}" =~ "checkpoints" ]] && \
+echo "pulling checkpoints" && \
+    wget "https://yale.box.com/shared/static/uxhtsdqfec28cu2tpbf8rtvkph16dhqz" \
+    -O "${SPATHS[checkpoints]}/ddp" && \
+    wget "https://yale.box.com/shared/static/cuwcgxk0b0o7h5jck35xbhmw80h8wm6v" \
+    -O "${SPATHS[checkpoints]}/vae"

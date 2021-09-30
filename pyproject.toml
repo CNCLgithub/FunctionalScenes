@@ -13,6 +13,7 @@ torch-intermediate-layer-getter = "^0.1.post1"
 matplotlib = "^3.3.3"
 ninja = "^1.10.0"
 slurm = {path = "deps/slurmpy"}
+plotly = "^5.3.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

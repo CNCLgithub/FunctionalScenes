@@ -126,8 +126,8 @@ end
 # TODO play with using `size(tracker_ref)`
 function tracker_prior_args(params::ModelParams)
     @unpack tracker_ref, n_trackers = params
-    _params = fill(params, n_trackers)
-    tids = collect(Int64, 1:n_trackers)
+    _params = fill(params, size(tracker_ref))
+    tids = collect(Int64, LinearIndices(tracker_ref))
     (_params, tids)
 end
 
@@ -471,6 +471,18 @@ end
 function clean_state(state::AbstractArray;
                      sigma = 1E-5)
     clamp.(state, sigma, 1.0 - sigma)
+end
+
+
+function package_scene_reps(gm::ModelParams, states, gs, instances)
+    clean_states = @>> states begin
+        map(last)
+        collect(Matrix{Float64})
+    end
+    clean_states = reshape(clean_states, size(gm.tracker_ref))
+    (clean_states, # tracker matrix
+     gs, # room matrix (for rendering?)
+     instances) # empirical distribution
 end
 
 # # stable softmax

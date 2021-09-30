@@ -22,17 +22,17 @@ end
 
  
 function generate_trackers(room::Room, scale::Int64 = 6, dims::Vector{Int64} = [1,3,6])
-	#tracker_col,tracker_row = map(x -> floor(Int64,x), steps(room).*1/scale)
-	tracker_col = floor(Int64,steps(room)[1] * 1/scale)
-	tracker_row = floor(Int64,steps(room)[2] * 1/scale)
-	trackers = Matrix{SimpleWeightedGraph{Int64, Float64}}(undef,tracker_col,tracker_row)
+    #tracker_col,tracker_row = map(x -> floor(Int64,x), steps(room).*1/scale)
+    tracker_col = floor(Int64,steps(room)[1] * 1/scale)
+    tracker_row = floor(Int64,steps(room)[2] * 1/scale)
+    trackers = Matrix{SimpleWeightedGraph{Int64, Float64}}(undef,tracker_col,tracker_row)
 
-	@inbounds for row_ind = 1:tracker_row, col_ind = 1:tracker_col
-		tracker_dim = rand(dims)
-		tracker_weight = rand(Float64,tracker_dim^2)
-		trackers[row_ind,col_ind] = SimpleWeightedGraph(grid([tracker_dim,tracker_dim]),scale/tracker_dim) 
-	end
-	return trackers
+    @inbounds for row_ind = 1:tracker_row, col_ind = 1:tracker_col
+        tracker_dim = rand(dims)
+        tracker_weight = rand(Float64,tracker_dim^2)
+        trackers[row_ind,col_ind] = SimpleWeightedGraph(grid([tracker_dim,tracker_dim]),scale/tracker_dim)
+    end
+    return trackers
 end
 
 

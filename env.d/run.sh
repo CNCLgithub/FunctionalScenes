@@ -24,7 +24,7 @@ examples:
     # Enter the Julia repl (if installed)
     ./env.d/run.sh julia
 "
-[ $# -eq 0 ] || [[ "${@}" =~ "help" ]] && echo "$usage" && exit 0
+[ $# -eq 0 ] && echo "$usage" && exit 0
 
 #################################################################################
 # Variable declarations
