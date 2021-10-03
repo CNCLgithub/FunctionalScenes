@@ -480,6 +480,8 @@ function package_scene_reps(gm::ModelParams, states, gs, instances)
         collect(Matrix{Float64})
     end
     clean_states = reshape(clean_states, size(gm.tracker_ref))
+    display(clean_states)
+
     (clean_states, # tracker matrix
      gs, # room matrix (for rendering?)
      instances) # empirical distribution

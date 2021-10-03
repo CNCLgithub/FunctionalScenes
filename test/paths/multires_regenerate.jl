@@ -1,7 +1,7 @@
 using Gen
 using FunctionalScenes
 using FunctionalScenes: select_from_model
-import  FunctionalScenes:a_star_paths,transforms
+import FunctionalScenes: a_star_paths,transforms, trackers_merge
 using LightGraphs,SimpleWeightedGraphs
 using Distances
 using OptimalTransport
@@ -33,14 +33,46 @@ function bern_plots(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
         end
         return bern_weights
 end
-function test()
+
+function div_weight(r::Room, trackers::Matrix{Matrix{Float64}}, 
+                    path_nodes::Vector{Int64}, scale::Int64 = 6)
+    trackers_row = fld(steps(r)[1], scale)
+    trackers_col = fld(steps(r)[2], scale)
+    trackers_graphs = trackers_tograph(trackers)
+    trackers_weights = Vector{Float64}()
+
+    @inbounds for col_ind = 1:trackers_col, row_ind = 1:trackers_row
+        trackers_weights = [trackers_weights; vec(trackers[row_ind, col_ind])]
+    end
+
+    tracker_nvs = map(nv, trackers_graphs)
+    tracker_dims = map(x -> round(Int64,sqrt(nv(x))), trackers_graphs)
+    g = trackers_merge(trackers_graphs, tracker_nvs, tracker_dims)
+
+    total_vs = sum(tracker_nvs)
+    edge_mx = repeat(trackers_weights'; outer = (total_vs, 1))
+    dist_mx = edge_mx .* weights(g)
+    
+    div_weight = Vector{Float64}(undef,length(path_nodes))
+    div_weight[1] = dist_mx[path_nodes[1], path_nodes[1]]
+    @inbounds for ind = 2:length(path_nodes)
+        div_weight[ind] = dist_mx[path_nodes[ind-1], path_nodes[ind]]
+    end
+    
+    normed_weight = div_weight .* 1/sum(div_weight)
+    return normed_weight
+end
+
+
+
+#function test()
 
     room_dims = (22,40)
     entrance = [11]
-    exits = [869]
+    exits = [640]
     r = Room(room_dims, room_dims, entrance, exits)
-    weights = ones(steps(r))
-    new_r = last(furniture_chain(10, r, weights))
+    weights_r = ones(steps(r))
+    new_r = last(furniture_chain(10, r, weights_r))
     params = ModelParams(;
                          gt = new_r,
                          dims = (6, 6),
@@ -99,8 +131,11 @@ function test()
     nb = size(points_b,1)
 
     # discrete measures
-    measure_a = fill(1.0/na,na)
-    measure_b = fill(1.0/nb,nb)
+    #measure_a = fill(1.0/na,na)
+    #measure_b = fill(1.0/nb,nb)
+    measure_a = div_weight(r, trackers_a, paths_a)
+    measure_b = div_weight(r, trackers_b, paths_b)
+    #display(measure_a)
     λ = 1.0
     ε = 0.01
 
@@ -115,21 +150,26 @@ function test()
     col_axis_a = points_a[:,2]
     row_axis_b = points_b[:,1]
     col_axis_b = points_b[:,2]
+    display(ga)
 
-
-    plotly()
-    plot_a = heatmap(1:1:12, 1:1:18, ga, color = :Greys_9,size=(600,900))
+    #pyplot()
+    plotlyjs()
+    plot_a = heatmap(1:1:36, 1:1:18, ga', color = :Greys_9,size=(900,450), legend = false)
     scatter!(row_axis_a, col_axis_a, legend = false)
     plot!(row_axis_a, col_axis_a, legend = false)
     scatter!([row_axis_a[1],row_axis_a[na]],[col_axis_a[1],col_axis_a[na]], legend=false)
+    savefig(plot_a,"test/paths/multires_a.png")
 
-    plot_b = heatmap(1:1:12, 1:1:18, gb, color = :Greys_9,size=(600,900), legend = false)
+
+    plot_b = heatmap(1:1:36, 1:1:18, gb', color = :Greys_9,size=(1800,900), legend = false)
     scatter!(row_axis_b, col_axis_b, legend = false)
     plot!(row_axis_b, col_axis_b, legend = false)
     scatter!([row_axis_b[1],row_axis_b[nb]],[col_axis_b[1],col_axis_b[nb]], legend=false)
 
-    plot_ref = plot(plot_a, plot_b, layout = (1, 2), legend = false)
-    savefig(plot_ref,"/project/test/paths/multires_regenerate.png")
-end
-
-test();
+    #Base.invokelatest(Plots.plot)
+    plot_ref = plot(plot_a, plot_b, layout = (2, 1), legend = false)
+    savefig(plot_ref,"test/paths/multires_regenerate.png")
+#end
+#savefig(test(),"test/paths/multires_regenerate.png")
+#pyplot()
+#test();

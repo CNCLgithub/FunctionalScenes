@@ -1,6 +1,6 @@
 using SimpleWeightedGraphs
 
-export a_star_paths, transforms, trackers_tograph
+export a_star_paths, transforms, trackers_tograph, trackers_merge
 
 # convert matrix of matrices of floats (Bernoulli weights for each tracker) to matrix of matrices of SimpleWeightedGraph
 function trackers_tograph(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
@@ -14,27 +14,31 @@ function trackers_tograph(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
 end
 
 function a_star_paths(r::Room, trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
-    trackers_row = round(Int64,steps(r)[1] * 1/scale)
-    trackers_col = round(Int64,steps(r)[2] * 1/scale)
+    trackers_row = fld(steps(r)[1], scale)
+    trackers_col = fld(steps(r)[2], scale)
     trackers_graphs = trackers_tograph(trackers)
+    trackers_weights = Vector{Float64}()  
+    display(trackers_row)
+    #nw = @>> trackers begin
+    #    map(length)
+    #    sum
+    #end
+    #trackers_weights = Vector{Float64}(undef, nw)
+    
+    @inbounds for col_ind = 1:trackers_col, row_ind = 1:trackers_row
+	trackers_weights = [trackers_weights; vec(trackers[row_ind, col_ind])]
+    end 
 
-    nw = @>> trackers begin
-        map(length)
-        sum
-    end
-    trackers_weights = Vector{Float64}(undef, nw)
-
-    # @inbounds for col_ind = 1:trackers_col, row_ind = 1:trackers_row
-    c = 0
-    @inbounds for i = 1:length(trackers)
-        nt = length(trackers[i])
-        trackers_weights[c:(c + nt)] = trackers[i]
-        c += nt
-    end
+    #c = 0
+    #@inbounds for i = 1:length(trackers)
+    #    nt = length(trackers[i])
+    #    trackers_weights[c:(c + nt)] = trackers[i]
+    #    c += nt
+    #end
 
     tracker_nvs = map(nv, trackers_graphs)
     tracker_dims = map(x -> round(Int64,sqrt(nv(x))), trackers_graphs)
-    g = merge(trackers_graphs, tracker_nvs, tracker_dims)
+    g = trackers_merge(trackers_graphs, tracker_nvs, tracker_dims)
     
     total_vs = sum(tracker_nvs)
     edge_mx = repeat(trackers_weights'; outer = (total_vs, 1))
@@ -60,7 +64,7 @@ end
 
 # function that implement column merge and row merge together
 # pass in the matrix of trackers
-function merge(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
+function trackers_merge(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
                nvs::Matrix{Int64}, dims::Matrix{Int64})
 
     @assert !isempty(trackers) "Tracker matrix is empty"
@@ -181,15 +185,17 @@ function inv_transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
     tracker_sizes = map(nv,trackers)
     tracker_dims = map(x -> round(Int64, sqrt(x)), tracker_sizes)
     nrow = size(trackers)[1]
+    display(tracker_dims)
     
     # transformation from cartesian to tracker index
-    col_ind = div((node_ind-1),(nrow * scale)) + 1 # start from index 1
+    col_ind = fld((node_ind-1),(nrow * scale)) + 1 # start from index 1
     row_ind = node_ind - nrow * scale * (col_ind - 1) # start from index 1
-    tracker_col_ind  = div((col_ind - 1), scale) + 1 # start from index 1
-    tracker_row_ind  = div((row_ind - 1), scale) + 1 # start from index 1
+    tracker_col_ind  = fld((col_ind - 1), scale) + 1 # start from index 1
+    tracker_row_ind  = fld((row_ind - 1), scale) + 1 # start from index 1
     within_col_ind = (col_ind - 1) - scale * (tracker_col_ind - 1) + 1 # start from index 1
     within_row_ind = (row_ind - 1) - scale * (tracker_row_ind - 1) + 1 # start from index 1
     
+    display(col_ind)    
     # find the position within tracker
     tracker_dim = tracker_dims[tracker_row_ind, tracker_col_ind]
     tracker_within_col_ind = div((within_col_ind - 1), scale/tracker_dim) + 1 

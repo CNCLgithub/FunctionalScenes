@@ -50,7 +50,8 @@ end
 
 #function test()
 template_room = Room((18,12), (18,12), [1], [216])
-desc = exits(template_room)
+#desc = exits(template_room)
+desc = 216
 
 trackers_a = generate_trackers(template_room)
 trackers_b = generate_trackers(template_room)
