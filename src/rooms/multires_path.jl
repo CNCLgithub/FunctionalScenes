@@ -13,9 +13,10 @@ function trackers_tograph(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
     return trackers_graphs
 end
 
-function a_star_paths(r::Room, trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
-    trackers_row = fld(steps(r)[1], scale)
-    trackers_col = fld(steps(r)[2], scale)
+function a_star_paths(r::Room, trackers::Matrix{Matrix{Float64}}, 
+    offset::CartesianIndex{2} = CartesianIndex(2, 2), scale::Int64 = 6)
+    offset = Tuple(offset) .* 2
+    trackers_row, trackers_col = map(x -> fld(x,scale), (steps(r).-offset))
     trackers_graphs = trackers_tograph(trackers)
     trackers_weights = Vector{Float64}()  
     display(trackers_row)

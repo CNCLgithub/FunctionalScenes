@@ -35,9 +35,13 @@ function bern_plots(trackers::Matrix{Matrix{Float64}}, scale::Int64 = 6)
 end
 
 function div_weight(r::Room, trackers::Matrix{Matrix{Float64}}, 
-                    path_nodes::Vector{Int64}, scale::Int64 = 6)
-    trackers_row = fld(steps(r)[1], scale)
-    trackers_col = fld(steps(r)[2], scale)
+                    path_nodes::Vector{Int64},
+                    offset::CartesianIndex{2} = CartesianIndex(2, 2),
+                    scale::Int64 = 6)
+    offset = Tuple(offset) .* 2
+    trackers_row, trackers_col = map(x->fld(x,scale),(steps(r).- offset))
+    #trackers_row = fld(steps(r)[1], scale)
+    #trackers_col = fld(steps(r)[2], scale)
     trackers_graphs = trackers_tograph(trackers)
     trackers_weights = Vector{Float64}()
 
@@ -71,6 +75,7 @@ end
     entrance = [11]
     exits = [640]
     r = Room(room_dims, room_dims, entrance, exits)
+    #offset =  CartesianIndex(2, 2)
     weights_r = ones(steps(r))
     new_r = last(furniture_chain(10, r, weights_r))
     params = ModelParams(;
@@ -158,8 +163,7 @@ end
     scatter!(row_axis_a, col_axis_a, legend = false)
     plot!(row_axis_a, col_axis_a, legend = false)
     scatter!([row_axis_a[1],row_axis_a[na]],[col_axis_a[1],col_axis_a[na]], legend=false)
-    savefig(plot_a,"test/paths/multires_a.png")
-
+    #savefig(plot_a,"test/paths/multires_a.png")
 
     plot_b = heatmap(1:1:36, 1:1:18, gb', color = :Greys_9,size=(1800,900), legend = false)
     scatter!(row_axis_b, col_axis_b, legend = false)
