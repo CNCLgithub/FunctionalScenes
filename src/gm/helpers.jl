@@ -150,7 +150,23 @@ function create_obs(params::ModelParams, r::Room)
     constraints
 end
 
+function gt_init_constraints!(cm::Gen.ChoiceMap, params::ModelParams, r::Room)
+    @unpack n_trackers, dims = params
+    state = occupancy_position(r)
+    # first column in room that has furniture
+    state_ref = CartesianIndices(steps(r))
+    constraints = Gen.choicemap()
+    state_ref = CartesianIndices((dims..., n_trackers))
+    for t = 1 : n_trackers
+        cm[:trackers => t => :level] = params.levels
+        vs = state_to_room(params, vec(state_ref[:, :, t]))
+        dat = reshape(state[vs], dims)
+        cm[:trackers => t => :state] = dat
+    end
+    return nothing
+end
 
+# TODO: refactor, shitty code
 function add_init_constraints!(cm::Gen.ChoiceMap, params::ModelParams, r::Room)
     @unpack n_trackers, instances = params
     state = occupancy_position(r)
@@ -235,7 +251,7 @@ end
 function viz_global_state(trace::Gen.Trace)
     params = first(get_args(trace))
     grid = zeros(steps(params.template))
-    state, _ = get_retval(trace)
+    _, state, _ = get_retval(trace)
     inds = project_state_weights(params, state)
     grid[inds] = state
 

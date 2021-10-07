@@ -186,8 +186,7 @@ function inv_transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
     tracker_sizes = map(nv,trackers)
     tracker_dims = map(x -> round(Int64, sqrt(x)), tracker_sizes)
     nrow = size(trackers)[1]
-    display(tracker_dims)
-    
+
     # transformation from cartesian to tracker index
     col_ind = fld((node_ind-1),(nrow * scale)) + 1 # start from index 1
     row_ind = node_ind - nrow * scale * (col_ind - 1) # start from index 1
@@ -196,7 +195,6 @@ function inv_transforms(trackers::Matrix{SimpleWeightedGraph{Int64, Float64}},
     within_col_ind = (col_ind - 1) - scale * (tracker_col_ind - 1) + 1 # start from index 1
     within_row_ind = (row_ind - 1) - scale * (tracker_row_ind - 1) + 1 # start from index 1
     
-    display(col_ind)    
     # find the position within tracker
     tracker_dim = tracker_dims[tracker_row_ind, tracker_col_ind]
     tracker_within_col_ind = div((within_col_ind - 1), scale/tracker_dim) + 1 
