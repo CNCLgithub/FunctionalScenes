@@ -17,7 +17,7 @@ using OptimalTransport
 using OrderedCollections
 using Parameters: @with_kw
 using Base.Iterators: take
-using Lazy: @>, @>>, lazymap, flatten
+using Lazy: @>, @>>
 
 #################################################################################
 # Runtime configuration
