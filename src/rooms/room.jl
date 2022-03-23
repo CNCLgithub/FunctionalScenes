@@ -1,167 +1,127 @@
-export Room, pathgraph, entrance, exits, bounds, steps, expand
+export GridRoom, pathgraph, entrance, exits, bounds, steps, expand
 
 #################################################################################
 # Type aliases
 #################################################################################
 
-# Floor tiles are vertices in a graph
-const Tile = Int64
 # Scenes contain a lattice graph over the paths in the room
-const PathGraph = MetaGraphs.MetaGraph{Int64, Float64}
+const PathGraph = SimpleWeightedGraph{Int64, Float64}
 
 
 #################################################################################
-# Room
+# GridRoom
 #################################################################################
 
-"""
-
-"""
-struct Room
+struct GridRoom <: Room
     steps::Tuple{Int64, Int64}
     bounds::Tuple{Float64, Float64}
-    entrance::Vector{Tile}
-    exits::Vector{Tile}
+    entrance::Vector{Int64}
+    exits::Vector{Int64}
     graph::PathGraph
+    data::Matrix{Tile}
 end
 
-pathgraph(r::Room) = r.graph
-bounds(r::Room) = r.bounds
-steps(r::Room) = r.steps
-entrance(r::Room) = r.entrance
-exits(r::Room) = r.exits
+pathgraph(r::GridRoom) = r.graph
+bounds(r::GridRoom) = r.bounds
+steps(r::GridRoom) = r.steps
+entrance(r::GridRoom) = r.entrance
+exits(r::GridRoom) = r.exits
 
 
 # helpers
 istype(g,v,t) = get_prop(g, v, :type) == t
 isfloor(g,v) = istype(g,v,:floor)
 iswall(g,v) = (length ∘ neighbors)(g, v) < 4
-matched_type(g, e::Edge) = get_prop(g, src(e), :type) ==
-    get_prop(g, dst(e), :type)
+matched_tile(d::Array{Tile}, e::Edge) = d[src(e)] == d[dst(e)]
+floor_edge(d::Array{Tile}, e::Edge) = (d[src(e)] == floor_tile) &&
+    (d[dst(e)] == floor_tile)
 wall_edge(g, e::Edge) = (get_prop(g, src(e), :type) == :wall) &&
     (get_prop(g, dst(e), :type) == :wall)
 
 
+function GridRoom(steps, bounds)
+    # initialize grid
+    g = PathGraph(grid(steps))
+    d = fill(floor_tile, steps)
+    GridRoom(steps, bounds, Int64[], Int64[], g, d)
+end
+
 """
 Builds a room given ...
 """
-function Room(steps::Tuple{T,T}, bounds::Tuple{G,G},
-              ent::Vector{T}, exs::Vector{T}) where {T<:Int, G<:Real}
-    # initialize grid
-    g = PathGraph(grid(steps))
+function GridRoom(steps, bounds, ent, exs)
 
-    # distinguish between walls and floor
-    @>> g vertices foreach(v -> set_prop!(g, v, :type,
-                                          iswall(g,v) ? :wall : :floor))
+    g = PathGraph(grid(steps))
+    d = fill(floor_tile, steps)
+
+    # add walls
+    d[:, 1] .= wall_tile
+    d[:, end] .= wall_tile
+    d[1, :] .= wall_tile
+    d[end, :] .= wall_tile
 
     # set entrances and exits
     # these are technically floors but are along the border
-    @>> ent foreach(v -> set_prop!(g, v, :type, :floor))
-    @>> exs foreach(v -> set_prop!(g, v, :type, :floor))
+    d[ent] .= floor_tile
+    d[exs] .= floor_tile
 
     # walls and non-walls cannot be connected
-    togo = @>> g edges collect filter(e -> !matched_type(g, e))
-    foreach(e -> rem_edge!(g, e), togo)
+    prune_edges!(g, d)
 
-    return Room(steps, bounds, ent, exs, g)
+    GridRoom(steps, bounds, ent, exs, g, d)
 end
 
 
-function expand(r::Room, factor::Int64)::Room
-    g = pathgraph(r)
-    s = Tuple(collect(steps(r)) .* factor)
-    rows, cols = s
-
-    # will copy properties and edges from `src`
-    new_g = MetaGraph(SimpleGraph(prod(s)))
-
-    # indices of src
-    src_c = CartesianIndices(steps(r))
-    # indices of dest
-    dest_c = CartesianIndices(s)
-    dest_l = LinearIndices(dest_c)
-    # mapping for src v -> dest vs
-    kern = CartesianIndices((1:factor, 1:factor))
-
-    # map for dest v -> src v
-    mp = @> g begin
-        vertices
-        # form m x n lattice of src
-        reshape(steps(r))
-        # scale up to dest
-        repeat(inner=(factor,factor))
+# TODO: Generalize?
+function prune_edges!(g, d)
+    @>> g begin
+        edges
+        collect
+        # filter(e -> !floor_edge(d, e))
+        filter(e -> !matched_tile(d, e))
+        foreach(e -> rem_edge!(g, e))
     end
+    return nothing
+end
 
-    for src in vertices(g)
-        # vs in dest that correspond to the same v in src
-        sister_vs = dest_l[src_c[src] .+ kern]
-        sister_vs = up_scale_inds(src_c, dest_c, factor, src)
+function expand(r::GridRoom, factor::Int64)::GridRoom
+    s = steps(r) .* factor
+    # "expand" by `factor`
+    sd = repeat(r.d, inner = (factor, factor))
+    sg = PathGraph(grid(s))
 
-        # neighbors of src mapped to potential neighbors in dest
-        src_ns = @>> neighbors(g, src) collect(Tile)
-        dest_n_candidates = up_scale_inds(src_c, dest_c, factor, src_ns)
+    prune_edges!(sg, sd)
 
-        for dest in sister_vs
-            # copy type
-            set_prop!(new_g, dest, :type,
-                    get_prop(g, src, :type))
-
-            # connect sister vs according to grid structure
-            dc = dest_c[dest]
-            for sv in sister_vs
-                svc = dest_c[sv]
-                # sister is either left,right,above,below
-                if !is_next_to(dc, svc)
-                    continue
-                end
-                add_edge!(new_g, Edge(dest, sv))
-            end
-
-            # connect to neighbhors from src
-            for sn in dest_n_candidates
-                snc = dest_c[sn]
-                if !is_next_to(dc, snc)
-                    continue
-                end
-                add_edge!(new_g, Edge(dest, sn))
-            end
-        end
-    end
-
+    cis = CartesianIndices(r.d)
+    slis = LinearIndicies(s)
+    sents = similar(r.entrance)
     # update entrances and exits
-    ent = @>> r begin
-        entrance
-        first
-        up_scale_inds(src_c, dest_c, factor)
-        x -> dest_l[x]
-        vec
+    @inbounds for (i, v) in enumerate(entrace(r))
+        sents[i] = slis[(cis[v] - unit_ci) * factor + unit_ci]
     end
-    exs = @>> r begin
-        exits
-        first
-        up_scale_inds(src_c, dest_c, factor)
-        x -> dest_l[x]
-        vec
+    sexits = similar(r.entrance)
+    @inbounds for (i, v) in enumerate(exits(r))
+        sexits[i] = slis[(cis[v] - unit_ci) * factor + unit_ci]
     end
-    Room(s, bounds(r) .* factor, ent, exs, new_g)
+    Room(s, bounds(r) .* factor, sents, sexts, sg, sd)
 end
 
 
 
-function shift_tile(r::Room, t::Tile, m::Symbol)::Tile
-    rows = first(steps(r))
-    idx = copy(t)
-    if m == :up
-        idx += - 1
-    elseif m == :down
-        idx += 1
-    elseif m == :left
-        idx -= rows
-    else
-        idx += rows
-    end
-    return idx
-end
+# function shift_tile(r::Room, t::Tile, m::Symbol)::Tile
+#     rows = first(steps(r))
+#     idx = copy(t)
+#     if m == :up
+#         idx += - 1
+#     elseif m == :down
+#         idx += 1
+#     elseif m == :left
+#         idx -= rows
+#     else
+#         idx += rows
+#     end
+#     return idx
+# end
 
 type_map = Dict{Symbol, Char}(
     :entrance => '◉',
@@ -174,28 +134,17 @@ type_map = Dict{Symbol, Char}(
 
 print_row(i) = print("$(String(i))")
 
-function Base.show(io::IO, m::MIME"text/plain", r::Room)
-    Base.show(io,m,(r, Tile[]))
+function Base.show(io::IO, m::MIME"text/plain", r::GridRoom)
+    Base.show(io,m,(r, Int64[]))
 end
 function Base.show(io::IO, m::MIME"text/plain", t::Tuple{Room, Vector{Tile}})
     r, paths = t
-    g = pathgraph(r)
-    types = @>> r begin
-        pathgraph 
-        vertices 
-        map(v -> get_prop(g, v, :type)) 
-        collect(Symbol)
-    end
-    types[entrance(r)] .= :entrance
-    types[exits(r)] .= :exit
-    types[paths] .= :path
-    grid = @>> types map(t -> type_map[t]) collect(Char)
-    grid = reshape(grid, steps(r))
-    for i in eachrow(grid)
-        print("\n")
-        print(String(i))
-    end
-    # show(io, m, grid)
+    rd = repr.(r.data)
+    rd[entrance(r)] .= _char_map[:entrance]
+    rd[exits(r)] .= _char_map[:exit]
+    rd[paths] .= :path
+    s = @> rd eachrow join("\t") join("\n")
+    show(io, m, s)
 end
 
 

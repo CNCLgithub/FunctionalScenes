@@ -46,9 +46,22 @@ function softmax(x)
     isnan(sxs) || iszero(sxs) ? fill(1.0/n, n) : exs ./ sxs
 end
 
+function uniform_weights(x)::Vector{Float64}
+    n = length(x)
+    fill(1.0 / n, n)
+end
+# TODO: documentation
+# deals with empty case
+function safe_uniform_weights(x)::Vector{Float64}
+    n = length(x) + 1
+    fill(1.0 / n, n)
+end
+
 #################################################################################
 # Room coordinate manipulation
 #################################################################################
+
+const unit_ci = CartesianIndex(1,1)
 
 """
 Is coordinate `a` adjacent to `b`?

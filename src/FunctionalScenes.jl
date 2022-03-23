@@ -6,29 +6,29 @@ module FunctionalScenes
 
 using Gen
 using JSON
-using GenRFS
+using Graphs
 using PyCall
 using Statistics
-using MetaGraphs
 using Gen_Compose
 using LightGraphs
+using Lazy: @>, @>>
 using LinearAlgebra
 using OptimalTransport
 using OrderedCollections
+using SimpleWeightedGraphs
 using Parameters: @with_kw
 using Base.Iterators: take
-using Lazy: @>, @>>
 
 #################################################################################
 # Runtime configuration
 #################################################################################
 
-const torch = PyNULL()
-const functional_scenes = PyNULL()
-function __init__()
-    copy!(torch, pyimport("torch"))
-    copy!(functional_scenes, pyimport("functional_scenes"))
-end
+# const torch = PyNULL()
+# const functional_scenes = PyNULL()
+# function __init__()
+#     copy!(torch, pyimport("torch"))
+#     copy!(functional_scenes, pyimport("functional_scenes"))
+# end
 
 #################################################################################
 # Module imports
@@ -37,9 +37,10 @@ end
 include("utils.jl")
 include("dists.jl")
 include("rooms/rooms.jl")
-include("gm/gm.jl")
-include("blender/blender.jl")
-include("inference/inference.jl")
+# include("gm/gm.jl")
+# include("dgp/dpg.jl")
+# include("blender/blender.jl")
+# include("inference/inference.jl")
 
 #################################################################################
 # Load Gen functions
