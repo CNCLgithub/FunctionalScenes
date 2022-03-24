@@ -76,12 +76,8 @@ end
 
 # TODO: Generalize?
 function prune_edges!(g, d)
-    @>> g begin
-        edges
-        collect
-        # filter(e -> !floor_edge(d, e))
-        filter(e -> !matched_tile(d, e))
-        foreach(e -> rem_edge!(g, e))
+    for e in collect(edges(g))
+        !matched_tile(d, e) && rem_edge!(g, e)
     end
     return nothing
 end

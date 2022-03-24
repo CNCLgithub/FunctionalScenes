@@ -8,11 +8,6 @@ using FunctionalScenes
 using DataFrames
 
 import Random:shuffle
-
-import FunctionalScenes: expand, furniture, valid_moves,
-    shift_furniture, move_map, labelled_categorical,
-    translate, k_shortest_paths, entrance, exits, wsd
-
 import Gen:categorical
 
 using Profile

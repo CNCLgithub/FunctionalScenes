@@ -1,16 +1,16 @@
 using FunctionalScenes
 using Gen
 using Graphs
+using Random
 using FunctionalCollections
 using Test
+using Profile
+using StatProfilerHTML
 
-# r = Room((4,10), (4, 10), [2], [38]);
-# r = add(r, Set([18]));
-# f = first(furniture(r));
-# r2 = shift_furniture(r, f, :down);
-# rg = pathgraph(r);
-# f2 = first(furniture(r2));
-# r2g = pathgraph(r2);
+# Profile.init(delay = 0.0001,
+#              n = 10^5)
+# Random.seed!(0)
+
 
 
 @testset "GridRoom" begin
@@ -61,18 +61,30 @@ end;
     # gs = GrowState(8, vs, g)
     # result = FunctionalScenes.fixed_depth_grow(gs, 1)
     # display(result)
-    tr, _ = Gen.generate(furnish, (r, vs, 2))
-    display(get_choices(tr))
-    display(get_retval(tr))
-    # @test furnish(r, vmap, 1) == [8, 9];
+    # @time tr, _ = Gen.generate(furnish, (r, vs, 1))
+
+    Random.seed!(123)
+    # @time tr, _ = Gen.generate(furnish, (r, vs, 1))
+    # display(get_choices(tr))
+    # display(get_retval(tr))
+    @test furnish(r, vs, 1) == Set([8, 9]);
 end;
 
-# @testset "Reorganizing" begin
-#     @test first(furniture(r2)) == Set([19])
-#     @test Set(neighbors(r2g, 18)) == Set([14, 22])
-#     @test valid_moves(r, f) == [0.0, 1.0, 1.0, 1.0]
-#     @test valid_moves(r2, f2) == [1.0, 0.0, 1.0, 1.0]
-# end;
+@testset "Reorganizing" begin
+    r = GridRoom((4,10), (4, 10), [2], [38]);
+    r = add(r, Set([18]));
+    f = first(furniture(r));
+    r2 = shift_furniture(r, f, down_move);
+    rg = pathgraph(r);
+    f2 = first(furniture(r2));
+    r2g = pathgraph(r2);
+    # make sure obstacle moved  18 ->  19
+    @test first(furniture(r2)) == Set([19])
+    # make sure free tile at 18 is now connected to neighbors
+    @test Set(neighbors(r2g, 18)) == Set([14, 22])
+    @test valid_moves(r, f) == [0, 1, 1, 1]
+    @test valid_moves(r2, f2) == [1, 0, 1, 1]
+end;
 
 # @testset "Navigation" begin
 #     @test compare(r, r2) > 0

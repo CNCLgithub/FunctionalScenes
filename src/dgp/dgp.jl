@@ -1,4 +1,4 @@
-export DGP, GrowState, valid_spaces
+export DGP, GrowState, valid_spaces, valid_move, valid_moves
 abstract type DGP end
 
 struct GrowState <: DGP
@@ -24,8 +24,6 @@ end
 function neighboring_candidates(st::GrowState)::Vector{Int64}
     @unpack head, vm, g = st
     ns = neighbors(g, head)
-    @show st
-    @show ns
     ns[vm[ns]]
 end
 
@@ -63,26 +61,30 @@ function merge_growth(head::Int64, children::Vector{Set{Int64}})
     isempty(children) ? Set(head) : union(first(children), head)
 end
 
+function is_floor(r::GridRoom, t::Int64)::Bool
+    g = pathgraph(r)
+    d = data(r)
+    has_vertex(g, t) && d[t] == floor_tile
+end
 
-const move_map = [up_move, down_move, left_move, right_move]
-
-function valid_move(g::PathGraph, f::Furniture, m)
-    @>> setdiff(m, f) begin
-        map(v -> has_vertex(g, v) && isfloor(g, v))
+function valid_move(r::Room, f::Furniture, m::Move)::Bool
+    g = pathgraph(r)
+    mf = move(r, f, m)
+    @>> setdiff(mf, f) begin
+        collect(Int64)
+        map(v -> is_floor(r, v))
         all
     end
 end
 
-function valid_moves(r::Room, f::Furniture)
+function valid_moves(r::Room, f::Furniture)::BitVector
     g = pathgraph(r)
     vs = vertices(g)
-    rows, cols = steps(r)
-    moves = Matrix{Tile}(undef, length(f), 4)
-    moves[:, 1] = f .- 1
-    moves[:, 2] = f .+ 1
-    moves[:, 3] = f .- rows
-    moves[:, 4] = f .+ rows
-    @>> moves eachcol lazymap(m -> valid_move(g,f,m)) collect(Float64)
+    moves = Vector{Bool}(undef, 4)
+    @inbounds for i = 1:4
+        moves[i] = valid_move(r, f, move_map[i])
+    end
+    BitVector(moves)
 end
 
 function strongly_connected(r::Room, f::Furniture, move::Symbol)

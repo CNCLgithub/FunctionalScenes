@@ -47,7 +47,8 @@ Randomly samples a new piece of furniture
     head = @trace(categorical(ws), :head)
     v = assoc(passed, head, false)
     gs = GrowState(head, v, g)
-    result = @trace(fixed_depth_grow(gs, max_depth), :tree)
+    tree = @trace(fixed_depth_grow(gs, max_depth), :tree)
+    result = union(tree, head)
     return result
 end
 
