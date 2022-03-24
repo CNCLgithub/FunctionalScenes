@@ -1,4 +1,4 @@
-
+export DGP, GrowState, valid_spaces
 abstract type DGP end
 
 struct GrowState <: DGP
@@ -7,27 +7,33 @@ struct GrowState <: DGP
     g::PathGraph
 end
 
+# function GrowState(head::Int64, vmap::BitMatrix,
+#                    g::PathGraph)
+#     GrowState(head, P)
+
 function GrowState(ns, ni::Int64, st::GrowState)::GrowState
     @unpack vm, g = st
     # done growing
     ni == 0 && return st
     # update head
-    new_vm = assoc(vm, ns[ni], false)
-    GrowState(ni, new_vm, g)
+    new_head = ns[ni]
+    new_vm = assoc(vm, new_head, false)
+    GrowState(new_head, new_vm, g)
 end
 
-function neighboring_candidates(st::GrowState)::Int64
+function neighboring_candidates(st::GrowState)::Vector{Int64}
     @unpack head, vm, g = st
-    ns = neighbors(g, vm)
-    # xs = ns[findall(vm[ns])]
-    @>> ns begin
-        getindex(vm) # neighbors free tiles?
-        findall      # local indices
-        getindex(ns) # global indices
-    end
+    ns = neighbors(g, head)
+    @show st
+    @show ns
+    ns[vm[ns]]
 end
 
-function valid_spaces(r::Room) end
+function valid_spaces(r::Room)::PersistentVector{Bool} end
+
+function valid_spaces(r::Room, vm::PersistentVector{Bool})
+    PersistentVector(valid_spaces(r) .& vm)
+end
 
 function valid_spaces(r::GridRoom)
     g = pathgraph(r)
@@ -37,7 +43,7 @@ function valid_spaces(r::GridRoom)
     valid_map[exits(r)] .= false
 
     # cannot block entrances
-    for v in entrace(r)
+    for v in entrance(r)
         ns = neighbors(g, v)
         valid_map[ns] .= false
     end
@@ -46,8 +52,15 @@ function valid_spaces(r::GridRoom)
         ns = neighbors(g, v)
         valid_map[ns] .= false
     end
+    PersistentVector(valid_map)
+end
 
-    findall(valid_map)
+# having to deal with type instability
+function merge_growth(head::Int64, children::Set{Int64})
+    union(children, head)
+end
+function merge_growth(head::Int64, children::Vector{Set{Int64}})
+    isempty(children) ? Set(head) : union(first(children), head)
 end
 
 

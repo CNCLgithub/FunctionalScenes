@@ -9,15 +9,15 @@ using JSON
 using Graphs
 using PyCall
 using Statistics
+using Parameters
 using Gen_Compose
-using LightGraphs
 using Lazy: @>, @>>
 using LinearAlgebra
 using OptimalTransport
 using OrderedCollections
 using SimpleWeightedGraphs
-using Parameters: @with_kw
 using Base.Iterators: take
+using FunctionalCollections
 
 #################################################################################
 # Runtime configuration
@@ -37,8 +37,8 @@ using Base.Iterators: take
 include("utils.jl")
 include("dists.jl")
 include("rooms/rooms.jl")
+include("dgp/dgp.jl")
 # include("gm/gm.jl")
-# include("dgp/dpg.jl")
 # include("blender/blender.jl")
 # include("inference/inference.jl")
 

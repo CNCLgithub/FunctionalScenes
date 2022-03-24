@@ -1,9 +1,8 @@
 using FunctionalScenes
-using LightGraphs, MetaGraphs
-# import FunctionalScenes: expand, furniture, valid_moves, shift_furniture, move_map, valid_spaces, furniture_prior,bitmap_render,coordinates_to_camera,coordinates_to_pixels
-using Luxor
+using Gen
+using Graphs
+using FunctionalCollections
 using Test
-using Images
 
 # r = Room((4,10), (4, 10), [2], [38]);
 # r = add(r, Set([18]));
@@ -16,11 +15,11 @@ using Images
 
 @testset "GridRoom" begin
     r = GridRoom((5,3), (5,3), [2], [12]);
-    # ■■■
-    # ◉□◎
-    # ■□■
-    # ■□■
-    # ■■■
+    # ■       ■       ■
+    # ◉       □       ◎
+    # ■       □       ■
+    # ■       □       ■
+    # ■       ■       ■
     g = pathgraph(r)
     @test Set(neighbors(g, 7)) == Set([2, 8, 12])
     @test Set(neighbors(g, 8)) == Set([7,9])
@@ -29,7 +28,7 @@ using Images
 end;
 
 @testset "Adding" begin
-    r = Room((5,3), (5,3), [2], [12]);
+    r = GridRoom((5,3), (5,3), [2], [12]);
     g = pathgraph(r)
     @test Set(neighbors(g, 8)) == Set([7, 9])
     r = add(r, Set([7]))
@@ -42,23 +41,31 @@ end;
 end;
 
 
-# @testset "Removing" begin
-#     x = Room((4,10), (4, 10), [2], [38]);
-#     y = add(x, Set([14,15]));
-#     # z = remove(y, Set([14,15]));
-#     @test navigability(x) != navigability(y);
-#     # @test navigability(y) != navigability(z);
-#     # @test navigability(x) == navigability(z);
-# end;
+@testset "Removing" begin
+    x = GridRoom((4,10), (4, 10), [2], [38]);
+    y = add(x, Set([14,15]));
+    @test navigability(x) != navigability(y);
+    @test Set(neighbors(pathgraph(x), 14)) !=
+        Set(neighbors(pathgraph(y), 14))
+end;
 
-# @testset "Furnishing" begin
-#     r = Room((5,3), (5,3), [2], [12]);
-#     r = add(r, Set([7]))
-#     g = pathgraph(r)
-#     @test valid_spaces(r) ==  [8, 9];
-#     ws = ones(steps(r));
-#     @test furnish(r, ws) == Set([8, 9]);
-# end;
+@load_generated_functions
+
+@testset "Furnishing" begin
+    r = GridRoom((5,3), (5,3), [2], [12]);
+    r = add(r, Set([7]))
+    g = pathgraph(r)
+    vs = valid_spaces(r)
+    @test findall(vs) ==  [8, 9];
+
+    # gs = GrowState(8, vs, g)
+    # result = FunctionalScenes.fixed_depth_grow(gs, 1)
+    # display(result)
+    tr, _ = Gen.generate(furnish, (r, vs, 2))
+    display(get_choices(tr))
+    display(get_retval(tr))
+    # @test furnish(r, vmap, 1) == [8, 9];
+end;
 
 # @testset "Reorganizing" begin
 #     @test first(furniture(r2)) == Set([19])

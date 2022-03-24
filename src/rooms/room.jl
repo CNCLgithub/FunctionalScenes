@@ -1,11 +1,11 @@
-export GridRoom, pathgraph, entrance, exits, bounds, steps, expand
+export GridRoom, pathgraph, data, entrance, exits, bounds, steps, expand
 
 #################################################################################
 # Type aliases
 #################################################################################
 
 # Scenes contain a lattice graph over the paths in the room
-const PathGraph = SimpleWeightedGraph{Int64, Float64}
+const PathGraph = SimpleGraph{Int64}
 
 
 #################################################################################
@@ -22,6 +22,7 @@ struct GridRoom <: Room
 end
 
 pathgraph(r::GridRoom) = r.graph
+data(r::GridRoom) = r.data
 bounds(r::GridRoom) = r.bounds
 steps(r::GridRoom) = r.steps
 entrance(r::GridRoom) = r.entrance
@@ -29,14 +30,14 @@ exits(r::GridRoom) = r.exits
 
 
 # helpers
-istype(g,v,t) = get_prop(g, v, :type) == t
-isfloor(g,v) = istype(g,v,:floor)
-iswall(g,v) = (length ∘ neighbors)(g, v) < 4
-matched_tile(d::Array{Tile}, e::Edge) = d[src(e)] == d[dst(e)]
-floor_edge(d::Array{Tile}, e::Edge) = (d[src(e)] == floor_tile) &&
+# istype(g,v,t) = get_prop(g, v, :type) == t
+# isfloor(g,v) = istype(g,v,:floor)
+# iswall(g,v) = (length ∘ neighbors)(g, v) < 4
+matched_tile(d::Array{Tile}, e::AbstractEdge) = d[src(e)] == d[dst(e)]
+floor_edge(d::Array{Tile}, e::AbstractEdge) = (d[src(e)] == floor_tile) &&
     (d[dst(e)] == floor_tile)
-wall_edge(g, e::Edge) = (get_prop(g, src(e), :type) == :wall) &&
-    (get_prop(g, dst(e), :type) == :wall)
+# wall_edge(g, e::Edge) = (get_prop(g, src(e), :type) == :wall) &&
+#     (get_prop(g, dst(e), :type) == :wall)
 
 
 function GridRoom(steps, bounds)
@@ -52,7 +53,8 @@ Builds a room given ...
 function GridRoom(steps, bounds, ent, exs)
 
     g = PathGraph(grid(steps))
-    d = fill(floor_tile, steps)
+    d = Matrix{Tile}(undef, steps)
+    d[:, :] .= floor_tile
 
     # add walls
     d[:, 1] .= wall_tile
@@ -123,13 +125,10 @@ end
 #     return idx
 # end
 
-type_map = Dict{Symbol, Char}(
-    :entrance => '◉',
-    :exit => '◎',
-    :wall => '■',
-    :floor => '□',
-    :furniture => '◆',
-    :path => '○'
+const _char_map = Dict{Symbol, String}(
+    :entrance => "◉",
+    :exit => "◎",
+    :path => "○"
 )
 
 print_row(i) = print("$(String(i))")
@@ -137,14 +136,15 @@ print_row(i) = print("$(String(i))")
 function Base.show(io::IO, m::MIME"text/plain", r::GridRoom)
     Base.show(io,m,(r, Int64[]))
 end
-function Base.show(io::IO, m::MIME"text/plain", t::Tuple{Room, Vector{Tile}})
+function Base.show(io::IO, m::MIME"text/plain",
+                   t::Tuple{GridRoom, Vector{Int64}})
     r, paths = t
     rd = repr.(r.data)
     rd[entrance(r)] .= _char_map[:entrance]
     rd[exits(r)] .= _char_map[:exit]
-    rd[paths] .= :path
-    s = @> rd eachrow join("\t") join("\n")
-    show(io, m, s)
+    rd[paths] .= _char_map[:path]
+    rd[:, 1:(end-1)] .*= "\t"
+    rd[:, end] .*= "\n"
+    s::String = @>> rd permutedims join
+    println(io,s)
 end
-
-

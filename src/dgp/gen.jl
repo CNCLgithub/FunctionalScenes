@@ -1,56 +1,53 @@
 export furnish, furniture_step, furniture_chain, reorganize
 
 @gen static function prod_grow_furniture(state::GrowState)
-    @unpack head, vm, g = state
-    ns = neighboring_candidates(vm, g, head)
+    ns = neighboring_candidates(state)
     # assuming uniform weights
     ws = safe_uniform_weights(ns)
     c = @trace(categorical(ws), :new_head)
     # ni == 1: stop
     # n > 1: head = n - 1
-    new_state::GrowState = GrowState(ns, ni - 1, state)
-    result = Production(new_state, fill(new_state, ni != 1))
+    new_state::GrowState = GrowState(ns, c - 1, state)
+    result = Production(new_state, fill(new_state, c != 1))
     return result
 end
 
-@gen function agg_grow_furniture(st::GrowState, children::Vector{GrowState})
-    # no children, at max depth
-    if length(children) == 0
-        result = st
-    # simply carry the deepest state to the top
-    else
-        result = first(children)
-    end
+@gen static function agg_grow_furniture(st::GrowState,
+                                 children)
+                                          # children::Vector{Set{Int64}})
+    result = merge_growth(st.head, children)
+    return result
 end
 
-function grow_furniture_gm(max_depth::Int64)
-    Recurse(prod_grow_furniture,
-            agg_grow_furniture,
-            max_depth, Vector{GrowState}, GrowState, GrowState)
-end
+const fixed_depth_grow = Recurse(prod_grow_furniture,
+                                 agg_grow_furniture,
+                                 5,
+                                 GrowState,
+                                 GrowState,
+                                 Set{Int64})
 
 """
 Randomly samples a new piece of furniture
 """
-@gen function furnish(r::GridRoom, vmap::PersistentVector{Bool},
-                      max_depth::Int64)
+@gen static function furnish(r::GridRoom,
+                               vmap::PersistentVector{Bool},
+                               max_depth::Int64)
 
     # first sample a vertex to add furniture to
     # - baking in a prior about number of immediate neighbors
     g = pathgraph(r)
-    candidates = valid_spaces(r)
-    passed = vmap[candidates]
-    if !any(passed)
-        return Furniture()
-    end
+    # annoying type instability...
+    # passed = PersistentVector(vmap .& valid_spaces(r))
+    passed = valid_spaces(r, vmap)
+    # if !any(passed)
+    #     return Furniture()
+    # end
     np = sum(passed)
-    ws = (1.0 / np) * vmap
-    vi = @trace(categorical(ws), :head)
-    head = candidates[vi]
-
-    gs = GrowState(head, vmap, g)
-
-    result = @trace(grow_furniture_gm(max_depth)(gs), :tree)
+    ws = (1.0 / np) * passed
+    head = @trace(categorical(ws), :head)
+    v = assoc(passed, head, false)
+    gs = GrowState(head, v, g)
+    result = @trace(fixed_depth_grow(gs, max_depth), :tree)
     return result
 end
 

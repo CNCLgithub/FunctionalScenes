@@ -1,4 +1,4 @@
-export Furniture, furniture, add, remove, clear_room,
+export Furniture, furniture, add, remove, clear_room, valid_move, shift_furniture
 
 #################################################################################
 # Furniture
@@ -27,7 +27,7 @@ Adds the furniture of `src` to `dest`
 """
 #TODO: Try out "flattened" update scheme (avoid `fold`)
 function add(src::GridRoom, dest::GridRoom)::GridRoom
-    omap = srd.d .== obstacle_tile
+    omap = src.data .== obstacle_tile
     d = deepcopy(dest.data)
     d[omap] .= obstacle_tile
     g = deepcopy(dest.graph)
@@ -38,8 +38,8 @@ end
 
 function add(r::GridRoom, f::Furniture)::GridRoom
     g = deepcopy(pathgraph(r))
-    d = deepcopy(r.d)
-    d[f] .= obstacle_tile
+    d = deepcopy(r.data)
+    d[collect(f)] .= obstacle_tile
     prune_edges!(g, d)
     GridRoom(r.steps, r.bounds, r.entrance,
              r.exits, g, d)
@@ -47,8 +47,8 @@ end
 
 function remove(r::GridRoom, f::Furniture)::GridRoom
     g = deepcopy(pathgraph(r))
-    d = deepcopy(r.d)
-    d[f] .= floor_tile
+    d = deepcopy(r.data)
+    d[collect(f)] .= floor_tile
     prune_edges!(g, d)
     GridRoom(r.steps, r.bounds, r.entrance,
              r.exits, g, d)
@@ -56,7 +56,7 @@ end
 
 function clear_room(r::Room)::Room
     g = deepcopy(pathgraph(r))
-    d = deepcopy(r.d)
+    d = deepcopy(r.data)
     d[d .== obstacle_tile] .= floor_tile
     prune_edges!(g, d)
     GridRoom(r.steps, r.bounds, r.entrance,
@@ -95,7 +95,7 @@ function shift_furniture(r::GridRoom, f::Furniture, move::Move)
              r.exits, g, d)
 end
 
-function unsafe_move!(::Furniture, ::Move, :::Room) end
+function unsafe_move!(::Furniture, ::Move, ::Room) end
 
 unsafe_move!(f::Furniture, ::Up, r::GridRoom) = f .- 1
 unsafe_move!(f::Furniture, ::Down, r::GridRoom) = f .+ 1
