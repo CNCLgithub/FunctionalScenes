@@ -37,25 +37,25 @@ function add(src::GridRoom, dest::GridRoom)::GridRoom
 end
 
 function add(r::GridRoom, f::Furniture)::GridRoom
-    g = deepcopy(pathgraph(r))
+    g = @> r steps grid PathGraph
     d = deepcopy(r.data)
-    d[collect(f)] .= obstacle_tile
+    d[f] .= obstacle_tile
     prune_edges!(g, d)
     GridRoom(r.steps, r.bounds, r.entrance,
              r.exits, g, d)
 end
 
 function remove(r::GridRoom, f::Furniture)::GridRoom
-    g = deepcopy(pathgraph(r))
+    g = @> r steps grid PathGraph
     d = deepcopy(r.data)
-    d[collect(f)] .= floor_tile
+    d[f] .= floor_tile
     prune_edges!(g, d)
     GridRoom(r.steps, r.bounds, r.entrance,
              r.exits, g, d)
 end
 
 function clear_room(r::Room)::Room
-    g = deepcopy(pathgraph(r))
+    g = @> r steps grid PathGraph
     d = deepcopy(r.data)
     d[d .== obstacle_tile] .= floor_tile
     prune_edges!(g, d)
@@ -77,28 +77,34 @@ function shift_furniture(r::Room, f::Furniture, move::Int64)
     shift_furniture(r, f, move_map[move])
 end
 
-function shift_furniture(r::GridRoom, f::Furniture, move::Move)
+function shift_furniture(r::GridRoom, f::Furniture, m::Move)
     # Check to see if move is valid
-    @assert valid_move(move, r, f)
-    @assert all(r.d[f] .== obstacle_tile)
-    g = deepcopy(pathgraph(r))
+    @assert valid_move(m, r, f)
+    @assert all(r.data[f] .== obstacle_tile)
     d = deepcopy(r.data)
     # apply move
-    moved_f = unsafe_move!(deepcopy(f), move, r)
+    moved_f = move(r, f, m)
     # update data and graph
     to_clear = setdiff(f, moved_f)
     d[to_clear] .= floor_tile
     to_add = setdiff(moved_f, f)
     d[to_add] .= obstacle_tile
+
+    g = @> r steps grid PathGraph
     prune_edges!(g, d)
     GridRoom(r.steps, r.bounds, r.entrance,
              r.exits, g, d)
 end
 
-function unsafe_move!(::Furniture, ::Move, ::Room) end
+function move(r::Room, f::Furniture, m::Move)::Furniture
+    nf = collect(Int64, f)
+    unsafe_move!(nf, m, r)
+    Set{Int64}(nf)
+end
 
-unsafe_move!(f::Furniture, ::Up, r::GridRoom) = f .- 1
-unsafe_move!(f::Furniture, ::Down, r::GridRoom) = f .+ 1
-unsafe_move!(f::Furniture, ::Left, r::GridRoom) = f .- first(steps(r))
-unsafe_move!(f::Furniture, ::Right, r::GridRoom) = f .- first(steps(r))
+# function unsafe_move!(::Furniture, ::Move, ::Room) end
 
+unsafe_move!(f::Vector{Int64}, ::Up, r::GridRoom) = f .-= 1
+unsafe_move!(f::Vector{Int64}, ::Down, r::GridRoom) = f .+= 1
+unsafe_move!(f::Vector{Int64}, ::Left, r::GridRoom) = f .-= first(steps(r))
+unsafe_move!(f::Vector{Int64}, ::Right, r::GridRoom) = f .+= first(steps(r))

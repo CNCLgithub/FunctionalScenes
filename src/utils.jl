@@ -1,5 +1,11 @@
 using JSON
 
+
+# index arrays using sets. Order doesn't matter
+function Base.to_index(i::Set{T}) where {T}
+    Base.to_index(collect(T, i))
+end
+
 #################################################################################
 # IO
 #################################################################################
@@ -54,7 +60,8 @@ end
 # deals with empty case
 function safe_uniform_weights(x)::Vector{Float64}
     n = length(x) + 1
-    fill(1.0 / n, n)
+    ws = fill(1.0 / n, n)
+    return ws
 end
 
 #################################################################################
