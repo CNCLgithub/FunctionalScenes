@@ -30,8 +30,8 @@ const fixed_depth_grow = Recurse(prod_grow_furniture,
 Randomly samples a new piece of furniture
 """
 @gen static function furnish(r::GridRoom,
-                               vmap::PersistentVector{Bool},
-                               max_depth::Int64)
+                             vmap::PersistentVector{Bool},
+                             max_depth::Int64)
 
     # first sample a vertex to add furniture to
     # - baking in a prior about number of immediate neighbors
@@ -52,14 +52,43 @@ Randomly samples a new piece of furniture
     return result
 end
 
-# """
-# Adds a randomly generated piece of furniture
-# """
-# @gen (static) function furniture_step(t::Int, r::Room, weights::Matrix{Float64})
-#     f = @trace(furnish(r, weights), :furniture)
-#     new_r = add(r, f)
-#     return new_r
-# end
+
+
+@gen static function prod_furnish(vmap::PersistentVector{Bool},
+                                  r::GridRoom,
+                                  f_depth::Int64)
+
+    sampled_f = @trace(furnish(r, vmap, f_depth), :furniture)
+    new_vmap = update_vmap(vmap, sampled_f)
+
+
+    # first sample a vertex to add furniture to
+    # - baking in a prior about number of immediate neighbors
+    g = pathgraph(r)
+    # annoying type instability...
+    # passed = PersistentVector(vmap .& valid_spaces(r))
+    passed = valid_spaces(r, vmap)
+    # if !any(passed)
+    #     return Furniture()
+    # end
+    np = sum(passed)
+    ws = (1.0 / np) * passed
+    head = @trace(categorical(ws), :head)
+    v = assoc(passed, head, false)
+    gs = GrowState(head, v, g)
+    tree = @trace(fixed_depth_grow(gs, max_depth), :tree)
+    result = union(tree, head)
+    return result
+end
+
+"""
+Adds a randomly generated piece of furniture
+"""
+@gen (static) function furniture_step(t::Int, r::Room, weights::Matrix{Float64})
+    f = @trace(furnish(r, weights), :furniture)
+    new_r = add(r, f)
+    return new_r
+end
 
 # furniture_chain = Gen.Unfold(furniture_step)
 

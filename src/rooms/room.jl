@@ -85,23 +85,24 @@ end
 function expand(r::GridRoom, factor::Int64)::GridRoom
     s = steps(r) .* factor
     # "expand" by `factor`
-    sd = repeat(r.d, inner = (factor, factor))
+    d = data(r)
+    sd = repeat(d, inner = (factor, factor))
     sg = PathGraph(grid(s))
 
     prune_edges!(sg, sd)
 
-    cis = CartesianIndices(r.d)
-    slis = LinearIndicies(s)
-    sents = similar(r.entrance)
+    cis = CartesianIndices(d)
+    slis = LinearIndices(s)
+    sents = similar(entrance(r))
     # update entrances and exits
-    @inbounds for (i, v) in enumerate(entrace(r))
+    @inbounds for (i, v) in enumerate(entrance(r))
         sents[i] = slis[(cis[v] - unit_ci) * factor + unit_ci]
     end
-    sexits = similar(r.entrance)
+    sexits = similar(exits(r))
     @inbounds for (i, v) in enumerate(exits(r))
         sexits[i] = slis[(cis[v] - unit_ci) * factor + unit_ci]
     end
-    Room(s, bounds(r) .* factor, sents, sexts, sg, sd)
+    GridRoom(s, bounds(r) .* factor, sents, sexits, sg, sd)
 end
 
 
@@ -144,3 +145,9 @@ function Base.show(io::IO, m::MIME"text/plain",
     s::String = @>> rd permutedims join
     println(io,s)
 end
+
+JSON.lower(r::GridRoom) = Dict(
+    steps = steps(r),
+    bounds = bounds(r),
+    data = Symbol.(data(r))
+)

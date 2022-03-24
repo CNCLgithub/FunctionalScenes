@@ -11,6 +11,11 @@ struct Right <: Move end
 struct Down <: Move end
 struct Up <: Move end
 
+Base.convert(::Type{Symbol}, ::Left) = :left
+Base.convert(::Type{Symbol}, ::Right) = :right
+Base.convert(::Type{Symbol}, ::Down) = :down
+Base.convert(::Type{Symbol}, ::Up) = :up
+
 const left_move = Left()
 const right_move = Right()
 const down_move = Down()

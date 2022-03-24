@@ -1,4 +1,6 @@
-export DGP, GrowState, valid_spaces, valid_move, valid_moves
+export DGP, GrowState, valid_spaces, valid_move, valid_moves,
+    strongly_connected
+
 abstract type DGP end
 
 struct GrowState <: DGP
@@ -87,39 +89,44 @@ function valid_moves(r::Room, f::Furniture)::BitVector
     BitVector(moves)
 end
 
-function strongly_connected(r::Room, f::Furniture, move::Symbol)
+# checks whether moving furnition
+# -1 changes contact with other furnitures
+# -2 creates a "visual gap" when looking straight down the room
+function strongly_connected(r::Room, f::Furniture, move::Move)
 
     f_inds = collect(Int64, f)
-    shifted = @>> f_inds begin
-        map(v -> shift_tile(r, v, move))
-        collect(Tile)
-    end
+    shifted = move(r, f, move)
 
     h, _ = steps(r)
     g = grid(steps(r))
     gs = gdistances(g, f_inds)
-    shifted_gs = gdistances(g, shifted)
+    shifted_gs = gdistances(g, collect(shifted))
 
     fs = furniture(r)
     other_inds = map(x -> collect(Int64, x), fs)
 
     connected = Int64[]
-    gaps = BitVector(zeros(h))
+    # represents the horizon of blocks
+    # ie. what spaces are occupied between
+    # the left towards the right wall
+    gaps = Vector{Bool}(zeros(h))
     for i = 1:length(fs)
 
         # skip rest if same as f
         fs[i] == f && continue
 
         # fill in gaps
-        gaps[(other_inds[i] .- 1) .% h .+ 1] .= 1
+        gaps[(other_inds[i] .- 1) .% h .+ 1] .= true
 
+        # is fs[i] touching original f?
         touching1 = any(d -> d == 1, gs[other_inds[i]])
+        # is fs[i] touching shifted f?
         touching2 = any(d -> d == 1, shifted_gs[other_inds[i]])
 
         # not touching
         (!touching1 && !touching2)  && continue
 
-        # weakly connected
+        # weakly connected, shifting changes contact
         xor(touching1, touching2) && return Int64[]
 
         # strongly connected
@@ -127,11 +134,11 @@ function strongly_connected(r::Room, f::Furniture, move::Symbol)
 
     end
 
-    # check to see if `f` is in the front
+    # make sure f is behind something
     !all(gaps[(f_inds .- 1) .% h .+ 1]) && return Int64[]
 
     # location after move
-    gaps[(shifted .- 1) .% h .+ 1] .= 1
+    gaps[(shifted .- 1) .% h .+ 1] .= true
 
     # gap was made with shift, reject
     !all(gaps[(f_inds .- 1) .% h .+ 1]) && return Int64[]

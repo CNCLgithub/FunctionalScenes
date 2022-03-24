@@ -34,3 +34,7 @@ const obstacle_tile = Obstacle()
 navigable(::Obstacle) = false
 Base.show(io::IO, ::Obstacle) = Base.print(io, '◆')
 # Base.show(io::IO, m::MIME"text/plain", ::Obstacle) = Base.show(io, m, '◆')
+
+Base.convert(::Type{Symbol}, ::Floor) = :floor
+Base.convert(::Type{Symbol}, ::Wall) = :wall
+Base.convert(::Type{Symbol}, ::Obstacle) = :obstacle

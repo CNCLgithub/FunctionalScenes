@@ -10,7 +10,7 @@ using Graphs
 using PyCall
 using Statistics
 using Parameters
-using Gen_Compose
+# using Gen_Compose
 using Lazy: @>, @>>
 using LinearAlgebra
 using OptimalTransport

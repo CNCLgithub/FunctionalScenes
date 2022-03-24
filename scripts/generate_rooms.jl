@@ -1,183 +1,190 @@
 using CSV
 using Lazy
-using JLD2
-using Statistics
-using LinearAlgebra: norm
-using FunctionalScenes
-
+using JSON
 using DataFrames
+using Statistics
+using FunctionalScenes
+using LinearAlgebra: norm
 
 import Random:shuffle
 import Gen:categorical
 
-using Profile
-using StatProfilerHTML
+# using Profile
+# using StatProfilerHTML
 
-
-function examine_moves(r::Room, move_set::Vector{Symbol})
-    # avoid furniture close to camera
-    fs = furniture(r)
-    data = DataFrame()
-    base_og = occupancy_grid(r; sigma = 0., decay = 0.)
-    for (i,f) in enumerate(fs)
-        moves = collect(Bool, valid_moves(r, f))
-        moves = move_map[moves]
-        moves = intersect(moves, move_set)
-        for m in moves
-            # only consider strongly connected moves
-            connected = strongly_connected(r, f, m)
-            isempty(connected) && continue
-
-            shifted = shift_furniture(r,f,m)
-            shifted_og = occupancy_grid(shifted; sigma = 0., decay = 0.)
-            d = norm(base_og - shifted_og)
-            append!(data,
-                    DataFrame(furniture = i,
-                              move = m,
-                              d = d,
-                              room = shifted))
-        end
-    end
-    data
+function move_change(r::GridRoom,
+                     f::Furniture,
+                     m::Move,
+                     base_og)
+    connected = strongly_connected(r, f, m)
+    # not valid, don't record
+    isempty(connected) && return -Inf
+    # passed first test
+    shifted = shift_furniture(r,f,m)
+    shifted_og = occupancy_grid(shifted; sigma = 0., decay = 0.)
+    # compute impact of shift
+    d = norm(base_og - shifted_og)
 end
 
-function change_in_path(x)
+function paired_change_in_path(x)
+    # door 1 has no change in path
     min_i = argmin(x[:, :d])
     c1 = x[min_i, :d] == 0.0 && x[min_i, :door] == 1
 
+    # door 2 changes
     max_i = argmax(x[:, :d])
     c2 = x[max_i, :d] > 10.0 && x[max_i, :door] == 2
 
     c1 && c2
 end
 
-function digest(df::DataFrame)::DataFrame
-    df = @>> DataFrames.groupby(df, [:furniture, :move]) begin
+function examine_furniture(df::DataFrame)::DataFrame
+    gdf = @>> DataFrames.groupby(df, :furniture) begin
         # look find change for one but not another door
-        filter(change_in_path)
-        # get the largest and smallest (0) change
-        map(g -> sort(g, :d)[[1,end], :])
+        filter(paired_change_in_path)
     end
-    isempty(df) && return DataFrame()
-
-    df = vcat(df...)
+    isempty(gdf) && return DataFrame()
+    # pick furniture, move pair with biggest difference
+    selected_i = @> gdf begin
+        combine(:d => maximum)
+        sortperm(:d_maximum)
+        last
+    end
+    gdf[selected_i]
 end
 
-function build(rooms::Vector{Room};
+function build(door_conditions::Vector{GridRoom},
+               move::Move;
                k::Int64 = 16, factor::Int64 = 1,
-               pct_open::Float64 = 0.5,
-               moves::Vector{Symbol} = move_map)
-    # assuming all rooms have the same entrance and dimensions
-    r = first(rooms)
-    r = expand(r, factor)
-    weights = zeros(steps(r))
-    # ensures that there is no furniture near the observer
-    start_x = Int64(last(steps(r)) * pct_open)
-    stop_x = last(steps(r)) - 4 # nor blocking the exit
-    start_y = 2
-    stop_y = first(steps(r)) - 1
-    weights[start_y:stop_y, start_x:stop_x] .= 1.0
+               pct_open::Float64 = 0.5)
 
-    new_rooms = Vector{Room}(undef, length(rooms))
-    new_r = last(furniture_chain(k, r, weights))
-    results = DataFrame()
-    for (i, ri) in enumerate(rooms)
-        new_r = i > 1 ? add(new_r, expand(ri, factor)) : new_r
-        # expanded = expand(new_r, factor)
-        # _df = examine_moves(expanded, moves)
-        _df = examine_moves(new_r, moves)
-        isempty(_df) && continue
-        _df[!, :door] .= i
-        append!(results, _df)
-        # new_rooms[i] = expanded
-        new_rooms[i] = new_r
+    # assuming all rooms have the same entrance and dimensions
+    rex = expand(first(door_conditions), factor)
+    dims = steps(rex)
+
+    # prevent furniture generated in either:
+    # -1 out of sight
+    # -2 blocking entrance exit
+    # -3 hard to detect spaces next to walls
+    weights = zeros(dims)
+    # ensures that there is no furniture near the observer
+    start_x = Int64(last(dims) * pct_open)
+    stop_x = last(dims) - 2 # nor blocking the exit
+    start_y = 2
+    stop_y = first(dims) - 1
+    weights[start_y:stop_y, start_x:stop_x] .= 1.0
+    vmap = vec(weights)
+
+    # generate furniture once and then apply to
+    # each door condition
+    with_furn = last(furniture_chain(k, rex, weights))
+    exp_bases = map(r -> add(with_furn, expand(r, factor)))
+    fs = furniture(with_furn)
+    results = DataFrame(door = Int64[],
+                        furniture = Int64[],
+                        move = Symbol[],
+                        d = Float64[])
+    for (i, ri) in enumerate(exp_bases)
+        base_og = occupancy_grid(base_r; sigma = 0., decay = 0.)
+        for (j, fj) in enumerate(fs)
+            d = move_change(ri, fj, move, base_og)
+            push!(results,
+                  # door, furn, distance
+                  [i, j, move, d])
+        end
     end
-    results = isempty(results) ? results : digest(results)
-    (new_rooms, results)
+    # see if any furniture pieces fit the criterion
+    results = digest(results)
+    (exp_bases, results)
 end
+
 
 
 function create(room_dims::Tuple{Int64, Int64},
                 entrance::Int64,
                 doors::Vector{Int64};
                 n::Int64 = 8)
-    df = DataFrame()
-    moves = [:down, :up]
-    max_count = Int64(ceil(n / length(moves)))
 
-    println("starting room")
-    r = Room(room_dims, room_dims, [entrance], Int64[])
-    display(r)
-
-    templates = @>> doors begin
-        map(d -> Room(room_dims, room_dims, [entrance], [d]))
-        collect(Room)
-    end
-    seeds = Matrix{Vector{Room}}(undef, max_count, length(moves))
-    ids = LinearIndices(seeds)
-    for (idx, move) in enumerate(moves)
-        i = 1
-        while i <= max_count
-            (seed, _df) = build(templates, factor = 2, moves = [move])
-            isempty(_df) && continue
-
-            grps = DataFrames.groupby(_df, [:furniture, :move])
-            selected_i = @>> grps begin
-                gs -> combine(gs, :d => maximum)
-                gs -> sortperm(gs, :d_maximum)
-                last
-            end
-            selected = @>> grps[selected_i] DataFrame
-            seeds[i, idx] = seed
-            selected[!, :id] .= ids[i, idx]
-            selected[!, :flip] .= i % 2
-            @show selected
-            append!(df, selected)
-            i += 1
-            println("$(i)/$(n)")
-
-            # visualize the accepted room pair
-            # println("seed")
-            # display((seed, FunctionalScenes.all_shortest_paths(seed)))
-            # og_a = occupancy_grid(seed, sigma = 0.)
-            # for row in eachrow(_df)
-            #     shifted = shift_furniture(seed,
-            #                             row.furniture,
-            #                             row.move)
-            #     @show row
-            #     display((shifted, FunctionalScenes.all_shortest_paths(shifted)))
-            #     # og_b = occupancy_grid(shifted, sigma = 0.)
-            #     # FunctionalScenes.viz_ocg(og_a - og_b)
-            # end
-        end
-    end
-    @show df
     return seeds, df
-end
-
-# function saver(id::Int64, r::Room, out::String)
-function saver(id::Int64, rs::Vector{Room}, out::String)
-    @save "$(out)/$(id).jld2" rs
 end
 
 
 function main()
-    name = "1_exit_22x40_doors"
+    name = "03_24_test"
+    dataset_out = "/spaths/datasets/$(name)"
+    isdir(dataset_out) || mkdir(dataset_out)
+
+    scenes_out = "$(dataset_out)/scenes"
+    isdir(scenes_out) || mkdir(scenes_out)
+
+
+    # Parameters
     room_dims = (11,20)
     entrance = 6
+    door_rows = [3, 9]
     inds = LinearIndices(room_dims)
-    doors = [3, 9]
-    doors = @>> doors map(d -> inds[d, room_dims[2]]) collect(Int64)
-    n = 32
-    seeds, df = create(room_dims, entrance, doors; n = n)
-    out = "/scenes/$(name)"
-    CSV.write("$(out).csv", df)
-    isdir(out) || mkdir(out)
+    doors = inds[door_rows, room_dims[2]]
+    # doors = @>> doors map(d -> inds[d, room_dims[2]]) collect(Int64)
+    #
+    # number of trials
+    n = 2
 
-    # save base rooms
-    @>> seeds enumerate foreach(x -> saver(x..., out))
+    # will only consider these moves
+    moves = [down_move, up_move]
+    n_moves = length(moves)
 
-    return seeds, df
+    # number of trials per move condition
+    max_count = Int64(ceil(n / n_moves))
+
+    # empty rooms with doors
+    templates = @>> doors begin
+        map(d -> GridRoom(room_dims, room_dims, [entrance], [d]))
+        collect(GridRoom)
+    end
+
+    # will store summary of generated rooms here
+    df = DataFrame(id = Int64[],
+                   flip = Bool[],
+                   door = Int64[],
+                   furniture = Int64[],
+                   move = Symbol[],
+                   d = Float64[])
+    for (idx, move) in enumerate(moves)
+        i = 1
+        while i <= max_count
+            # generate a room pair
+            (pair, _df) = build(templates, move, factor = 2)
+            # no valid pair generated, try again or finish
+            isempty(_df) && continue
+
+            # valid pair found, organize and store
+            id = (idx - 1) * max_count + i
+            _df[!, :id] .= id
+            _df[!, :flip] .= i % 2
+            @show _df
+            append!(df, _df)
+
+            # save scenes as json
+            open("$(scenes_out)/$(id)_1".json, "w") do f
+                _d = pair[1] |> json
+                write(f, _d)
+            end
+            open("$(scenes_out)/$(id)_2".json, "w") do f
+                _d = pair[2] |> json
+                write(f, _d)
+            end
+
+            println("$(i)/$(n)")
+            i += 1
+        end
+    end
+    @show df
+    # saving summary / manifest
+    CSV.write("$(scenes_out).csv", df)
+
+    # saving rooms
+
+    return nothing
 end
 
 main();

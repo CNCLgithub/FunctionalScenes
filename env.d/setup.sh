@@ -59,12 +59,11 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
     echo "building python env at ${SENV[pyenv]}" && \
     $SING exec "${cont_dest}" bash -c "virtualenv ${SENV[pyenv]} && \
     source ${SENV[pyenv]}/bin/activate && \
-    python3.8 -m pip install --upgrade pip && \
-    cd functional_scenes && poetry install" && \
-    ./env.d/run.sh python3.8 -m pip install torch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 && \
-    ./env.d/run.sh curl -LO https://github.com/NVIDIA/cub/archive/1.10.0.tar.gz && \
-    ./env.d/run.sh tar xzf 1.10.0.tar.gz -C "${SENV[pyenv]}" && \
-    ./env.d/run.sh python3.8 -m pip install -v git+https://github.com/facebookresearch/pytorch3d.git@stable
+    python3.9 -m pip install --upgrade pip && \
+    python3.9 -m pip install -r requirements.txt"
+    # ./env.d/run.sh curl -LO https://github.com/NVIDIA/cub/archive/1.10.0.tar.gz && \
+    # ./env.d/run.sh tar xzf 1.10.0.tar.gz -C "${SENV[pyenv]}" && \
+    # ./env.d/run.sh python -m pip install -v git+https://github.com/facebookresearch/pytorch3d.git@stable
 
 #################################################################################
 # Julia setup

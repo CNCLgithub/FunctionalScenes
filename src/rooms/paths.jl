@@ -52,7 +52,7 @@ function all_shortest_paths(r::Room)
     all_shortest_paths(pathgraph(r), entrance(r), exits(r))
 end
 
-# function all_shortest_paths(g::AbstractGraph, start::Tile, stop::Tile)
+# function all_shortest_paths(g::AbstractGraph, start::Int64, stop::Int64)
 # end
 
 function all_shortest_paths(g::AbstractGraph{T}, start::Vector{T},
@@ -85,7 +85,7 @@ function safe_shortest_paths(r::Room)
     vs = @>> ents begin
         first
         connected(g)
-        collect(Tile)
+        collect(Int64)
     end
     # closest points to the exit
     # that are still reachable from the entrance
@@ -158,7 +158,7 @@ function occupancy_grid(r::Room;
     end
 end
 
-function occupancy_grid(r::Room, ps::Vector{Vector{Tile}};
+function occupancy_grid(r::Room, ps::Vector{Vector{Int64}};
                         decay::Float64 = 0.0,
                         sigma::Float64 = 1.0)
     @>> ps begin
@@ -171,7 +171,7 @@ function occupancy_grid(r::Room, ps::Vector{Vector{Tile}};
     end
 end
 
-function occupancy_grid(r::Room, p::Vector{Tile};
+function occupancy_grid(r::Room, p::Vector{Int64};
                         decay = -1, sigma = 1)
     g = pathgraph(r)
     m = zeros(steps(r))
