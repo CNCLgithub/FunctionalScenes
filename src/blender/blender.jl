@@ -19,18 +19,22 @@ function camera(r::Room)
     # camera is placed over entrance
     space, transform = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
-    pos = @>> Tuple.(cis[entrance(r)]) lazymap(transform) first
-    pos = pos  .+ ((0.5, -1.25) .* space)
+    pos = @>> r begin
+        entrance
+        first
+        getindex(cis)
+        Tuple
+        transform
+    end
+    # FIXME: looks janky
+    pos = pos  .+ ((0.5, -1.25) .* space) # slight shift to center
     pos = [pos..., 0.75 * tile_height]
-    # exts = @>> Tuple.(cis[exits(r)]) lazymap(transform) mean(dims = 2)
     orientation = [0.475 * pi, 0., 0.]
-    # pos = [0,0,60]
-    # orientation = [0, 0, 0.5 * pi]
     Dict(:position => pos,
          :orientation => orientation)
 end
 
-function floor(r::Room; ceiling = false)
+function plain(r::Room; ceiling = false)
     dx,dy = bounds(r)
     z = ceiling ? tile_height : 0.0
     rx = ceiling ? pi : 0.0
@@ -42,36 +46,37 @@ function floor(r::Room; ceiling = false)
          :appearance => :white)
 end
 
-function tile(t, coords, space, sphere)
-    dx,dy = space
-    if t == :wall
-        dz = tile_height
-        shape = :Block
-    else
-        # dx, dy = sphere ? 0.9 .* (dx, dy) : (dx, dy)
-        # dx, dy = (0.8, 0.6) .* (dx, dy)
-        dz = 0.35 * tile_height # sqrt(dx^2 + dy^2)
-        shape = sphere ? :Ball : :Block
-    end
-    pos = [coords..., dz / 2.0]
+function tile(::Wall, x::Float64, y::Float64, dx::Float64, dy::Float64)
+    dz = tile_height
+    pos = [x, y, dz / 2.0]
     Dict(:position => pos,
          :orientation => [0,0,0],
-         :shape => shape,
+         :shape => :Block,
          :dims => [dx,dy,dz],
-         # :appearance =>  :blue)
-         :appearance => t == :wall ? :white : :blue)
+         :appearance => :white)
+end
+
+function tile(::Obstacle, x::Float64, y::Float64,
+              dx::Float64, dy::Float64)
+    dz = 0.35 * tile_height # sqrt(dx^2 + dy^2)
+    pos = [x, y, dz / 2.0]
+    Dict(:position => pos,
+         :orientation => [0,0,0],
+         :shape => :Block,
+         :dims => [dx,dy,dz],
+         :appearance => :blue)
 end
 
 
-function spot(coords, space; exit::Bool=false)
-    dx,dy = space
+function tile(::Floor, x::Float64, y::Float64,
+              dx::Float64, dy::Float64)
     dz = 0.01
-    pos = [coords..., dz]
+    pos = [x, y, dz]
     Dict(:position => pos,
          :orientation => [0,0,0],
          :shape => :Plane,
-         :dims => [dx,dy, 0],
-         :appearance => exit ? :red : :green)
+         :dims => [dx,dy, dz],
+         :appearance => :green)
 end
 
 function lattice_to_coord(bounds::Tuple, steps::Tuple)
@@ -80,21 +85,38 @@ function lattice_to_coord(bounds::Tuple, steps::Tuple)
     (space, c -> c .* space .- offset)
 end
 
-function lattice_to_coord(r::Room)
+function lattice_to_coord(r::GridRoom)
     lattice_to_coord(bounds(r), steps(r))
 end
 
-function tiles(r::Room; spheres::Bool = false)
-    space, transform = lattice_to_coord(r)
-    g = pathgraph(r)
-    vs = @>> g vertices filter(v -> !isfloor(g, v))
-    cis = CartesianIndices(steps(r))
-    vcis = Tuple.(cis[vs])
-    coords = map(transform, vcis)
-    types = @>> vs lazymap(v -> get_prop(g, v, :type))
-    @>> zip(types, coords) lazymap(xy -> tile(xy..., space, spheres)) collect
+function tiles(r::Room)
+    tiles(r, Int64[])
 end
 
+function tiles(r::Room, p::Vector{Int64})
+    d = data(r)
+    vs = union(get_tiles(r, obstacle_tile),
+               get_tiles(r, wall_tile))
+    nv = length(vs)
+    np = length(p)
+    n = nv + np
+    # map from room space to cartesian coordinates
+    (dx, dy), transform = lattice_to_coord(r)
+    cis = CartesianIndices(steps(r))
+    result = Vector{Dict}(undef, nv + np)
+    @inbounds for i = 1:n
+        v = i <= nv ? vs[i] : p[i - nv]
+        ci = Tuple(cis[v])
+        x, y = transform(ci)
+        result[i] =  tile(d[v], x, y, dx, dy)
+    end
+    return result
+end
+
+"""
+
+Creates a voxel map
+"""
 function cubify(r::Room)
 
     g = pathgraph(r)
@@ -114,33 +136,10 @@ function cubify(r::Room)
 
 end
 
-function task(r::Room)
-    space, transform = lattice_to_coord(r)
-    cis = CartesianIndices(steps(r))
-    ents = @>> Tuple.(cis[entrance(r)]) lazymap(transform)
-    ents = @>> ents lazymap(x -> spot(x, space)) collect
-
-    exts = @>> Tuple.(cis[exits(r)]) lazymap(transform)
-    exts = @>> exts lazymap(x -> spot(x, space; exit=true)) collect
-
-    vcat(ents, exts)
-end
-
-
-function plot_path(r::Room)
-    space, transform = lattice_to_coord(r)
-    cis = CartesianIndices(steps(r))
-    vs = safe_shortest_paths(r)
-    vs = @>> Tuple.(cis[vs]) lazymap(transform)
-    @>> vs lazymap(x -> spot(x, space)) collect
-end
-
-function translate(r::Room, paths::Bool;
-                   cubes::Bool=false,
-                   spheres::Bool=false)
-    ps = paths ? plot_path(r) : []
-    d = Dict(:floor => floor(r),
-             :ceiling => floor(r, ceiling = true),
+function translate(r::Room, paths::Vector{Int64};
+                   cubes::Bool=false)
+    d = Dict(:floor => plain(r),
+             :ceiling => plain(r, ceiling = true),
              :lights => lights(r),
              :camera => camera(r))
     if cubes
@@ -148,9 +147,7 @@ function translate(r::Room, paths::Bool;
         d[:walls] = walls
         d[:furniture] = furn
     else
-        d[:objects] = vcat(tiles(r, spheres=spheres),
-                           ps)
-                           # task(r), ps)
+        d[:objects] = tiles(r, paths)
     end
     return d
 end
@@ -160,14 +157,14 @@ default_template = joinpath(@__DIR__, "template.blend")
 
 function render(r::Room, out::String;
                 navigation = false,
-                spheres = false,
                 script = default_script, template = default_template,
                 mode = "none", blender="blender", threads=Sys.CPU_THREADS)
 
     isdir(out) || mkpath(out)
     scene_out = joinpath(out, "scene.json")
 
-    scene = translate(r, navigation, spheres = spheres) |> json
+    paths = navigation ? safe_shortest_paths(r) : Int64[]
+    scene = translate(r, paths) |> json
     open(scene_out, "w") do f
         write(f, scene)
     end
@@ -175,4 +172,4 @@ function render(r::Room, out::String;
     run(cmd)
 end
 
-export translate, render
+export translate, render, cubify

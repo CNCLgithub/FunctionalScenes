@@ -22,19 +22,20 @@ end
 function build_subpath(g::AbstractGraph, gd::Array{Int64}, v)::Vector{Int64}
     # initialize a bit vector (`falses`) for each tile being on a
     # shortest path to the entrance
-    path = @>> g nv falses
+    path = Vector{Bool}(falses(nv(g)))
     build_subpath!(path, g, gd, v)
     findall(path)
 end
 
-function build_subpath!(path::BitVector, g::AbstractGraph{T}, gd::Array{T},
+function build_subpath!(path::Vector{Bool}, g::AbstractGraph{T}, gd::Array{T},
                         vs::Vector{T}) where {T<:Int}
     @>> vs foreach(v -> build_subpath!(path, g, gd, v))
 end
 
-function build_subpath!(path::BitVector, g::AbstractGraph{T}, gd::Array{T}, v::T) where {T<:Int}
+function build_subpath!(path::Vector{Bool}, g::AbstractGraph{T}, gd::Array{T},
+                        v::T) where {T<:Int}
     # add neighbors that are 1 unit closer to the src
-    path[v] = 1
+    path[v] = true
     d_next = gd[v] - 1
 
     subpath = @>> v begin
@@ -57,40 +58,27 @@ end
 
 function all_shortest_paths(g::AbstractGraph{T}, start::Vector{T},
                             stop::Vector{T}) where {T}
-    # get subgraph of just floor
-    floor, vmap = @> g begin
-        filter_vertices(:type, :floor)
-        (@>> induced_subgraph(g))
-    end
-    ent_i = @>> vmap map(v -> in(v, start)) findall
-    exit_i = @>> vmap map(v -> in(v, stop)) findall
-
-    # compute geodesic distances to the entrance for each tile
-    gd = gdistances(floor, ent_i)
-
-    # walk through
-
+    gd = gdistances(g, start)
     # No path from entrance to exit
-    maximum(gd[exit_i]) <= length(floor) || return T[]
-
-    floor_path = build_subpath(floor, gd, exit_i)
-    # map back to pathgraph
-    vmap[floor_path]
+    maximum(gd[stop]) <= length(g) || return T[]
+    build_subpath(g, gd, stop)
 end
 
-function safe_shortest_paths(r::Room)
+function safe_shortest_paths(r::GridRoom)
     g = pathgraph(r)
     ents = entrance(r)
     exs = exits(r)
-    vs = @>> ents begin
-        first
-        connected(g)
-        collect(Int64)
-    end
     # closest points to the exit
     # that are still reachable from the entrance
-    gs = @>> r steps grid graph->gdistances(graph, exs)
-    safe_exits = findall(gs .== minimum(gs))
+    vs = neighborhood(g, first(ents), length(g))
+    gs = @> r begin
+        clear_room
+        pathgraph
+        gdistances(exs)
+        getindex(vs)
+    end
+    min_d = minimum(gs)
+    safe_exits = vs[gs .== min_d]
     all_shortest_paths(g, ents, safe_exits)
 end
 
@@ -172,34 +160,28 @@ function occupancy_grid(r::Room, ps::Vector{Vector{Int64}};
 end
 
 function occupancy_grid(r::Room, p::Vector{Int64};
-                        decay = -1, sigma = 1)
+                        decay::Float64 = -1.,
+                        sigma::Float64 = 1.0)
     g = pathgraph(r)
     m = zeros(steps(r))
-    mask = zeros(steps(r))
     lp = length(p)
     iszero(lp) && return m
     gs = @>> r entrance gdistances(g)
-    for v in p
-        if !isfloor(g, v)
-            println("$(v) => $(get_prop(g, v, :type))")
-            ns = connected(g, v)
-            new_r = clear_room(r)
-            new_r = add(new_r, ns)
-            display(new_r)
 
-            @>> ns collect filter(v -> istype(g, v, :floor)) println
-            error("invalid path")
-        end
+    for v in p
+        is_floor(r, v) || error("invalid path at tile $(v)")
         # m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
         m[v] = exp(decay * gs[v])
         # m[v] = exp(decay * (lp - i))
     end
+    # apply gaussian blur
     gf = Kernel.gaussian(sigma)
     m = imfilter(m, gf, "symmetric")
-    floor = @>> g vertices Base.filter(v -> isfloor(g, v)) collect
-    mask[floor] .= 1
     mm = maximum(m)
-    mm = iszero(mm) ? m : m ./ mm
+    mm = iszero(mm) ? m : m ./ mm # normalize to [0,1]
+    # remove blur along walls and obstacles
+    mask = zeros(steps(r))
+    mask[get_tiles(r, floor_tile)] .= 1
     m .* mask
 end
 

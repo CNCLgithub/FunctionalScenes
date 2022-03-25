@@ -38,3 +38,11 @@ Base.show(io::IO, ::Obstacle) = Base.print(io, '◆')
 Base.convert(::Type{Symbol}, ::Floor) = :floor
 Base.convert(::Type{Symbol}, ::Wall) = :wall
 Base.convert(::Type{Symbol}, ::Obstacle) = :obstacle
+
+const tile_d = Dict{Symbol, Tile}(
+    :wall => wall_tile,
+    :floor => floor_tile,
+    :obstacle => obstacle_tile,
+)
+Base.convert(::Type{Tile}, s::Symbol) = tile_d[s]
+Base.convert(::Type{Tile}, s::String) = tile_d[Symbol(s)]

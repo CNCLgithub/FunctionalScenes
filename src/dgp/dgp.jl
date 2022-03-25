@@ -3,10 +3,33 @@ export DGP, GrowState, valid_spaces, valid_move, valid_moves,
 
 abstract type DGP end
 
-struct GrowState <: DGP
+@with_kw struct FurnishState <: DGP
+    template::GridRoom
+    vm::PersistentVector{Bool}
+    f::Set{Int64}
+    count::Int64
+    max_size::Int64 = 5
+    max_count::Int64 = 10
+end
+
+function FurnishState(st::FurnishState, f::Set{Int64})
+    _vm = collect(Bool, st.vm)
+    _vm[f] .= false
+    FurnishState(st.template,
+                 PersistentVector(_vm),
+                 f,
+                 st.count + 1,
+                 st.max_size,
+                 st.max_count)
+end
+
+
+@with_kw struct GrowState <: DGP
     head::Int64
     vm::PersistentVector{Bool}
     g::PathGraph
+    current_depth::Int64
+    max_depth::Int64 = 5
 end
 
 # function GrowState(head::Int64, vmap::BitMatrix,
@@ -14,17 +37,20 @@ end
 #     GrowState(head, P)
 
 function GrowState(ns, ni::Int64, st::GrowState)::GrowState
-    @unpack vm, g = st
+    @unpack vm, g, current_depth = st
     # done growing
     ni == 0 && return st
     # update head
     new_head = ns[ni]
     new_vm = assoc(vm, new_head, false)
-    GrowState(new_head, new_vm, g)
+    GrowState(new_head, new_vm, g, current_depth + 1,
+              st.max_depth)
 end
 
 function neighboring_candidates(st::GrowState)::Vector{Int64}
-    @unpack head, vm, g = st
+    @unpack head, vm, g, current_depth, max_depth= st
+    # reached max depth. terminate
+    current_depth == max_depth && return Int64[]
     ns = neighbors(g, head)
     ns[vm[ns]]
 end
@@ -56,12 +82,28 @@ function valid_spaces(r::GridRoom)
 end
 
 # having to deal with type instability
-function merge_growth(head::Int64, children::Set{Int64})
+function merge_prod(st::GrowState, children::Set{Int64})
+    @unpack head = st
     union(children, head)
 end
-function merge_growth(head::Int64, children::Vector{Set{Int64}})
+function merge_prod(st::GrowState, children::Vector{Set{Int64}})
+    @unpack head = st
     isempty(children) ? Set(head) : union(first(children), head)
 end
+
+function merge_prod(st::FurnishState, children::Set{Int64})
+    @unpack f = st
+    # @show f
+    union(children, f)
+    # children
+end
+function merge_prod(st::FurnishState, children::Vector{Set{Int64}})
+    @unpack f = st
+    # @show f
+    isempty(children) ? f : union(first(children), f)
+    # isempty(children) ? f : first(children)
+end
+
 
 function is_floor(r::GridRoom, t::Int64)::Bool
     g = pathgraph(r)
@@ -92,10 +134,10 @@ end
 # checks whether moving furnition
 # -1 changes contact with other furnitures
 # -2 creates a "visual gap" when looking straight down the room
-function strongly_connected(r::Room, f::Furniture, move::Move)
+function strongly_connected(r::GridRoom, f::Furniture, m::Move)
 
     f_inds = collect(Int64, f)
-    shifted = move(r, f, move)
+    shifted = move(r, f, m)
 
     h, _ = steps(r)
     g = grid(steps(r))

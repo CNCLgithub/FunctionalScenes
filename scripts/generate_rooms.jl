@@ -5,6 +5,7 @@ using DataFrames
 using Statistics
 using FunctionalScenes
 using LinearAlgebra: norm
+using FunctionalCollections
 
 import Random:shuffle
 import Gen:categorical
@@ -16,9 +17,10 @@ function move_change(r::GridRoom,
                      f::Furniture,
                      m::Move,
                      base_og)
-    connected = strongly_connected(r, f, m)
-    # not valid, don't record
-    isempty(connected) && return -Inf
+    # FIXME: do we want to deal with gaps?
+    # connected = strongly_connected(r, f, m)
+    # # not valid, don't record
+    # isempty(connected) && return -Inf
     # passed first test
     shifted = shift_furniture(r,f,m)
     shifted_og = occupancy_grid(shifted; sigma = 0., decay = 0.)
@@ -33,7 +35,7 @@ function paired_change_in_path(x)
 
     # door 2 changes
     max_i = argmax(x[:, :d])
-    c2 = x[max_i, :d] > 10.0 && x[max_i, :door] == 2
+    c2 = x[max_i, :d] > 0.0 && x[max_i, :door] == 2
 
     c1 && c2
 end
@@ -55,37 +57,42 @@ end
 
 function build(door_conditions::Vector{GridRoom},
                move::Move;
-               k::Int64 = 16, factor::Int64 = 1,
+               max_f::Int64 = 5,
+               max_size::Int64 = 5,
+               factor::Int64 = 1,
                pct_open::Float64 = 0.5)
 
     # assuming all rooms have the same entrance and dimensions
-    rex = expand(first(door_conditions), factor)
+    rex = first(door_conditions)
+    # rex = expand(first(door_conditions), factor)
     dims = steps(rex)
 
     # prevent furniture generated in either:
     # -1 out of sight
     # -2 blocking entrance exit
     # -3 hard to detect spaces next to walls
-    weights = zeros(dims)
+    weights = Matrix{Bool}(zeros(dims))
     # ensures that there is no furniture near the observer
     start_x = Int64(last(dims) * pct_open)
     stop_x = last(dims) - 2 # nor blocking the exit
     start_y = 2
     stop_y = first(dims) - 1
     weights[start_y:stop_y, start_x:stop_x] .= 1.0
-    vmap = vec(weights)
+    vmap = PersistentVector(vec(weights))
 
     # generate furniture once and then apply to
     # each door condition
-    with_furn = last(furniture_chain(k, rex, weights))
-    exp_bases = map(r -> add(with_furn, expand(r, factor)))
+    with_furn = furniture_gm(rex, vmap, max_f, max_size)
+    with_furn = expand(with_furn, factor)
+    exp_bases = map(r -> add(with_furn, expand(r, factor)),
+                    door_conditions)
     fs = furniture(with_furn)
     results = DataFrame(door = Int64[],
                         furniture = Int64[],
                         move = Symbol[],
                         d = Float64[])
     for (i, ri) in enumerate(exp_bases)
-        base_og = occupancy_grid(base_r; sigma = 0., decay = 0.)
+        base_og = occupancy_grid(ri; sigma = 0., decay = 0.)
         for (j, fj) in enumerate(fs)
             d = move_change(ri, fj, move, base_og)
             push!(results,
@@ -93,20 +100,12 @@ function build(door_conditions::Vector{GridRoom},
                   [i, j, move, d])
         end
     end
+    display(results)
     # see if any furniture pieces fit the criterion
-    results = digest(results)
+    results = examine_furniture(results)
     (exp_bases, results)
 end
 
-
-
-function create(room_dims::Tuple{Int64, Int64},
-                entrance::Int64,
-                doors::Vector{Int64};
-                n::Int64 = 8)
-
-    return seeds, df
-end
 
 
 function main()
@@ -124,8 +123,7 @@ function main()
     door_rows = [3, 9]
     inds = LinearIndices(room_dims)
     doors = inds[door_rows, room_dims[2]]
-    # doors = @>> doors map(d -> inds[d, room_dims[2]]) collect(Int64)
-    #
+
     # number of trials
     n = 2
 
@@ -165,11 +163,11 @@ function main()
             append!(df, _df)
 
             # save scenes as json
-            open("$(scenes_out)/$(id)_1".json, "w") do f
+            open("$(scenes_out)/$(id)_1.json", "w") do f
                 _d = pair[1] |> json
                 write(f, _d)
             end
-            open("$(scenes_out)/$(id)_2".json, "w") do f
+            open("$(scenes_out)/$(id)_2.json", "w") do f
                 _d = pair[2] |> json
                 write(f, _d)
             end

@@ -73,8 +73,11 @@ valid_move(::Down, r::GridRoom, f::Furniture) = all((f .% first(steps(r))) .> 0)
 valid_move(::Up, r::GridRoom, f::Furniture) = all((f .% first(steps(r))) .!= 1)
 
 
-function shift_furniture(r::Room, f::Furniture, move::Int64)
-    shift_furniture(r, f, move_map[move])
+function shift_furniture(r::Room, f::Furniture, m::Symbol)
+    shift_furniture(r, f, move_d[m])
+end
+function shift_furniture(r::Room, f::Furniture, m::Int64)
+    shift_furniture(r, f, move_map[m])
 end
 
 function shift_furniture(r::GridRoom, f::Furniture, m::Move)

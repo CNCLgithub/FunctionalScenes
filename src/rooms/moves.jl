@@ -1,5 +1,5 @@
 export Move, Left, Right, Down, Up, left_move, right_move, down_move, up_move,
-    move_map
+    move_map, move_d
 
 #################################################################################
 # Movement
@@ -22,3 +22,10 @@ const down_move = Down()
 const up_move = Up()
 
 const move_map = [up_move, down_move, left_move, right_move]
+
+const move_d = Dict(
+    :up => up_move,
+    :down => down_move,
+    :left => left_move,
+    :right => right_move,
+)

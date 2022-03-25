@@ -52,11 +52,11 @@ end;
 @load_generated_functions
 
 @testset "Furnishing" begin
-    r = GridRoom((5,3), (5,3), [2], [12]);
-    r = add(r, Set([7]))
+    r = GridRoom((10,10), (10,10), [5], []);
+    r = add(r, Set([13]))
     g = pathgraph(r)
     vs = valid_spaces(r)
-    @test findall(vs) ==  [8, 9];
+    # @test findall(vs) ==  [8, 9];
 
     # gs = GrowState(8, vs, g)
     # result = FunctionalScenes.fixed_depth_grow(gs, 1)
@@ -67,7 +67,13 @@ end;
     # @time tr, _ = Gen.generate(furnish, (r, vs, 1))
     # display(get_choices(tr))
     # display(get_retval(tr))
-    @test furnish(r, vs, 1) == Set([8, 9]);
+
+    tr, _ = Gen.generate(furniture_gm, (r, vs, 10, 5))
+    # @time tr, _ = Gen.generate(furniture_gm, (r, vs, 10, 5))
+    # display(get_choices(tr))
+    # display(get_retval(tr))
+    # @test furnish(r, vs, 1) == Set([8, 9]);
+    @test true
 end;
 
 @testset "Reorganizing" begin
@@ -86,9 +92,29 @@ end;
     @test valid_moves(r2, f2) == [1, 0, 1, 1]
 end;
 
-# @testset "Navigation" begin
-#     @test compare(r, r2) > 0
-# end;
+@testset "Navigation" begin
+    r = GridRoom((4,10), (4, 10), [2], [38]);
+    r = add(r, Set([18]));
+    paths = safe_shortest_paths(r)
+    # obstacle shouldn't show up in paths
+    @test !in(18, paths)
+
+
+    r = GridRoom((4,10), (4, 10), [2], [38]);
+    r = add(r, Set([18, 19]));
+    paths = safe_shortest_paths(r)
+    # path should stop at blockage
+    @test Set(paths) == Set([2, 6, 10, 14])
+
+    r = GridRoom((4,10), (4, 10), [2], [38]);
+    r = add(r, Set([18]));
+    paths = safe_shortest_paths(r)
+    og = occupancy_grid(r, decay = 0., sigma = 0.)
+
+    # REVIEW is this a valid test?
+    @test sum(og) == length(paths)
+
+end;
 
 
 # @testset "Showing" begin
@@ -97,8 +123,3 @@ end;
 #     @show (r, first(p))
 # end;
 
-# @testset "gdistances" begin
-#     r = Room((10,10), (10,10), [5], [95]);
-#     paths = FunctionalScenes.all_shortest_paths(r)
-#     @show paths
-# end;

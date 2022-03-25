@@ -1,4 +1,5 @@
-export GridRoom, pathgraph, data, entrance, exits, bounds, steps, expand
+export GridRoom, pathgraph, data, entrance, exits, bounds, steps, expand,
+    from_json
 
 #################################################################################
 # Type aliases
@@ -38,6 +39,7 @@ floor_edge(d::Array{Tile}, e::AbstractEdge) = (d[src(e)] == floor_tile) &&
     (d[dst(e)] == floor_tile)
 # wall_edge(g, e::Edge) = (get_prop(g, src(e), :type) == :wall) &&
 #     (get_prop(g, dst(e), :type) == :wall)
+get_tiles(r::GridRoom, t::Tile) = findall(data(r) .== t)
 
 
 function GridRoom(steps, bounds)
@@ -106,22 +108,6 @@ function expand(r::GridRoom, factor::Int64)::GridRoom
 end
 
 
-
-# function shift_tile(r::Room, t::Tile, m::Symbol)::Tile
-#     rows = first(steps(r))
-#     idx = copy(t)
-#     if m == :up
-#         idx += - 1
-#     elseif m == :down
-#         idx += 1
-#     elseif m == :left
-#         idx -= rows
-#     else
-#         idx += rows
-#     end
-#     return idx
-# end
-
 const _char_map = Dict{Symbol, String}(
     :entrance => "◉",
     :exit => "◎",
@@ -147,7 +133,25 @@ function Base.show(io::IO, m::MIME"text/plain",
 end
 
 JSON.lower(r::GridRoom) = Dict(
-    steps = steps(r),
-    bounds = bounds(r),
-    data = Symbol.(data(r))
+    steps  => steps(r),
+    bounds => bounds(r),
+    entrance => entrance(r),
+    exits => exits(r),
+    data   => convert.(Symbol, data(r))
 )
+
+# FIXME: several janky statements
+function from_json(::Type{GridRoom}, jd::Dict)
+    s = Tuple(collect(Int64, jd["steps"]))
+    b = Tuple(collect(Float64, jd["bounds"]))
+    g = PathGraph(grid(s))
+    d = Matrix{Tile}(undef, s)
+    for i = 1:s[1], j = 1:s[2]
+        msg = Symbol(jd["data"][j][i])
+        d[i, j] = convert(Tile, msg)
+    end
+    prune_edges!(g, d)
+    en = collect(Int64, jd["entrance"])
+    ex = collect(Int64, jd["exits"])
+    GridRoom(s,b,en,ex, g, d)
+end
