@@ -3,9 +3,9 @@ using JSON
 const tile_height = 5.0
 
 function light(pos)
-    Dict(:position => [pos..., 0.99 * tile_height],
+    Dict(:position => [pos..., 0.95 * tile_height],
          :orientation => [0., 0., 0.5 * pi],
-         :intensity => 300.0)
+         :intensity => 150.0)
 end
 
 function lights(r::Room)
@@ -19,16 +19,13 @@ function camera(r::Room)
     # camera is placed over entrance
     space, transform = lattice_to_coord(r)
     cis = CartesianIndices(steps(r))
-    pos = @>> r begin
-        entrance
-        first
-        getindex(cis)
-        Tuple
-        transform
-    end
-    # FIXME: looks janky
-    pos = pos  .+ ((0.5, -1.25) .* space) # slight shift to center
-    pos = [pos..., 0.75 * tile_height]
+    pos = transform.(Tuple.(cis[entrance(r)]))
+    # REVIEW: may need adjustment along y (forward-back)
+    # NOTE: no adjustment needed when using 60mm camera
+    y = pos[1][2]
+    x = mean(first.(pos)) + 0.5
+    # center of x-y for entrances
+    pos = [x, y, 0.75 * tile_height]
     orientation = [0.475 * pi, 0., 0.]
     Dict(:position => pos,
          :orientation => orientation)
@@ -58,7 +55,7 @@ end
 
 function tile(::Obstacle, x::Float64, y::Float64,
               dx::Float64, dy::Float64)
-    dz = 0.35 * tile_height # sqrt(dx^2 + dy^2)
+    dz = 0.3 * tile_height
     pos = [x, y, dz / 2.0]
     Dict(:position => pos,
          :orientation => [0,0,0],

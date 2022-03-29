@@ -15,7 +15,7 @@ using DataFrames
 cycles_args = Dict(
     # :mode => "full",
     :mode => "none",
-    :navigation => true
+    :navigation => false
 )
 
 # function render_base(bases::Vector{Int64}, name::String;
@@ -91,8 +91,8 @@ end
 # end
 function main()
     args = Dict(
-        "dataset" => "03_24_test",
-        "scene" => 1,
+        "dataset" => "vss_pilot",
+        "scene" => 0,
         "threads" => Sys.CPU_THREADS
     )
     # args = parse_commandline()

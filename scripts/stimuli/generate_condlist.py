@@ -46,32 +46,33 @@ def stimuli(a, b, fps, im_dur, mk_dur, out,
 def main():
 
     parser = argparse.ArgumentParser(
-        description = 'Generates condlist for 1exit',
+        description = 'Generates condlist for experiment',
         formatter_class = argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--scene', type = str,
+    parser.add_argument('--dataset', type = str,
                         help = "Which scene dataset to use",
-                        default = '2e_1p_30s')
+                        default = 'vss_pilot')
     parser.add_argument('--render', type = str,
-                        help = "Which render mode",
-                        default = 'cycles_cubes')
+                        help = "Which render mode", choices = ['cycles'],
+                        default = 'cycles')
     parser.add_argument('--fps', type = int,
                         help = "FPS of resulting videos",
                         default = 60)
     parser.add_argument('--stim_dur', type = float,
                         help = 'duration of A or B in seconds',
-                        default = 0.250)
+                        default = 0.750)
     parser.add_argument('--mask_dur', type = float,
                         help = 'duration of mask in seconds',
                         default = 0.750)
     args = parser.parse_args()
 
-    renders = '/renders/' + args.scene + '_' + args.render
-    movies = '/movies/' + args.scene + '_' + args.render
+    dataset = '/spaths/datasets/' + args.dataset
+    renders = dataset + '/render_cycles/' + args.scene
+    renders = '{0!s}/render_{1!s}'.format(dataset, args.render)
+    renders = '{0!s}/movies_{1!s}'.format(dataset, args.render)
 
-    #movies = '/movies/{0!s}_{1:0.3f}'.format(args.scene, args.stim_dur)
     os.path.isdir(movies) or os.mkdir(movies)
-    df = pd.read_csv('/scenes/' + args.scene + '.csv')
+    df = pd.read_csv(os.path.join(dataset, 'scenes.csv'))
 
     aa_movies = []
     ab_movies = []

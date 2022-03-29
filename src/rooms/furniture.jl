@@ -1,4 +1,4 @@
-export Furniture, furniture, add, remove, clear_room, valid_move, shift_furniture
+export Furniture, furniture, add, remove, clear_room, shift_furniture
 
 #################################################################################
 # Furniture
@@ -63,16 +63,6 @@ function clear_room(r::Room)::Room
              r.exits, g, d)
 end
 
-
-
-function valid_move(::Move, ::Room, ::Furniture)::Bool end
-
-valid_move(::Left, r::GridRoom, f::Furniture) = all(f .> first(steps(r)))
-valid_move(::Right, r::GridRoom, f::Furniture) = all(f .<= (prod(steps) - first(steps(r))))
-valid_move(::Down, r::GridRoom, f::Furniture) = all((f .% first(steps(r))) .> 0)
-valid_move(::Up, r::GridRoom, f::Furniture) = all((f .% first(steps(r))) .!= 1)
-
-
 function shift_furniture(r::Room, f::Furniture, m::Symbol)
     shift_furniture(r, f, move_d[m])
 end
@@ -81,8 +71,6 @@ function shift_furniture(r::Room, f::Furniture, m::Int64)
 end
 
 function shift_furniture(r::GridRoom, f::Furniture, m::Move)
-    # Check to see if move is valid
-    @assert valid_move(m, r, f)
     @assert all(r.data[f] .== obstacle_tile)
     d = deepcopy(r.data)
     # apply move

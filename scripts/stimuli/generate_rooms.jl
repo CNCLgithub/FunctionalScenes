@@ -17,11 +17,6 @@ function move_change(r::GridRoom,
                      f::Furniture,
                      m::Move,
                      base_og)
-    # FIXME: do we want to deal with gaps?
-    # connected = strongly_connected(r, f, m)
-    # # not valid, don't record
-    # isempty(connected) && return -Inf
-    # passed first test
     shifted = shift_furniture(r,f,m)
     shifted_og = occupancy_grid(shifted; sigma = 0., decay = 0.)
     # compute impact of shift
@@ -57,10 +52,11 @@ end
 
 function build(door_conditions::Vector{GridRoom},
                move::Move;
-               max_f::Int64 = 5,
+               max_f::Int64 = 15,
                max_size::Int64 = 5,
                factor::Int64 = 1,
-               pct_open::Float64 = 0.5)
+               pct_open::Float64 = 0.3,
+               side_buffer::Int64 = 1)
 
     # assuming all rooms have the same entrance and dimensions
     rex = first(door_conditions)
@@ -73,10 +69,11 @@ function build(door_conditions::Vector{GridRoom},
     # -3 hard to detect spaces next to walls
     weights = Matrix{Bool}(zeros(dims))
     # ensures that there is no furniture near the observer
-    start_x = Int64(last(dims) * pct_open)
+    start_x = Int64(ceil(last(dims) * pct_open))
     stop_x = last(dims) - 2 # nor blocking the exit
-    start_y = 2
-    stop_y = first(dims) - 1
+    # buffer along sides
+    start_y = side_buffer + 1
+    stop_y = first(dims) - side_buffer
     weights[start_y:stop_y, start_x:stop_x] .= 1.0
     vmap = PersistentVector(vec(weights))
 
@@ -84,6 +81,7 @@ function build(door_conditions::Vector{GridRoom},
     # each door condition
     with_furn = furniture_gm(rex, vmap, max_f, max_size)
     with_furn = expand(with_furn, factor)
+    n_v = prod(steps(with_furn))
     exp_bases = map(r -> add(with_furn, expand(r, factor)),
                     door_conditions)
     fs = furniture(with_furn)
@@ -94,13 +92,15 @@ function build(door_conditions::Vector{GridRoom},
     for (i, ri) in enumerate(exp_bases)
         base_og = occupancy_grid(ri; sigma = 0., decay = 0.)
         for (j, fj) in enumerate(fs)
+            # REVIEW: see if only changing rear obstacles makes a difference
+            # ignore obstacles in the front
+            (minimum(fj) < (0.4 * n_v)) && continue
+            valid_move(ri, fj, move) || continue
             d = move_change(ri, fj, move, base_og)
-            push!(results,
-                  # door, furn, distance
-                  [i, j, move, d])
+            # door, furn, distance
+            push!(results, [i, j, move, d])
         end
     end
-    display(results)
     # see if any furniture pieces fit the criterion
     results = examine_furniture(results)
     (exp_bases, results)
@@ -109,7 +109,7 @@ end
 
 
 function main()
-    name = "03_24_test"
+    name = "vss_pilot"
     dataset_out = "/spaths/datasets/$(name)"
     isdir(dataset_out) || mkdir(dataset_out)
 
@@ -118,14 +118,14 @@ function main()
 
 
     # Parameters
-    room_dims = (11,20)
-    entrance = 6
-    door_rows = [3, 9]
+    room_dims = (16, 24)
+    entrance = [8, 9]
+    door_rows = [5, 12]
     inds = LinearIndices(room_dims)
     doors = inds[door_rows, room_dims[2]]
 
     # number of trials
-    n = 2
+    n = 30
 
     # will only consider these moves
     moves = [down_move, up_move]
@@ -136,7 +136,7 @@ function main()
 
     # empty rooms with doors
     templates = @>> doors begin
-        map(d -> GridRoom(room_dims, room_dims, [entrance], [d]))
+        map(d -> GridRoom(room_dims, room_dims, entrance, [d]))
         collect(GridRoom)
     end
 
@@ -158,8 +158,7 @@ function main()
             # valid pair found, organize and store
             id = (idx - 1) * max_count + i
             _df[!, :id] .= id
-            _df[!, :flip] .= i % 2
-            @show _df
+            _df[!, :flip] .= (i-1) % 2
             append!(df, _df)
 
             # save scenes as json
@@ -172,7 +171,7 @@ function main()
                 write(f, _d)
             end
 
-            println("$(i)/$(n)")
+            print("move $(idx): $(i)/$(max_count)\r")
             i += 1
         end
     end

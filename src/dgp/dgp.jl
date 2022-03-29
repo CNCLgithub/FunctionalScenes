@@ -15,6 +15,7 @@ end
 function FurnishState(st::FurnishState, f::Set{Int64})
     _vm = collect(Bool, st.vm)
     _vm[f] .= false
+    purge_around!(_vm, st.template, f)
     FurnishState(st.template,
                  PersistentVector(_vm),
                  f,
@@ -58,13 +59,14 @@ end
 function valid_spaces(r::Room)::PersistentVector{Bool} end
 
 function valid_spaces(r::Room, vm::PersistentVector{Bool})
-    PersistentVector(valid_spaces(r) .& vm)
+    PersistentVector{Bool}(valid_spaces(r) .& vm)
 end
 
 function valid_spaces(r::GridRoom)
     g = pathgraph(r)
     d = data(r)
-    valid_map = vec(d) .== floor_tile
+    vec_d = vec(d)
+    valid_map = Vector{Bool}(vec_d .== floor_tile)
     valid_map[entrance(r)] .= false
     valid_map[exits(r)] .= false
 
@@ -78,6 +80,11 @@ function valid_spaces(r::GridRoom)
         ns = neighbors(g, v)
         valid_map[ns] .= false
     end
+
+    # want to prevent "stitching" new pieces together
+    fvs = Set{Int64}(findall(vec_d .== obstacle_tile))
+    purge_around!(valid_map, r, fvs)
+
     PersistentVector(valid_map)
 end
 
@@ -129,6 +136,14 @@ function valid_moves(r::Room, f::Furniture)::BitVector
         moves[i] = valid_move(r, f, move_map[i])
     end
     BitVector(moves)
+end
+
+function purge_around!(vm::Vector{Bool}, r::GridRoom, f::Furniture)
+    # want to prevent "stitching" new pieces together
+    for m in move_map
+        vm[move(r, f, m)] .= false
+    end
+    return nothing
 end
 
 # checks whether moving furnition

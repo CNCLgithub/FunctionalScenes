@@ -31,7 +31,12 @@ end
 const fixed_grow = grow_rec(10);
 
 """
+    furnish
+
 Randomly samples a new piece of furniture
+
+Note: Assumes that at least one valid tile is present.
+Usage should be safe when within a `FurnishState` context.
 """
 @gen static function furnish(r::GridRoom,
                              vmap::PersistentVector{Bool},
@@ -41,11 +46,7 @@ Randomly samples a new piece of furniture
     # - baking in a prior about number of immediate neighbors
     g = pathgraph(r)
     # annoying type instability...
-    # passed = PersistentVector(vmap .& valid_spaces(r))
     passed = valid_spaces(r, vmap)
-    # if !any(passed)
-    #     return Furniture()
-    # end
     np = sum(passed)
     ws = (1.0 / np) * passed
     head = @trace(categorical(ws), :head)
