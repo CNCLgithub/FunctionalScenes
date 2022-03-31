@@ -5,13 +5,13 @@ import os
 import argparse
 from slurmpy import sbatch
 
-#script = 'bash {0!s}/run.sh julia -C "generic" -J /project/image.so ' + \
-#         '/project/scripts/experiments/attention/attention.jl'
-script = 'bash {0!s}/run.sh julia -C "generic" ' + \
-         '/project/scripts/render_rooms.jl'
+datasets = ['vss_pilot']
+
+script = 'bash {0!s}/run.sh julia ' + \
+         '/project/scripts/stimuli/render_rooms.jl'
 
 def att_tasks(args):
-    tasks = [(t, ) for t in range(1, args.scenes+1)]
+    tasks = [(args.dataset, t) for t in range(1, args.scenes+1)]
     return (tasks, [], [])
     
 def main():
@@ -20,9 +20,12 @@ def main():
         formatter_class = argparse.ArgumentDefaultsHelpFormatter
     )
 
-    parser.add_argument('--scenes', type = int, default = 32,
+    parser.add_argument('--dataset', type = str, default = 'vss_pilot',
+                        choices = datasets,
+                        help = 'Dataset to render')
+    parser.add_argument('--scenes', type = int, default = 60,
                         help = 'number of scenes')
-    parser.add_argument('--duration', type = int, default = 20,
+    parser.add_argument('--duration', type = int, default = 10,
                         help = 'job duration (min)')
     args = parser.parse_args()
 
@@ -35,17 +38,18 @@ def main():
         'mem-per-cpu' : '1GB',
         'time' : '{0:d}'.format(args.duration),
         'partition' : 'scavenge',
-        # 'gres' : 'gpu:1',
         'requeue' : None,
         'job-name' : 'rooms',
-        'output' : os.path.join(os.getcwd(), 'output/slurm/%A_%a.out')
+        'output' : os.path.join(os.getcwd(), 'env.d/spaths/slurm/%A_%a.out')
     }
     func = script.format(os.getcwd())
     batch = sbatch.Batch(interpreter, func, tasks,
                          kwargs, extras, resources)
+    job_script = batch.job_file(chunk = n, tmp_dir = '/spaths/slurm')
+    job_script = '\n'.join(job_script)
     print("Template Job:")
-    print('\n'.join(batch.job_file(chunk=n)))
-    batch.run(n = n, check_submission = False)
+    print(job_script)
+    # batch.run(n = njobs, script = job_script)
 
 if __name__ == '__main__':
     main()
