@@ -13,8 +13,8 @@ using DataFrames
 # device = _load_device()
 
 cycles_args = Dict(
-    # :mode => "full",
-    :mode => "none",
+    :mode => "full",
+    # :mode => "none",
     :navigation => false
 )
 
