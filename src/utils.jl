@@ -39,6 +39,12 @@ function read_json(path)
     return sym_data
 end
 
+function _init_graphics(r, img_size, device)
+    graphics = functional_scenes.SimpleGraphics(img_size, device)
+    base_d = translate(r, Int64[])
+    graphics.set_from_scene(base_d)
+    return graphics
+end
 
 #################################################################################
 # Math

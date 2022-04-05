@@ -84,12 +84,6 @@ function load(::Type{ModelParams}, path::String; kwargs...)
     ModelParams(;read_json(path)..., kwargs...)
 end
 
-function _init_graphics(r, img_size, device)
-    graphics = functional_scenes.SimpleGraphics(img_size, device)
-    base_d = translate(r, false)
-    graphics.set_from_scene(base_d)
-    return graphics
-end
 
 function _tracker_ref(r::Room, dims::Tuple{Int64, Int64},
                       offset::CartesianIndex{2})

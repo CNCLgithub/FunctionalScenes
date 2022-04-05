@@ -1,6 +1,7 @@
 using JSON
 
 const tile_height = 5.0
+const obstacle_height = 0.3 * tile_height
 
 function light(pos)
     Dict(:position => [pos..., 0.95 * tile_height],
@@ -112,25 +113,27 @@ end
 
 """
 
-Creates a voxel map
+Creates a voxel map Z*Y*X
 """
-function cubify(r::Room)
+function cubify(r::GridRoom)
 
-    g = pathgraph(r)
+    d = data(r)
     cis = CartesianIndices(steps(r))
-    dims = reverse(steps(r))
-    walls = zeros(4, dims...)
-    furniture = zeros(4, dims...)
-    for v in vertices(g)
-        idx = reverse(Tuple(cis[v]))
-        if istype(g,v,:wall)
-            walls[:, idx...] .= 1.0
-        elseif istype(g,v,:furniture)
-            furniture[1, idx...] = 1.0
+    dx, dy = steps(r)
+    c_th = Int64(ceil(tile_height))
+    c_oh = Int64(ceil(obstacle_height))
+    voxels = zeros(c_th * 2, dy, dx)
+    # add floor
+    voxels[1, :, :] .= 1.0
+    for i in 1:length(d)
+        (x, y) = Tuple(cis[i])
+        if d[i] == wall_tile
+            voxels[2:c_th+1, y, x] .= 1.0
+        elseif d[i] == obstacle_tile
+            voxels[2:c_oh+1, y, x] .= 2.0
         end
     end
-    return (furniture, walls)
-
+    return voxels
 end
 
 function translate(r::Room, paths::Vector{Int64};
@@ -140,9 +143,8 @@ function translate(r::Room, paths::Vector{Int64};
              :lights => lights(r),
              :camera => camera(r))
     if cubes
-        furn, walls = cubify(r)
-        d[:walls] = walls
-        d[:furniture] = furn
+        d[:voxels] = cubify(r)
+        d[:voxel_dim] = maximum(bounds(r)) * 0.5
     else
         d[:objects] = tiles(r, paths)
     end
