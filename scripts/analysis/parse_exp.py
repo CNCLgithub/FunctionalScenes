@@ -64,25 +64,36 @@ def read_db(db_path, table_name, codeversions, mode):
 def parse_row(tname):
 
     # scene data
-    tpath, _ = os.path.splitext(tname)
+    img_a, img_b, flip = tname
+    tpath, _ = os.path.splitext(img_b)
     splits = tpath.split('_')
-    if len(splits) == 3:
+    ns = len(splits)
+    if ns == 2:
+        # A -> A
         base = True
-        scene, _, door = splits
+        scene, door = splits
         furniture = None
         move = None
-    else:
+    elif ns == 4:
+        # A -> B
         base = False
         scene, door, furniture, move = splits
+    else:
+        raise ValueError('Unrecognized trial format')
+
 
     new_row = {
         'base' : base,
         'scene' : scene,
         'door' : door,
         'furniture' : furniture,
-        'move' : move}
+        'move' : move,
+        'flip' : flip}
     return new_row
 
+exp_choices = [
+    'vss_pilot',
+]
 
 def main():
 
@@ -90,7 +101,7 @@ def main():
         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("--exp", type = str, help = "Path to trial dataset",
-                        default = '2e_1p_30s')
+                        default = 'vss_pilot', choices = exp_choices)
     parser.add_argument("--table_name", type = str, default = "2e_1p_30s",
                         help = 'Table name')
     parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["1.0"],
@@ -98,14 +109,8 @@ def main():
     parser.add_argument("--mode", type = str, default = "debug",
                         choices = ['debug', 'sandbox', 'live'],
                         help = 'Experiment mode')
-    parser.add_argument("--trialsbyp", type = int, default = 128,
+    parser.add_argument("--trialsbyp", type = int, default = 60,
                         help = 'Number of trials expected per subject')
-    parser.add_argument("--trialdata", type = str,
-                        default = '/experiments/pilot/parsed_trials.csv',
-                        help = 'Filename to dump parsed trial data')
-    parser.add_argument("--questiondata", type = str,
-                        default = '/experiments/pilot/parsed_questions.csv',
-                        help = 'Filename to dump parsed trial data')
     args = parser.parse_args()
 
     exp_src = os.path.join('/spaths/experiments', args.exp)
