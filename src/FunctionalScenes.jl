@@ -24,12 +24,12 @@ using FunctionalCollections
 # Runtime configuration
 #################################################################################
 
-# const torch = PyNULL()
-# const functional_scenes = PyNULL()
-# function __init__()
-#     copy!(torch, pyimport("torch"))
-#     copy!(functional_scenes, pyimport("functional_scenes"))
-# end
+const torch = PyNULL()
+const functional_scenes = PyNULL()
+function __init__()
+    copy!(torch, pyimport("torch"))
+    copy!(functional_scenes, pyimport("functional_scenes"))
+end
 
 #################################################################################
 # Module imports
