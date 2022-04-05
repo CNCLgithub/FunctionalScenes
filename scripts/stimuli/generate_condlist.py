@@ -9,21 +9,6 @@ from functional_scenes import blank, chain, still, concat, vflip, run_cmd
 
 noise = '/project/src/blender/noise.jpeg'
 
-# def stimuli(a, b, fps, im_dur, mk_dur, out):
-#     """Creates a video of the pattern `a -> mask -< b`
-#     """
-#     src = '' # blank takes an empty argument
-#     p1 = out + '_p1'
-#     p2 = out + '_p2'
-#     cmd = chain([still], [(im_dur,fps)], a, p1, 'a')
-#     cmd += chain([still], [(im_dur,fps)], b, p2, 'b')
-#     cmd += chain([still, concat, concat],
-#                  [(mk_dur, fps), (p1+'.mp4', True), (p2+'.mp4', False)],
-#                  noise, out, 'c')
-#     cmd.append('rm ' + p1 + '.mp4')
-#     cmd.append('rm ' + p2 + '.mp4')
-#     run_cmd(cmd)
-
 
 def stimuli(a, b, fps, im_dur, mk_dur, out,
             flip = False):
@@ -67,9 +52,8 @@ def main():
     args = parser.parse_args()
 
     dataset = '/spaths/datasets/' + args.dataset
-    renders = dataset + '/render_cycles/' + args.scene
     renders = '{0!s}/render_{1!s}'.format(dataset, args.render)
-    renders = '{0!s}/movies_{1!s}'.format(dataset, args.render)
+    movies = '{0!s}/movies_{1!s}'.format(dataset, args.render)
 
     os.path.isdir(movies) or os.mkdir(movies)
     df = pd.read_csv(os.path.join(dataset, 'scenes.csv'))
@@ -100,7 +84,7 @@ def main():
     nab = len(ab_movies)
 
     trials = [aa_movies + ab_movies]
-    with open(os.path.join(movies, args.scene + '.json'), 'w') as f:
+    with open(os.path.join(movies, 'condlist.json'), 'w') as f:
        json.dump(trials, f)
 
 

@@ -7,7 +7,7 @@ from slurmpy import sbatch
 
 datasets = ['vss_pilot']
 
-script = 'bash {0!s}/run.sh julia ' + \
+script = 'bash {0!s}/env.d/run.sh julia ' + \
          '/project/scripts/stimuli/render_rooms.jl'
 
 def att_tasks(args):
@@ -32,6 +32,7 @@ def main():
     n = args.scenes
     tasks, kwargs, extras = att_tasks(args)
 
+    slurm_out = os.path.join(os.getcwd(), 'env.d/spaths/slurm')
     interpreter = '#!/bin/bash'
     resources = {
         'cpus-per-task' : '4',
@@ -40,16 +41,17 @@ def main():
         'partition' : 'scavenge',
         'requeue' : None,
         'job-name' : 'rooms',
-        'output' : os.path.join(os.getcwd(), 'env.d/spaths/slurm/%A_%a.out')
+        'chdir' : os.getcwd(),
+        'output' : os.path.join(slurm_out, '%A_%a.out')
     }
     func = script.format(os.getcwd())
     batch = sbatch.Batch(interpreter, func, tasks,
                          kwargs, extras, resources)
-    job_script = batch.job_file(chunk = n, tmp_dir = '/spaths/slurm')
+    job_script = batch.job_file(chunk = n, tmp_dir = slurm_out)
     job_script = '\n'.join(job_script)
     print("Template Job:")
     print(job_script)
-    # batch.run(n = njobs, script = job_script)
+    batch.run(n = n, script = job_script)
 
 if __name__ == '__main__':
     main()
