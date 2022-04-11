@@ -95,13 +95,20 @@ exp_choices = [
     'vss_pilot',
 ]
 
+# exp flag legend
+#
+# vss_pilot:
+#
+#   3.0 : reduced number + size of objects (vss_pilot_12f_32x48.tar.gz)
+#   4.0 : reduced size of room (vss_pilot_11f_32x32.tar.gz)
+
 def main():
 
     parser = argparse.ArgumentParser(description = "Parses participants.db",
         formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("--exp", type = str, help = "Path to trial dataset",
-                        default = 'vss_pilot', choices = exp_choices)
+                        default = 'vss_pilot')
     parser.add_argument("--table_name", type = str, default = "2e_1p_30s",
                         help = 'Table name')
     parser.add_argument("--exp_flag", type = str, nargs ='+', default = ["1.0"],
@@ -109,7 +116,7 @@ def main():
     parser.add_argument("--mode", type = str, default = "debug",
                         choices = ['debug', 'sandbox', 'live'],
                         help = 'Experiment mode')
-    parser.add_argument("--trialsbyp", type = int, default = 60,
+    parser.add_argument("--trialsbyp", type = int, default = 120,
                         help = 'Number of trials expected per subject')
     args = parser.parse_args()
 

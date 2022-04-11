@@ -155,3 +155,37 @@ function from_json(::Type{GridRoom}, jd::Dict)
     ex = collect(Int64, jd["exits"])
     GridRoom(s,b,en,ex, g, d)
 end
+
+
+# Debug visualization
+
+function viz_room(r::GridRoom, ocg::Matrix{Float64})
+    d = data(r)
+    c = deepcopy(ocg)
+    c[d .== obstacle_tile] .= -1.
+        println(spy(c,
+                    title = "Obstacles + path"))
+
+end
+function viz_room(r::GridRoom)
+    d = data(r)
+    c = occupancy_position(r)
+    println(heatmap(c,
+                    border = :none,
+                    colorbar_border = :none,
+                    colormap = :inferno
+                    ))
+end
+
+
+function viz_ocg(ocg; title = "occupancy grid")
+    # ocg = mean(ocg)
+    println(heatmap(ocg,
+                    title = title,
+                    border = :none,
+                    colorbar_border = :none,
+                    # colormap = :inferno,
+                    xfact = 2.0,
+                    yfact = 2.0
+                    ))
+end

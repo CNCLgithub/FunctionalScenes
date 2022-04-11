@@ -1,4 +1,5 @@
 using JSON
+using UnicodePlots
 
 
 # index arrays using sets. Order doesn't matter

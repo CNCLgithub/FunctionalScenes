@@ -18,15 +18,6 @@ def main():
     parser.add_argument('--render', type = str,
                         help = "Which render mode", choices = ['cycles'],
                         default = 'cycles')
-    parser.add_argument('--fps', type = int,
-                        help = "FPS of resulting videos",
-                        default = 60)
-    parser.add_argument('--stim_dur', type = float,
-                        help = 'duration of A or B in seconds',
-                        default = 0.750)
-    parser.add_argument('--mask_dur', type = float,
-                        help = 'duration of mask in seconds',
-                        default = 0.750)
     args = parser.parse_args()
 
     dataset = '/spaths/datasets/' + args.dataset

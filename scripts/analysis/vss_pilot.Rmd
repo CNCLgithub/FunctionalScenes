@@ -48,9 +48,15 @@ library(readr)
 
 ```{r load}
 
-exp_name = "vss_pilot"
+# exp_name = "vss_pilot_12f_32x48"
+exp_name = "vss_pilot_11f_32x32"
 
-parsed_trials <- read_csv("~/project/spaths/experiments/vss_pilot/parsed_trials.csv") %>%
+exp_path = paste("~/project/spaths/experiments", exp_name,
+                 "parsed_trials.csv", sep = "/")
+exp_scenes = paste("~/project/spaths/datasets", exp_name,
+                   "scenes.csv", sep = "/")
+
+parsed_trials <- read_csv(exp_path) %>%
     mutate(resp_same = Response == "j",
            correct = !xor(base, resp_same)) %>%
   # trying to remove extra responses at the end
@@ -58,7 +64,7 @@ parsed_trials <- read_csv("~/project/spaths/experiments/vss_pilot/parsed_trials.
   filter(row_number() == 1) %>%
   ungroup()
 
-exp_data <- read_csv("~/project/spaths/datasets/vss_pilot/scenes.csv") %>%
+exp_data <- read_csv(exp_scenes) %>%
   rename(scene = id) 
 # %>%
 #   right_join(parsed_trials, by = c("scene", "door", "furniture", "move", "flip"))
@@ -92,8 +98,8 @@ subject_performance <- hr_by_subj %>%
 
 # passed_subjects <- subject_performance
 passed_subjects <- subject_performance %>%
-  # filter(hr >= 1.75 * fp)
-  # filter(hr > 2.0 * fp, n == 64)
+  filter(hr >= 1.1 * fp) %>%
+  # filter(hr > 2.0 * fp) %>%
   filter(n == 60)
 
 good_data <- passed_subjects %>%
@@ -111,9 +117,9 @@ good_data %>%
 passed_hits <- good_data %>%
   filter(!base) %>%
   group_by(scene, door) %>%
-  summarise(c = sum(correct),
-            n = n(),
-            f = c / n) %>%
+  summarise(c = sum(correct), # hit count
+            n = n(),          # number of subjects
+            f = c / n) %>%    # hit rate
   left_join(exp_data, by = c("scene", "door"))
 
 passed_hits %>%
@@ -137,7 +143,7 @@ delta_hr_by_scene <- passed_hits %>%
   group_by(scene) %>%
   select(c, f, d, starts_with("og"), contains("cycles")) %>%
   summarise(across(everything(), 
-                   list(mean = mean, max = max, diff = diff)))
+                   list(mean = mean, max = max, min = min, diff = diff)))
                    # .names = "{.col}_{.fn}"))
 
   # summarise(dc = diff(c), # difference in raw hits
@@ -153,9 +159,6 @@ delta_hr_by_scene %>%
   geom_point() + 
   geom_smooth(method = "lm", formula = y ~ x)
 
-delta_hr_by_scene %>%
-  ggplot(aes(x = d_diff, y = f_diff)) +
-  geom_density2d_filled()
 
 
 
@@ -170,7 +173,18 @@ passed_hits %>%
 
 
 ```{r}
-model <- t.test(delta_hr_by_scene$f_diff)
+delta_hr_by_scene %>%
+  ggplot(aes(f_diff)) +
+  geom_histogram()
+
+hr_by_scene_door <- passed_hits %>%
+  group_by(scene, door) %>%
+  summarise(across(f, 
+                   list(mean = mean)),
+            across(-c(f), first))
+
+model <- t.test(f_mean ~ d > 0,
+                data = hr_by_scene_door, paired = T)
 model
 ```
 
