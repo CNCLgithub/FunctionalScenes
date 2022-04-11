@@ -22,8 +22,8 @@ function camera(r::Room)
     cis = CartesianIndices(steps(r))
     pos = transform.(Tuple.(cis[entrance(r)]))
     # REVIEW: may need adjustment along y (forward-back)
-    # NOTE: no adjustment needed when using 60mm camera
-    y = pos[1][2]
+    # NOTE: push back slightly to maximize visability of scene
+    y = pos[1][2] - 1.75 * space[2]
     x = mean(first.(pos)) + 0.5
     # center of x-y for entrances
     pos = [x, y, 0.75 * tile_height]
