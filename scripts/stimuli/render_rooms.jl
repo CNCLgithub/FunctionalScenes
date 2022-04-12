@@ -7,8 +7,8 @@ using DataFrames
 using FunctionalScenes
 
 cycles_args = Dict(
-    # :mode => "full",
-    :mode => "none",
+    :mode => "full",
+    # :mode => "none",
     :navigation => false
 )
 
@@ -36,12 +36,12 @@ function render_stims(df::DataFrame, name::String;
 end
 
 function main()
-    args = Dict(
-        "dataset" => "vss_pilot_11f_32x32",
-        "scene" => 1,
-        "threads" => Sys.CPU_THREADS
-    )
-    # args = parse_commandline()
+    # args = Dict(
+    #     "dataset" => "vss_pilot_11f_32x32",
+    #     "scene" => 1,
+    #     "threads" => Sys.CPU_THREADS
+    # )
+    args = parse_commandline()
 
     name = args["dataset"]
     src = "/spaths/datasets/$(name)"

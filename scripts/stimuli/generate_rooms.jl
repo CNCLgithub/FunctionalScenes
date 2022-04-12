@@ -7,9 +7,6 @@ using FunctionalScenes
 using LinearAlgebra: norm
 using FunctionalCollections
 
-import Random:shuffle
-import Gen:categorical
-
 # using Profile
 # using StatProfilerHTML
 
@@ -26,12 +23,10 @@ end
 function paired_change_in_path(x)
     # door 1 has no change in path
     min_i = argmin(x[:, :d])
-    c1 = x[min_i, :d] == 0.0 && x[min_i, :door] == 1
-
+    c1 = x[min_i, :door] == 1 && x[min_i, :d] == 0.0
     # door 2 changes
     max_i = argmax(x[:, :d])
-    c2 = x[max_i, :d] > 0.0 && x[max_i, :door] == 2
-
+    c2 = x[max_i, :door] == 2 && x[max_i, :d] < 17.0 && x[max_i, :d] > 13.0
     c1 && c2
 end
 
@@ -52,7 +47,7 @@ end
 
 function build(door_conditions::Vector{GridRoom},
                move::Move;
-               max_f::Int64 = 15,
+               max_f::Int64 = 11,
                max_size::Int64 = 5,
                factor::Int64 = 1,
                pct_open::Float64 = 0.3,
@@ -94,7 +89,7 @@ function build(door_conditions::Vector{GridRoom},
         for (j, fj) in enumerate(fs)
             # REVIEW: see if only changing rear obstacles makes a difference
             # ignore obstacles in the front
-            (minimum(fj) < (0.4 * n_v)) && continue
+            (minimum(fj) < (0.3 * n_v)) && continue
             valid_move(ri, fj, move) || continue
             d = move_change(ri, fj, move, base_og)
             # door, furn, distance
@@ -109,7 +104,7 @@ end
 
 
 function main()
-    name = "vss_pilot"
+    name = "vss_pilot_11f_32x32_restricted"
     dataset_out = "/spaths/datasets/$(name)"
     isdir(dataset_out) || mkdir(dataset_out)
 
@@ -118,7 +113,7 @@ function main()
 
 
     # Parameters
-    room_dims = (16, 24)
+    room_dims = (16, 16)
     entrance = [8, 9]
     door_rows = [5, 12]
     inds = LinearIndices(room_dims)
