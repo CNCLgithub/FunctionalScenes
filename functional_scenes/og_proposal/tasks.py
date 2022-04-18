@@ -5,7 +5,7 @@ import torchvision.utils as vutils
 from torch.utils.data import DataLoader
 
 from . pytypes import *
-from . models import BaseVAE
+from . model import BaseVAE, Decoder
 
 class OGVAE(pl.LightningModule):
     """Task of embedding image space into z-space"""
@@ -28,7 +28,7 @@ class OGVAE(pl.LightningModule):
         return self.model(input, **kwargs)
 
     def training_step(self, batch, batch_idx, optimizer_idx = 0):
-        real_img = batch
+        real_img = batch[0]
         results = self.forward(real_img)
         train_loss = self.model.loss_function(*results,
                                               M_N = self.params['kld_weight'], #al_img.shape[0]/ self.num_train_imgs,
@@ -40,13 +40,20 @@ class OGVAE(pl.LightningModule):
         return train_loss['loss']
 
     def validation_step(self, batch, batch_idx, optimizer_idx = 0):
-        real_img = batch
+        real_img = batch[0]
         results = self.forward(real_img)
         val_loss = self.model.loss_function(*results,
                                             M_N = 1.0, #real_img.shape[0]/ self.num_val_imgs,
                                             optimizer_idx = optimizer_idx,
                                             batch_idx = batch_idx)
 
+        recons = results[0]
+        vutils.save_image(recons.data,
+                          os.path.join(self.logger.log_dir ,
+                                       "reconstructions",
+                                       f"recons_{self.logger.name}_Epoch_{self.current_epoch}.png"),
+                          normalize=True,
+                          nrow=12)
         self.log_dict({f"val_{key}": val.item() for key, val in val_loss.items()}, sync_dist=True)
 
 
@@ -54,31 +61,15 @@ class OGVAE(pl.LightningModule):
         self.sample_images()
 
     def sample_images(self):
-        # Get sample reconstruction image
-        test_input = next(iter(self.trainer.datamodule.test_dataloader()))
-        test_input = test_input.to(self.curr_device)
+        samples = self.model.sample(144,
+                                self.curr_device)
 
-#         test_input, test_label = batch
-        recons = self.model.generate(test_input)
-        vutils.save_image(recons.data,
-                          os.path.join(self.logger.log_dir ,
-                                       "Reconstructions",
-                                       f"recons_{self.logger.name}_Epoch_{self.current_epoch}.png"),
-                          normalize=True,
-                          nrow=12)
-
-        try:
-            samples = self.model.sample(144,
-                                        self.curr_device)
-
-            vutils.save_image(samples.cpu().data,
-                              os.path.join(self.logger.log_dir ,
-                                           "Samples",
-                                           f"{self.logger.name}_Epoch_{self.current_epoch}.png"),
-                              normalize=True,
-                              nrow=12)
-        except Warning:
-            pass
+        vutils.save_image(samples.cpu().data,
+                        os.path.join(self.logger.log_dir ,
+                                        "samples",
+                                        f"{self.logger.name}_Epoch_{self.current_epoch}.png"),
+                        normalize=True,
+                        nrow=12)
 
     def configure_optimizers(self):
 
@@ -156,7 +147,7 @@ class OGDecoder(pl.LightningModule):
         recons = self.model.forward(test_input)
         vutils.save_image(recons.data,
                           os.path.join(self.logger.log_dir ,
-                                       "Reconstructions",
+                                       "reconstructions",
                                        f"recons_{self.logger.name}_Epoch_{self.current_epoch}.png"),
                           normalize=True,
                           nrow=12)

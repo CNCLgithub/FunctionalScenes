@@ -2,6 +2,7 @@
 
 import os
 import argparse
+import numpy as np
 
 from functional_scenes.og_proposal.dataset import OGVAEDataset, write_ffcv_data
 
@@ -26,12 +27,15 @@ def main():
     img_kwargs = dict()
     og_kwargs = dict(
         shape = d.manifest['og_shape'],
-        dtype = np.float32
+        dtype = np.dtype('uint8')
     )
     writer_kwargs = dict(
-        num_workser = args.num_workers
+        num_workers = args.num_workers
     )
-    write_ffcv_data(d, img_kwargs, og_kwargs, writer_kwargs)
+    path = dpath + '.beton'
+
+    print(og_kwargs)
+    write_ffcv_data(d, path, img_kwargs, og_kwargs, writer_kwargs)
 
 
 # TODO: compute img stats
@@ -65,5 +69,5 @@ def main():
 
 # mean, std = batch_mean_and_sd(loader)
 
-if __name__ == '__init__':
+if __name__ == '__main__':
     main()

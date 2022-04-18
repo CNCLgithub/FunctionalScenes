@@ -1,10 +1,14 @@
 pandas
 scipy
 sqlalchemy
--f https://download.pytorch.org/whl/torch_stable.html 
-torch==1.10.0+cu111
-torchvision==0.11.0+cu111
+numba
+opencv-python
+--extra-index-url https://download.pytorch.org/whl/cu113
+torch
+torchvision
 fvcore==0.1.5.post20220305
 iopath==0.1.9
+ffcv
+pytorch-lightning
 -e deps/slurmpy
 -e .

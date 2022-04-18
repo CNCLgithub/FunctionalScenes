@@ -1,6 +1,9 @@
-from .types_ import *
+import torch
 from torch import nn
+import torch.nn.functional as F
 from abc import abstractmethod
+
+from . pytypes import *
 
 class BaseVAE(nn.Module):
 
@@ -27,6 +30,15 @@ class BaseVAE(nn.Module):
     def loss_function(self, *inputs: Any, **kwargs) -> Tensor:
         pass
 
+class PrintLayer(nn.Module):
+    def __init__(self):
+        super(PrintLayer, self).__init__()
+
+    def forward(self, x):
+        # Do your print / debug stuff here
+        print(x.shape)
+        return x
+
 class BetaVAE(BaseVAE):
 
     num_iter = 0 # Global static variable to keep track of iterations
@@ -52,28 +64,29 @@ class BetaVAE(BaseVAE):
 
         modules = []
         if hidden_dims is None:
-            hidden_dims = [32, 64, 128, 256, 512]
+            hidden_dims = [32, 32, 64, 128, 256, 256]
 
         # Build Encoder
         for h_dim in hidden_dims:
             modules.append(
                 nn.Sequential(
                     nn.Conv2d(in_channels, out_channels=h_dim,
-                              kernel_size= 3, stride= 2, padding  = 1),
+                              kernel_size= 4, stride= 2, padding  = 1),
+                    # PrintLayer(),
                     nn.BatchNorm2d(h_dim),
                     nn.LeakyReLU())
             )
             in_channels = h_dim
 
         self.encoder = nn.Sequential(*modules)
-        self.fc_mu = nn.Linear(hidden_dims[-1]*4, latent_dim)
-        self.fc_var = nn.Linear(hidden_dims[-1]*4, latent_dim)
+        self.fc_mu = nn.Linear(hidden_dims[-1] * 16, latent_dim)
+        self.fc_var = nn.Linear(hidden_dims[-1] * 16, latent_dim)
 
 
         # Build Decoder
         modules = []
 
-        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * 4)
+        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * 16)
 
         hidden_dims.reverse()
 
@@ -82,10 +95,10 @@ class BetaVAE(BaseVAE):
                 nn.Sequential(
                     nn.ConvTranspose2d(hidden_dims[i],
                                        hidden_dims[i + 1],
-                                       kernel_size=3,
+                                       kernel_size=4,
                                        stride = 2,
-                                       padding=1,
-                                       output_padding=1),
+                                       padding=1),
+                    # PrintLayer(),
                     nn.BatchNorm2d(hidden_dims[i + 1]),
                     nn.LeakyReLU())
             )
@@ -95,17 +108,19 @@ class BetaVAE(BaseVAE):
         self.decoder = nn.Sequential(*modules)
 
         self.final_layer = nn.Sequential(
-                            nn.ConvTranspose2d(hidden_dims[-1],
-                                               hidden_dims[-1],
-                                               kernel_size=3,
-                                               stride=2,
-                                               padding=1,
-                                               output_padding=1),
-                            nn.BatchNorm2d(hidden_dims[-1]),
-                            nn.LeakyReLU(),
-                            nn.Conv2d(hidden_dims[-1], out_channels= 3,
-                                      kernel_size= 3, padding= 1),
-                            nn.Tanh())
+            nn.ConvTranspose2d(hidden_dims[-1],
+                               hidden_dims[-1],
+                               kernel_size=3,
+                               stride=2,
+                               padding=1,
+                               output_padding=1),
+            # PrintLayer(),
+            nn.BatchNorm2d(hidden_dims[-1]),
+            nn.LeakyReLU(),
+            nn.Conv2d(hidden_dims[-1], out_channels= 3,
+                      kernel_size= 3, padding= 1),
+            # PrintLayer(),
+            nn.Tanh())
 
     def encode(self, input: Tensor) -> List[Tensor]:
         """
@@ -116,17 +131,22 @@ class BetaVAE(BaseVAE):
         """
         result = self.encoder(input)
         result = torch.flatten(result, start_dim=1)
-
         # Split the result into mu and var components
         # of the latent Gaussian distribution
+        # print(result.shape)
         mu = self.fc_mu(result)
         log_var = self.fc_var(result)
 
         return [mu, log_var]
 
     def decode(self, z: Tensor) -> Tensor:
+        # print(z.shape)
         result = self.decoder_input(z)
-        result = result.view(-1, 512, 2, 2)
+        # print(result.shape)
+        # print('decode view')
+        result = result.view(z.shape[0], -1, 4, 4)
+        # result = result.unsqueeze(-1)
+        # print(result.shape)
         result = self.decoder(result)
         result = self.final_layer(result)
         return result
@@ -200,7 +220,7 @@ class BetaVAE(BaseVAE):
 
         return self.forward(x)[0]
 
-class OGDecoder(nn.Module):
+class Decoder(nn.Module):
 
     def __init__(self,
                  in_channels: int,
