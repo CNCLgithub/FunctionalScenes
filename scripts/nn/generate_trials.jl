@@ -6,12 +6,12 @@ using FunctionalCollections: PersistentVector
 using FunctionalScenes: _init_graphics, _load_device, occupancy_position,
     functional_scenes
 
-IMG_RES = (240, 360)
+IMG_RES = (256, 256)
 # device = _load_device()
 device = FunctionalScenes.torch.device("cpu")
 
 function build(r::GridRoom;
-               max_f::Int64 = 15,
+               max_f::Int64 = 11,
                max_size::Int64 = 5,
                factor::Int64 = 1,
                pct_open::Float64 = 0.3,
@@ -66,10 +66,10 @@ end
 
 function main()
     # Parameters
-    name = "train_ddp_vss_pilot"
-    n = 1
+    name = "vss_pilot_ddp_11f_32x32"
+    n = 100
     # n = 1000
-    room_dims = (16, 24)
+    room_dims = (16, 16)
     entrance = [8, 9]
     door_rows = [5, 12]
     inds = LinearIndices(room_dims)
@@ -84,7 +84,10 @@ function main()
     # will store summary of generated rooms here
     m = Dict(
         :n => n,
-        :templates => templates
+        :templates => templates,
+        :og_shape => (32, 32),
+        :img_mu => 0,
+        :img_sd => 0
     )
 
     out = "/spaths/datasets/$(name)"
@@ -98,7 +101,7 @@ function main()
         save_trial(out, i, r, r_img, r_og)
     end
 
-    open("$(out)/manifest.json", "w") do f
+    open("$(out)_manifest.json", "w") do f
         write(f, m |> json)
     end
     return nothing

@@ -1,67 +1,64 @@
 import os
-import numpy as np
-
 import torch
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-#from natsort import natsorted
-from PIL import Image
-from torchvision.datasets import ImageFolder
+import numpy as np
+from torch.utils.data import Dataset
+from torchvision.io import read_image
+from ffcv.loader import Loader, OrderOption
+from ffcv.fields import RGBImageField, NDArrayField
+from ffcv.transforms import NormalizeImage, ToTensor
+from ffcv.fields.decoders import NDArrayDecoder, SimgpleRGBDecoder
 
-class CustomImageFolder(ImageFolder):
-    def __init__(self, root, transform=None):
-        super(CustomImageFolder, self).__init__(root, transform)
+class OGVAEDataset(Dataset):
+    def __init__(self, src: str, render_type: str = 'pytorch'):
+        with open(src+'_manifest.json', 'r') as f:
+            manifest = json.load(f)
+        self.src = src
+        self.manifest = manifest
+        self.render_type = render_type
 
-    def __getitem__(self, index):
-        path = self.imgs[index][0]
-        img = self.loader(path)
-        if self.transform is not None:
-            img = self.transform(img)
+    def __len__(self):
+        return self.manifest['n']
 
-        return (img,path)
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.src, str(idx), self.render_type + '.png')
+        image = read_image(img_path)
+        og_path = os.path.join(self.src, str(idx), 'og.png')
+        og = np.asarray(read_image(img_path))
+        return image, og
 
+def write_ffcv_data(d: OGVAEDataset,
+                    img_kwargs: dict,
+                    og_kwargs: dict,
+                    w_kwargs: dict) -> Nothing:
+    write_path = d.dpath + '.beton'
+    writer = DatasetWriter(write_path,
+                           { 'image': RGBImageField(**img_kwargs),
+                             'og': NDArrayField(**og_kwargs)},
+                           **w_kwargs)
+    writer.from_indexed_dataset(d)
 
-def return_data(args):
-    batch_size = args.batch_size
-    num_workers = args.num_workers
-    image_size = args.image_size
-    assert image_size == 64, 'currently only image size of 64 is supported'
+def img_pipeline(mu, sd) -> List[Operation]:
+    return [SimpleRGBImageDecoder(),
+            # NormalizeImage(mu, sd, np.float16),
+            ToTensor()]
 
-    # TODO: refine this logic
+def og_pipeline() -> List[Operation]:
+    return [NDArrayDecoder(),
+            ToTensor()]
 
-    root = os.path.join(args.dset_dir, args.dataset)
-    transform = transforms.Compose([
-            transforms.Resize((image_size, image_size)),
-            transforms.ToTensor(),])
-    train_kwargs = {'root':root, 'transform':transform}
+def ogvae_loader(name: str , **kwargs) -> Loader:
+    d = OGVAEDataset(name)
+    l =  Loader(d.dpath + '.beton',
+                pipelines= {'image' : img_pipline(d.manifest['img_mu'],
+                                                  d.manifest['img_sd'])},
+                **kwargs)
+    return l
 
-    train_data = CustomImageFolder(**train_kwargs)
-    loader = DataLoader(train_data,
-                        batch_size=batch_size,
-                        shuffle=True,
-                        num_workers=num_workers,
-                        pin_memory=True,
-                        drop_last=True)
-
-    return loader
-
-if __name__ == '__main__':
-    transform = transforms.Compose([
-        transforms.Resize((64, 64)),
-        transforms.ToTensor(),])
-
-    # for debugging purpose
-    #dset = CustomDataSet('output/datasets', transform)
-    dset = CustomImageFolder('output/datasets', transform)
-    loader = DataLoader(dset,
-                       batch_size=32,
-                       shuffle=True,
-                       num_workers=1,
-                       pin_memory=False,
-                       drop_last=True)
-
-    images1 = iter(loader).next()
-    import ipdb; ipdb.set_trace()
-
-
-
+def ogdecoder_loader(name: str , **kwargs) -> Loader:
+    d = OGVAEDataset(name)
+    l =  Loader(d.dpath + '.beton',
+                pipelines= {'image' : img_pipeline(d.manifest['img_mu'],
+                                                   d.manifest['img_sd']),
+                            'og'    : og_pipeline()},
+                **kwargs)
+    return l

@@ -45,11 +45,11 @@ end
 
 function main()
 
-    dataset = "vss_pilot_11f_32x32"
+    dataset = "vss_pilot_11f_32x32_restricted"
     obstacle_weight = 1.5
     dpath = "/spaths/datasets/$(dataset)"
     # scenes = [1, 6, 10, 25]
-    scenes = [6, 9, 7]
+    scenes = [13]
 
     df = DataFrame(CSV.File("$(dpath)/scenes.csv"))
     df = filter(r -> in(r.id, scenes), df)
