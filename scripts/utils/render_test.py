@@ -20,7 +20,7 @@ else:
 
 print(device)
 # device = 'cuda:1'
-src = '/spaths/datasets/train_ddp_vss_pilot/1/scene.json'
+src = '/spaths/datasets/vss_pilot/1/scene.json'
 with open(src, 'r') as f:
     scene = json.load(f)
 
