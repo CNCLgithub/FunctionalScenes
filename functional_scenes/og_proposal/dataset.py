@@ -11,7 +11,8 @@ from ffcv.loader import Loader, OrderOption
 from ffcv.fields import RGBImageField, NDArrayField
 from ffcv.pipeline.operation import Operation
 from ffcv.fields.decoders import NDArrayDecoder, SimpleRGBImageDecoder
-from ffcv.transforms import Convert, NormalizeImage, ToTensor, ToTorchImage
+from ffcv.transforms import (Convert, NormalizeImage, ToTensor, ToTorchImage, 
+    ToDevice)
 
 from . pytypes import *
 
@@ -59,13 +60,14 @@ def og_pipeline() -> List[Operation]:
             Convert(torch.float32),
             ToTensor()]
 
-def ogvae_loader(path: str , **kwargs) -> Loader:
+def ogvae_loader(path: str, device,  **kwargs) -> Loader:
     with open(path + '_manifest.json', 'r') as f:
         manifest = json.load(f)
 
     l =  Loader(path + '.beton',
                 pipelines= {'image' : img_pipeline(manifest['img_mu'],
-                                                   manifest['img_sd']),
+                                                   manifest['img_sd']) + 
+                                      [ToDevice(device)],
                             'og': None},
                 **kwargs)
     return l

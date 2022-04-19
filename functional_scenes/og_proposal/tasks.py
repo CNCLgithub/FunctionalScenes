@@ -55,14 +55,12 @@ class OGVAE(pl.LightningModule):
                           normalize=True,
                           nrow=12)
         self.log_dict({f"val_{key}": val.item() for key, val in val_loss.items()}, sync_dist=True)
+        self.sample_images(real_img.device)
 
 
-    def on_validation_end(self) -> None:
-        self.sample_images()
-
-    def sample_images(self):
-        samples = self.model.sample(144,
-                                self.curr_device)
+    def sample_images(self, device):
+        samples = self.model.sample(25,
+                                    device)
 
         vutils.save_image(samples.cpu().data,
                         os.path.join(self.logger.log_dir ,
