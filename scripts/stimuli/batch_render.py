@@ -5,7 +5,8 @@ import os
 import argparse
 from slurmpy import sbatch
 
-datasets = ['vss_pilot_11f_32x32']
+datasets = ['vss_pilot_11f_32x32',
+            'vss_pilot_11f_32x32_restricted']
 
 script = 'bash {0!s}/env.d/run.sh julia ' + \
          '/project/scripts/stimuli/render_rooms.jl'
@@ -20,7 +21,7 @@ def main():
         formatter_class = argparse.ArgumentDefaultsHelpFormatter
     )
 
-    parser.add_argument('--dataset', type = str, default = datasets[0],
+    parser.add_argument('--dataset', type = str, default = datasets[1],
                         choices = datasets,
                         help = 'Dataset to render')
     parser.add_argument('--scenes', type = int, default = 60,
