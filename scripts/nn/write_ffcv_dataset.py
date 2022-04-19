@@ -2,9 +2,31 @@
 
 import os
 import argparse
+import torch
 import numpy as np
 
 from functional_scenes.og_proposal.dataset import OGVAEDataset, write_ffcv_data
+
+def batch_mean_and_sd(loader):
+
+    cnt = 0
+    fst_moment = torch.empty(3)
+    snd_moment = torch.empty(3)
+
+    for batch in loader:
+        images = batch[0]
+        b, c, h, w = images.shape
+        nb_pixels = b * h * w
+        sum_ = torch.sum(images, dim=[0, 2, 3])
+        sum_of_square = torch.sum(images ** 2,
+                                  dim=[0, 2, 3])
+        fst_moment = (cnt * fst_moment + sum_) / (cnt + nb_pixels)
+        snd_moment = (cnt * snd_moment + sum_of_square) / (cnt + nb_pixels)
+        cnt += nb_pixels
+
+    mean, std = fst_moment, torch.sqrt(snd_moment - fst_moment ** 2)
+    return mean,std
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -23,6 +45,12 @@ def main():
     args = parser.parse_args()
     dpath = os.path.join('/spaths/datasets', args.src)
     d = OGVAEDataset(dpath)
+    
+    mu, sd = batch_mean_sd(d)
+    d.manifest['img_mu'] = mu
+    d.manifest['img_sd'] = sd
+    with open('', 'w') as f:
+        json.dump(f, d.manifest)
 
     img_kwargs = dict()
     og_kwargs = dict(

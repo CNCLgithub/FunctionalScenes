@@ -43,11 +43,7 @@ def main():
         # model = OGVAE(arch,  config['exp_params'])
         raise ValueError(f"mode {config['mode']} not recognized")
 
-    train_loader = loader(config['path_params']['train_path'],
-                          **config['loader_params'])
-    test_loader = loader(config['path_params']['test_path'],
-                         **config['loader_params'])
-
+    
     runner = Trainer(logger=logger,
                      callbacks=[
                          LearningRateMonitor(),
@@ -60,12 +56,16 @@ def main():
                      # strategy=DDPPlugin(find_unused_parameters=False),
                      deterministic = True,
                      **config['trainer_params'])
-
+    device = runner.device_ids[0]
+    train_loader = loader(config['path_params']['train_path'],
+                          device, 
+                          **config['loader_params'])
+    test_loader = loader(config['path_params']['test_path'],
+                         device, 
+                         **config['loader_params'])
 
     Path(f"{logger.log_dir}/samples").mkdir(exist_ok=True, parents=True)
     Path(f"{logger.log_dir}/reconstructions").mkdir(exist_ok=True, parents=True)
-
-
     print(f"======= Training {logger.name} =======")
     runner.fit(task, train_loader, test_loader)
 

@@ -120,7 +120,7 @@ class BetaVAE(BaseVAE):
             nn.Conv2d(hidden_dims[-1], out_channels= 3,
                       kernel_size= 3, padding= 1),
             # PrintLayer(),
-            nn.LeakyReLU())
+            nn.ReLU())
 
     def encode(self, input: Tensor) -> List[Tensor]:
         """

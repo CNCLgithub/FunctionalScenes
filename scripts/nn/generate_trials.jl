@@ -7,8 +7,8 @@ using FunctionalScenes: _init_graphics, _load_device, occupancy_position,
     functional_scenes
 
 IMG_RES = (256, 256)
-# device = _load_device()
-device = FunctionalScenes.torch.device("cpu")
+device = _load_device()
+# device = FunctionalScenes.torch.device("cpu")
 
 function build(r::GridRoom;
                max_f::Int64 = 11,
@@ -66,9 +66,8 @@ end
 
 function main()
     # Parameters
-    name = "vss_pilot_ddp_11f_32x32"
+    name = "vss_pilot_ddp_test_11f_32x32"
     n = 100
-    # n = 1000
     room_dims = (16, 16)
     entrance = [8, 9]
     door_rows = [5, 12]
@@ -86,10 +85,7 @@ function main()
         :n => n,
         :templates => templates,
         :og_shape => (32, 32),
-        :img_mu => 0,
-        :img_sd => 0
     )
-
     out = "/spaths/datasets/$(name)"
     isdir(out) || mkdir(out)
 
@@ -100,6 +96,9 @@ function main()
         r_og = occupancy_position(r)
         save_trial(out, i, r, r_img, r_og)
     end
+    
+    m[:img_mu] = zeros(3)
+    m[:img_sd] = ones(3)
 
     open("$(out)_manifest.json", "w") do f
         write(f, m |> json)

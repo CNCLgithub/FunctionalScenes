@@ -49,9 +49,9 @@ def write_ffcv_data(d: OGVAEDataset,
 
 def img_pipeline(mu, sd) -> List[Operation]:
     return [SimpleRGBImageDecoder(),
-            # NormalizeImage(mu, sd, np.float16),
+            NormalizeImage(mu, sd, np.float32),
             ToTensor(),
-            ToTorchImage(),
+            ToTorchImage(convert_back_int16 =False),
             Convert(torch.float32),
             ]
 
@@ -63,10 +63,11 @@ def og_pipeline() -> List[Operation]:
 def ogvae_loader(path: str, device,  **kwargs) -> Loader:
     with open(path + '_manifest.json', 'r') as f:
         manifest = json.load(f)
-
+    mu = np.zeros(3)
+    sd = np.array([255, 255, 255])
     l =  Loader(path + '.beton',
-                pipelines= {'image' : img_pipeline(manifest['img_mu'],
-                                                   manifest['img_sd']) + 
+                pipelines= {'image' : img_pipeline(mu,
+                                                   sd) + 
                                       [ToDevice(device)],
                             'og': None},
                 **kwargs)

@@ -63,7 +63,7 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
     python -m pip install --no-cache-dir -r requirements.txt" && \
     # install pytorch3d. current requires special treatment
     # ./env.d/run.sh curl -LO https://github.com/NVIDIA/cub/archive/1.10.0.tar.gz && \
-    # ./env.d/run.sh tar xzf 1.10.0.tar.gz -C "${SENV[pyenv]}" && \
+    ./env.d/run.sh tar xzf 1.10.0.tar.gz -C "${SENV[pyenv]}" && \
     # ./env.d/run.sh python -m pip install --no-index  -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu113_pyt1100/download.html pytorch3d==0.6.1
     ./env.d/run.sh python -m pip install -v git+https://github.com/facebookresearch/pytorch3d.git@main
 
