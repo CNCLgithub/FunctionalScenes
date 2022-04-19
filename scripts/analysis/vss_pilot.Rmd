@@ -49,7 +49,7 @@ library(readr)
 ```{r load}
 
 # exp_name = "vss_pilot_12f_32x48"
-exp_name = "vss_pilot_11f_32x32"
+exp_name = "vss_pilot_11f_32x32_restricted"
 
 exp_path = paste("~/project/spaths/experiments", exp_name,
                  "parsed_trials.csv", sep = "/")
@@ -144,21 +144,16 @@ delta_hr_by_scene <- passed_hits %>%
   select(c, f, d, starts_with("og"), contains("cycles")) %>%
   summarise(across(everything(), 
                    list(mean = mean, max = max, min = min, diff = diff)))
-                   # .names = "{.col}_{.fn}"))
-
-  # summarise(dc = diff(c), # difference in raw hits
-  #           df = diff(f), # hit rate
-  #           maxf = max(f), # maximum hit rate for either condition
-  #           muf = mean(f), # average hit rate across conditions
-  #           n = sum(n), # number of trials ? 
-  #           d = max(d), # maximum difference in idealized 
-  #           g = first(g))
 
 delta_hr_by_scene %>%
-  ggplot(aes(x = d_diff, y = f_diff)) +
+  ggplot(aes(x = d_diff, y = f_diff, color = f_mean)) +
   geom_point() + 
   geom_smooth(method = "lm", formula = y ~ x)
 
+
+delta_hr_by_scene %>%
+  with(lm(f_diff ~ d_diff)) %>%
+  summary
 
 
 
@@ -173,9 +168,6 @@ passed_hits %>%
 
 
 ```{r}
-delta_hr_by_scene %>%
-  ggplot(aes(f_diff)) +
-  geom_histogram()
 
 hr_by_scene_door <- passed_hits %>%
   group_by(scene, door) %>%

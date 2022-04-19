@@ -122,18 +122,23 @@ function cubify(r::GridRoom)
     dx, dy = steps(r)
     c_th = Int64(ceil(tile_height))
     c_oh = Int64(ceil(obstacle_height))
-    voxels = zeros(c_th * 2, dy, dx)
-    # add floor
-    voxels[1, :, :] .= 1.0
+    vdims = (c_th * 2 + 1, dy, dx)
+    floor_voxels = zeros(vdims)
+    floor_voxels[c_th + 1, :, :] .= 1.
+    wall_voxels = zeros(vdims)
+    obs_voxels = zeros(vdims)
     for i in 1:length(d)
         (x, y) = Tuple(cis[i])
         if d[i] == wall_tile
-            voxels[2:c_th+1, y, x] .= 1.0
+            wall_voxels[c_th+1:end, y, x] .= 1.0
         elseif d[i] == obstacle_tile
-            voxels[2:c_oh+1, y, x] .= 2.0
+            obs_voxels[c_th+1:c_th+c_oh, y, x] .= 1.0
         end
     end
-    return voxels
+    Dict(:floor_voxels => floor_voxels,
+         :wall_voxels => wall_voxels,
+         :obstacle_voxels => obs_voxels,
+         :voxel_dim => maximum(vdims) * 0.5)
 end
 
 function translate(r::Room, paths::Vector{Int64};
@@ -143,8 +148,7 @@ function translate(r::Room, paths::Vector{Int64};
              :lights => lights(r),
              :camera => camera(r))
     if cubes
-        d[:voxels] = cubify(r)
-        d[:voxel_dim] = maximum(bounds(r)) * 0.5
+        merge!(d, cubify(r))
     else
         d[:objects] = tiles(r, paths)
     end
