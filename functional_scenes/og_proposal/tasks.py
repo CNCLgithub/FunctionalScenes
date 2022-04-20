@@ -89,11 +89,12 @@ class OGDecoder(pl.LightningModule):
     """Task of decoding z-space to grid space"""
 
     def __init__(self,
-                 vae: BaseVAE,
+                 vae: OGVAE,
                  decoder: Decoder,
                  params: dict) -> None:
         super(OGDecoder, self).__init__()
-
+        vae.eval()
+        vae.freeze()
         self.vae = vae
         self.decoder = decoder
         self.params = params
@@ -105,16 +106,16 @@ class OGDecoder(pl.LightningModule):
             pass
 
     def forward(self, input: Tensor, **kwargs) -> Tensor:
-        mu, log_var = self.vae.encode(input)
+        mu, log_var = self.vae.model.encode(input)
         return self.decoder(mu)
 
     def training_step(self, batch, batch_idx, optimizer_idx = 0):
         real_img, real_og = batch
         pred_og = self.forward(real_img)
-        train_loss = self.model.loss_function(pred_og,
-                                              real_og,
-                                              optimizer_idx=optimizer_idx,
-                                              batch_idx = batch_idx)
+        train_loss = self.decoder.loss_function(pred_og,
+                                                real_og,
+                                                optimizer_idx=optimizer_idx,
+                                                batch_idx = batch_idx)
 
         self.log_dict({key: val.item() for key, val in train_loss.items()},
                       sync_dist=True)
@@ -124,31 +125,46 @@ class OGDecoder(pl.LightningModule):
     def validation_step(self, batch, batch_idx, optimizer_idx = 0):
         real_img, real_og = batch
         pred_og = self.forward(real_img)
-        val_loss = self.model.loss_function(pred_og,
+        # print(f"prediction shape {pred_og.shape}")
+        # print(f"ground truth shape {real_og.shape}")
+        # print(f"prediction max {pred_og.max()}")
+        # print(f"ground truth max {real_og.max()}")
+        val_loss = self.decoder.loss_function(pred_og,
                                               real_og,
                                               optimizer_idx=optimizer_idx,
                                               batch_idx = batch_idx)
-        self.log_dict({f"val_{key}": val.item() for key, val in val_loss.items()},
-                      sync_dist=True)
-
-
-    def on_validation_end(self) -> None:
-        self.sample_ogs()
-
-    def sample_ogs(self):
-        # Get sample reconstruction image
-        test_input, test_og = next(iter(self.trainer.datamodule.test_dataloader()))
-        test_input = test_input.to(self.curr_device)
-        test_og = test_label.to(self.curr_device)
-
-#         test_input, test_label = batch
-        recons = self.model.forward(test_input)
-        vutils.save_image(recons.data,
+       	results = pred_og.unsqueeze(1) 
+        vutils.save_image(results.data,
                           os.path.join(self.logger.log_dir ,
                                        "reconstructions",
                                        f"recons_{self.logger.name}_Epoch_{self.current_epoch}.png"),
+                          normalize=False,
+                          nrow=6)
+        vutils.save_image(real_og.unsqueeze(1).data,
+                          os.path.join(self.logger.log_dir ,
+                                       "reconstructions",
+                                       f"gt_{self.logger.name}_Epoch_{self.current_epoch}.png"),
+                          normalize=False,
+                          nrow=6)
+        vutils.save_image(real_img.data,
+                          os.path.join(self.logger.log_dir ,
+                                       "reconstructions",
+                                       f"input_{self.logger.name}_Epoch_{self.current_epoch}.png"),
                           normalize=True,
-                          nrow=12)
+                          nrow=6)
+        self.log_dict({f"val_{key}": val.item() for key, val in val_loss.items()}, sync_dist=True)
+        self.sample_ogs(real_img.device)
+
+    def sample_ogs(self, device):
+        samples = self.decoder.sample(25,
+                                    device).unsqueeze(1)
+        sdata = samples.cpu().data
+        vutils.save_image(sdata ,
+                        os.path.join(self.logger.log_dir ,
+                                        "samples",
+                                        f"{self.logger.name}_Epoch_{self.current_epoch}.png"),
+                        normalize=False,
+                        nrow=5)
 
 
     def configure_optimizers(self):

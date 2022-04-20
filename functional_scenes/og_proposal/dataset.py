@@ -33,6 +33,7 @@ class OGVAEDataset(Dataset):
         image = pil_loader(img_path)
         og_path = os.path.join(self.src, str(idx+1), 'og.png')
         og = np.asarray(read_image(og_path)).squeeze()
+        og = og.astype(np.float32) * (1.0/255.0)
         # og = pil_loader(og_path)
         return image, og
 
@@ -57,8 +58,8 @@ def img_pipeline(mu, sd) -> List[Operation]:
 
 def og_pipeline() -> List[Operation]:
     return [NDArrayDecoder(),
-            Convert(torch.float32),
-            ToTensor()]
+            ToTensor(),
+            Convert(torch.float32)]
 
 def ogvae_loader(path: str, device,  **kwargs) -> Loader:
     with open(path + '_manifest.json', 'r') as f:

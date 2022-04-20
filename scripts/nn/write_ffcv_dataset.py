@@ -25,7 +25,10 @@ def main():
     dpath = os.path.join('/spaths/datasets', args.src)
     d = OGVAEDataset(dpath)
     img_kwargs = dict()
-    og_kwargs = dict()
+    og_kwargs = dict(
+        shape = d.manifest['og_shape'],
+        dtype = np.dtype('float32')
+    )
     writer_kwargs = dict(
         num_workers = args.num_workers
     )

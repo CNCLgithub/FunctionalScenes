@@ -1,5 +1,6 @@
 import os
 import yaml
+import torch
 import argparse
 import numpy as np
 from pathlib import Path
@@ -41,7 +42,14 @@ def main():
     elif config['mode'] == 'og_decoder':
         decoder_arch = archs[config['model_params']['name']](**config['model_params'])
         vae_arch = archs[config['vae_params']['name']](**config['vae_params'])
-        task = OGDecoder(vae_arch, decoder_arch,  config['exp_params'])
+        # checkpoint = torch.load(config['vae_chkpt'])
+        # state_dict = {k.replace('model.', '') : v 
+        #                   for (k,v) in checkpoint['state_dict'].items()}
+        # vae.load_state_dict(state_dict)
+        vae = OGVAE.load_from_checkpoint(config['vae_chkpt'],
+                                         vae_model = vae_arch,
+                                         params = config['exp_params'])
+        task = OGDecoder(vae, decoder_arch, config['exp_params'])
         loader = ogdecoder_loader
     else:
         # TODO
