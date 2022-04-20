@@ -15,6 +15,7 @@ from functional_scenes.og_proposal.dataset import ogvae_loader, ogdecoder_loader
 
 archs = {
     'BetaVAE' : BetaVAE,
+    'Decoder' : Decoder
 }
 
 def main():
@@ -37,6 +38,11 @@ def main():
         arch = archs[config['model_params']['name']](**config['model_params'])
         task = OGVAE(arch,  config['exp_params'])
         loader = ogvae_loader
+    elif config['mode'] == 'og_decoder':
+        decoder_arch = archs[config['model_params']['name']](**config['model_params'])
+        vae_arch = archs[config['vae_params']['name']](**config['vae_params'])
+        task = OGDecoder(vae_arch, decoder_arch,  config['exp_params'])
+        loader = ogdecoder_loader
     else:
         # TODO
         # arch = models[config['model_params']['name']](**config['model_params'])

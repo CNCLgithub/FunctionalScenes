@@ -238,13 +238,10 @@ class Decoder(nn.Module):
 
         # Build Decoder
         if hidden_dims is None:
-            hidden_dims = [32, 64, 128, 256, 512]
+            hidden_dims = [32, 32, 64, 128, 256, 256]
         modules = []
-
-        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * 4)
-
+        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * 16)
         hidden_dims.reverse()
-
         for i in range(len(hidden_dims) - 1):
             modules.append(
                 nn.Sequential(
@@ -254,14 +251,11 @@ class Decoder(nn.Module):
                                        stride = 2,
                                        padding=1,
                                        output_padding=1),
+                    PrintLayer(),
                     nn.BatchNorm2d(hidden_dims[i + 1]),
                     nn.LeakyReLU())
             )
-
-
-
         self.decoder = nn.Sequential(*modules)
-
         self.final_layer = nn.Sequential(
                             nn.ConvTranspose2d(hidden_dims[-1],
                                                hidden_dims[-1],
@@ -269,15 +263,17 @@ class Decoder(nn.Module):
                                                stride=2,
                                                padding=1,
                                                output_padding=1),
+                            PrintLayer(),
                             nn.BatchNorm2d(hidden_dims[-1]),
                             nn.LeakyReLU(),
                             nn.Conv2d(hidden_dims[-1], out_channels= 3,
                                       kernel_size= 3, padding= 1),
+                            PrintLayer(),
                             nn.Tanh())
 
     def decode(self, z: Tensor) -> Tensor:
         result = self.decoder_input(z)
-        result = result.view(-1, 512, 2, 2)
+        result = result.view(-1, 512, 4, 4)
         result = self.decoder(result)
         result = self.final_layer(result)
         return result

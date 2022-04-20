@@ -73,13 +73,16 @@ def ogvae_loader(path: str, device,  **kwargs) -> Loader:
                 **kwargs)
     return l
 
-def ogdecoder_loader(path: str , **kwargs) -> Loader:
+def ogdecoder_loader(path: str, device, **kwargs) -> Loader:
     with open(path + '_manifest.json', 'r') as f:
         manifest = json.load(f)
 
+    mu = np.zeros(3)
+    sd = np.array([255, 255, 255])
     l =  Loader(path + '.beton',
-                pipelines= {'image' : img_pipeline(manifest['img_mu'],
-                                                   manifest['img_sd']),
-                            'og'    : og_pipeline()},
+                pipelines= {'image' : img_pipeline(mu,
+                                                   sd) +
+                                      [ToDevice(device)],
+                            'og': og_pipeline() + [ToDevice(device)]},
                 **kwargs)
     return l
