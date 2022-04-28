@@ -27,16 +27,17 @@ knitr::opts_chunk$set(fig.pos = 'H',
 
 
 ```{r includes}
+
+# dependencies and ggplot settings
+
 library(dplyr)
-# library(estimatr)
 library(ggplot2)
 library(readr)
+library(boot)
+
 
 # devtools::install_github("topfunky/gghighcontrast")
 # library(gghighcontrast)
-
-
-
 
 # th <- theme_classic() +
 #   theme(axis.text = element_text(size=26)) +
@@ -46,14 +47,17 @@ library(readr)
 # update_geom_defaults("point", list(size = 10))
 ```
 
+
+
 ```{r load}
+# Loading data
 
-# exp_name = "vss_pilot_12f_32x48"
 exp_name = "vss_pilot_11f_32x32_restricted"
-
+# exp_name = "vss_pilot_inverted"
+dataset = "vss_pilot_11f_32x32_restricted"
 exp_path = paste("~/project/spaths/experiments", exp_name,
                  "parsed_trials.csv", sep = "/")
-exp_scenes = paste("~/project/spaths/datasets", exp_name,
+exp_scenes = paste("~/project/spaths/datasets", dataset,
                    "scenes.csv", sep = "/")
 
 parsed_trials <- read_csv(exp_path) %>%
@@ -79,6 +83,10 @@ exp_data <- read_csv(exp_scenes) %>%
 #   left_join(covariates, by = c("scene", "door", "furniture", "move"))
 
 ```
+
+
+Screening subjects based on overall hit rate (`hr`) and false-positivity rate
+(`fp`).
 ```{r}
 by_subj <- parsed_trials %>%
   group_by(ID)
@@ -98,20 +106,22 @@ subject_performance <- hr_by_subj %>%
 
 # passed_subjects <- subject_performance
 passed_subjects <- subject_performance %>%
-  filter(hr >= 1.1 * fp) %>%
+  filter(hr > 1.0 * fp) %>%
   # filter(hr > 2.0 * fp) %>%
   filter(n == 60)
 
 good_data <- passed_subjects %>%
-  left_join(parsed_trials)
-```
-```{r}
-good_data %>%
-  group_by(ID) %>%
-  summarise(n = n())
+  left_join(parsed_trials, by = "ID")
+
+
+subject_performance %>%
+  ggplot(aes(d_hr_fr)) + 
+  geom_histogram(binwidth = 0.05)
 ```
 
 
+Compute the hit rate per trial as well as the difference in hit rate between
+scene pairs
 ```{r} 
 
 passed_hits <- good_data %>%
@@ -137,33 +147,75 @@ hr_by_door <- passed_hits %>%
   group_by(door, d > 0) %>%
   summarise(c = sum(c),
             f = mean(f))
- 
+
 delta_hr_by_scene <- passed_hits %>%
   arrange(scene, door) %>%
   group_by(scene) %>%
   select(c, f, d, starts_with("og"), contains("cycles")) %>%
   summarise(across(everything(), 
-                   list(mean = mean, max = max, min = min, diff = diff)))
+                   list(mean = mean, max = max, min = min, diff = diff))) %>%
+  mutate(rel_hr_min = f_min - mean(f_mean),
+         rel_hr_max = f_max - mean(f_mean),
+         abs_f_diff = abs(f_diff))
 
 delta_hr_by_scene %>%
-  ggplot(aes(x = d_diff, y = f_diff, color = f_mean)) +
-  geom_point() + 
-  geom_smooth(method = "lm", formula = y ~ x)
+  summarise(mu = mean(abs_f_diff),
+            sd = sd(abs_f_diff),
+            n = n(),
+            se = sd / sqrt(n))
 
+t.test(delta_hr_by_scene$abs_f_diff)
 
 delta_hr_by_scene %>%
-  with(lm(f_diff ~ d_diff)) %>%
-  summary
-
+  ggplot(aes(abs_f_diff)) +
+  # geom_density()
+  geom_histogram(bins = 10)
+# summary(path_diff)
 
 
 ```
 
+Bootstrap analysis on average absolute difference between pairs.
 ```{r}
-passed_hits %>%
- ggplot(aes(x = d > 0, y = f)) + 
- geom_boxplot()
+
+set.seed(0) # TODO: Should we set this seed?
+# Returns the absolute pairwise difference (N=30 pairs)
+ad_function <- function(data) {
+  x <- data %>%
+    filter(!base) %>%
+    group_by(scene, door) %>%
+    summarise(c = sum(!resp_same), # hit count
+              hr = c / n(),     # hit rate
+              .groups = "keep") %>%
+    group_by(scene) %>%
+    arrange(door) %>%
+    summarise(abs_hr_diff = abs(diff(hr)),
+              .groups = "keep")
+  return(x$abs_hr_diff) 
+}
+# Computes the mean absolute pairwise difference
+mad_function <- function(data, indices) {
+  d <- data[indices,] #allows boot to permute sample
+  nr = nrow(d)
+  # shuffle responses
+  d$resp_same = data$resp_same[0:nr]
+  abs_diff <- ad_function(d)
+  return(mean(abs_diff)) #return mean absolute difference
+}
+reps <- boot(data = good_data, 
+             statistic=mad_function,
+             sim = "permutation",
+             R=1000)
+#view results of boostrapping
+reps
+plot(reps)
+#calculate adjusted bootstrap percentile (BCa) interval
+# boot.ci(reps, type="bca")
+
+sum((reps$t0 < reps$t)) / length(reps$t)
+
 ```
+
 
 
 
