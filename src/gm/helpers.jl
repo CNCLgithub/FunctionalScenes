@@ -309,7 +309,7 @@ function viz_render(trace::Gen.Trace)
     _, instances = get_retval(trace)
     params = first(get_args(trace))
     g = params.graphics
-    translated = translate(first(instances), false, cubes = true)
+    translated = translate(first(instances), Int64[], cubes = true)
     batch = @pycall functional_scenes.render_scene_batch([translated], g)::PyObject
     batch = Array{Float64, 4}(batch.cpu().numpy())
     display(colorview(RGB, batch[1, :, :, :]))

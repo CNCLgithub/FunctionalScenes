@@ -15,6 +15,9 @@ export QuadTreeModel
     # Same as `gt` but without obstacles
     template::GridRoom = clear_room(gt)
 
+    entrance::Int64 = first(entrance(gt))
+    exit::Int64 = first(exits(gt))
+
     #############################################################################
     # Tracker parameters
     #############################################################################
@@ -67,6 +70,7 @@ end
     qt::QTState
     gs::Matrix{Float64}
     instances::Vector{GridRoom}
+    path::Vector{Int64}
 end
 
 function add_from_state_flip(params::QuadTreeModel,
@@ -95,11 +99,12 @@ function consolidate_qt_states!(gs::Matrix{Float64}, st::QTState)
     return nothing
 end
 
-function room_from_state_args(params::QuadTreeModel, gs::Matrix{Float64})
-    @unpack instances = params
-    gs = fill(gs, instances)
-    ps = fill(params, instances)
-    (gs, ps)
+function instances_from_gen(params::QuadTreeModel, instances)
+    rs = Vector{GridRoom}(undef, params.instances)
+    @inbounds for i = 1:params.instances
+        rs[i] = add_from_state_flip(params, instances[i])
+    end
+    return rs
 end
 
 function graphics_from_instances(instances, params)
@@ -110,8 +115,8 @@ function graphics_from_instances(instances, params)
     # println("printing instances")
     # foreach(viz_gt, instances)
 
-    instances = map(r -> translate(r, Int64[], cubes=true), instances)
-    batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
+    cubes = map(r -> translate(r, Int64[], cubes=true), instances)
+    batch = @pycall functional_scenes.render_scene_batch(cubes, g)::PyObject
     features = Array{Float64, 4}(batch.cpu().numpy())
     # features = @pycall functional_scenes.nn_features.single_feature(params.model,
     #                                                                 "features.6",
@@ -124,4 +129,26 @@ function graphics_from_instances(instances, params)
         sigma = fill(params.base_sigma, size(mu))
     end
     (mu[1, :, :, :], sigma[1, :, :, :])
+end
+
+function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
+    st.leaves < 4 && return Int64[]
+    # adjacency, distance matrix, and leaves
+    adj, ds, lv = nav_graph(st)
+    # scale dist matrix by room size
+    rmul!(ds, d)
+    g = SimpleGraph(adj)
+    # map entrance and exit to qt
+    ent_p = idx_to_node_space(ent, d)
+    a = findfirst(s -> contains(s, ent_p), lv)
+    ext_p = idx_to_node_space(ext, d)
+    b = findfirst(s -> contains(s, ext_p), lv)
+    # compute and store path
+    ps = a_star(g, a, b, ds)
+    path = Vector{Int64}(undef, length(ps) + 1)
+    @inbounds for i in eachindex(ps)
+        path[i] = src(ps[i])
+    end
+    path[end] = ext
+    return path
 end

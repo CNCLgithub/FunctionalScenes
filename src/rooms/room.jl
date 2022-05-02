@@ -1,5 +1,5 @@
 export GridRoom, pathgraph, data, entrance, exits, bounds, steps, expand,
-    from_json
+    from_json, viz_room
 
 #################################################################################
 # Type aliases
@@ -163,18 +163,14 @@ function viz_room(r::GridRoom, ocg::Matrix{Float64})
     d = data(r)
     c = deepcopy(ocg)
     c[d .== obstacle_tile] .= -1.
-        println(spy(c,
-                    title = "Obstacles + path"))
+    c[d .== wall_tile] .= -2.
+    println(spy(c,
+                title = "Obstacles + path"))
 
 end
 function viz_room(r::GridRoom)
-    d = data(r)
-    c = occupancy_position(r)
-    println(heatmap(c,
-                    border = :none,
-                    colorbar_border = :none,
-                    colormap = :inferno
-                    ))
+    c = zeros(steps(r))
+    viz_room(r, c)
 end
 
 

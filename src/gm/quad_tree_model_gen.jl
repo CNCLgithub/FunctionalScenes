@@ -13,11 +13,10 @@ end
 """
 Given a global state, sample furniture according to bernoulli weights
 """
-@gen (static) function room_from_gs(state::Matrix{Float64},
-                                       params::QuadTreeModel)
-    occupied = {:furniture} ~ Gen.Map(tile_flip)(state)
-    result::GridRoom = add_from_state_flip(params, occupied)
-    return result
+@gen (static) function obst_gen(state::Matrix{Float64})
+    occupied = {:obstacle} ~ Gen.Map(tile_flip)(state)
+    # result::GridRoom = add_from_state_flip(params, occupied)
+    return occupied
 end
 
 @gen (static) function qt_model(params::QuadTreeModel)
@@ -26,15 +25,20 @@ end
 
     # a global room matrix
     global_state = consolidate_qt_states(params, qt)
-    (gs, ps) = room_from_state_args(params, global_state)
 
     # empirical estimation of multigranular predictions
-    instances = {:instances} ~ Gen.Map(room_from_gs)(gs, ps)
+    obstacles = {:instances} ~ Gen.Map(obst_gen)(fill(global_state,
+                                                      params.instances))
+    instances = instances_from_gen(params, obstacles)
 
     # mean and variance of observation
     viz = graphics_from_instances(instances, params)
     pred = @trace(broadcasted_normal(viz[1], viz[2]), :viz)
 
-    result::QuadTreeState = QuadTreeState(qt, global_state, instances)
+    # shortest path given qt uncertainty
+    spath = qt_a_star(qt, params.dims[1], params.entrance, params.exit)
+
+    result::QuadTreeState = QuadTreeState(qt, global_state, instances,
+                                          spath)
     return result
 end

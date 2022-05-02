@@ -44,8 +44,23 @@ function node_to_idx(n::QTNode, d::Int64)
     return idx
 end
 
+function contains(n::QTNode, p::SVector{2, Float64})
+    @unpack center, dims = n
+    lower = center - 0.5 * dims
+    upper = center + 0.5 * dims
+    all(lower .<= p) && all(p .<= upper)
+end
+
+function idx_to_node_space(i::Int64, d::Int64)
+    c = [i / d, ((i - 1) % d) + 1.0]
+    c .*= 1.0/d
+    c .+= -_intercept
+    c .*= _slope
+    SVector{2, Float64}(c)
+end
+
 function dist(x::QTNode, y::QTNode)
-    norm(x.pos - y.pos) - (0.5*x.dims[1]) - (0.5*y.dims[1])
+    norm(x.center - y.center) - (0.5*x.dims[1]) - (0.5*y.dims[1])
 end
 
 struct QTState
@@ -64,7 +79,7 @@ node(st::QTState) = st.node
 Base.length(st::QTState) = st.k
 
 function leaf_vec(s::QTState)::Vector{QTState}
-    v = Vector{QTState}(undef, st.leaves)
+    v = Vector{QTState}(undef, s.leaves)
     add_leaves!(v, 1, s)
     return v
 end
@@ -74,8 +89,7 @@ function add_leaves!(v::Vector{QTState}, i::Int64, s::QTState)
         v[i] = s
         return i + 1
     end
-    for j = 1:4
-        @inbounds c = s.children[c]
+    for c in s.children
         i = add_leaves!(v, i, c)
     end
     return i
@@ -179,11 +193,22 @@ function nav_graph(st::QTState)
         x = lv[i]
         y = lv[j]
         d = dist(x.node, y.node)
+        # spatial distance of x <-> y
+        dw = 0.5 * (x.node.dims[1] + y.node.dims[1])
+        # average obstacle cost of x <-> y
+        bw = 0.5 * (weight(x) + weight(y))
+        w = dw * bw
         if isapprox(d, 0.)
             adj[i, j] = true
-            ds[i, j] = 0.5 * (x.node.dims[1] + y.node.dims[1])
-            ds[j, i] = d[i, j]
+            adj[j, i] = true
+            ds[i, j] = w
+            ds[j, i] = w
         end
     end
     (adj, ds, lv)
+end
+
+
+function contains(st::QTState, p::SVector{2, Float64})
+    contains(st.node, p)
 end

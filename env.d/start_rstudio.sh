@@ -11,4 +11,5 @@ singularity exec --bind "$WDIR/run":"/run" \
     --bind "$WDIR":"/home/rstudio" \
     --bind "$PWD/scripts":"/home/rstudio/project/scripts" \
     --bind "$ENVD/spaths":"/home/rstudio/project/spaths" \
-    env.d/rstudio_4.0.4.sif rserver --www-address=127.0.0.1
+    env.d/verse_4.0.4.sif rserver --www-address=127.0.0.1
+    # env.d/rstudio_4.0.4.sif rserver --www-address=127.0.0.1
