@@ -7,8 +7,8 @@ using FunctionalScenes: QTNode, qt_production, qt_aggregation, quad_tree, graph_
 
 function mytest()
     center = zeros(2)
-    dims = [32., 32.]
-    max_level = 3
+    dims = [1., 1.]
+    max_level = 6
     start_node = QTNode(center, dims, 1, max_level)
     display(start_node)
     trace, ls = Gen.generate(qt_production, (start_node,))
@@ -18,10 +18,13 @@ function mytest()
     @time trace, ls = Gen.generate(quad_tree, (start_node, 1))
     st = get_retval(trace)
     # display(st)
-    g = graph_from_qt(st)
+    # g = graph_from_qt(st)
+    gs = Matrix{Float64}(undef, 32, 32)
+    FunctionalScenes.consolidate_qt_states!(gs, st)
+    display(gs)
     # display(get_choices(trace))
-    display(g)
-    display(graphplot(g, method = :buchheim))
+    # display(g)
+    # display(graphplot(g, method = :buchheim))
     return nothing
 end
 

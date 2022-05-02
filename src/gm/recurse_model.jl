@@ -1,3 +1,5 @@
+using Base.Iterators: product
+
 export QTNode, QTState
 
 struct QTNode
@@ -8,22 +10,76 @@ struct QTNode
 end
 area(n::QTNode) = prod(n.dims)
 
-# const QTBranch = SVector{4, QTNode}
-# const QTLeaf = SVector{0, QTNode}
+const _slope =  SVector{2, Float64}([1., -1.])
+const _intercept =  SVector{2, Float64}([0.5, 0.5])
+
+function pos_to_idx(pos::SVector{2, Float64}, n::Int64)
+    # cartesian coordinates
+    c = @. ceil(Int64, n * (pos * _slope + _intercept))
+    # linear index
+    ceil(Int64, n*(c[1] - 1) + c[2])
+end
+
+function node_to_idx(n::QTNode, d::Int64)
+    @unpack center, level, max_level, dims = n
+    if level == max_level
+        # single index
+        idx = [pos_to_idx(center, d)]
+    else
+        # offset from each boundry
+        fac = (0.5 - (1.0 / exp2(max_level - level + 1)))
+        lower = center - fac * dims
+        upper = center + fac * dims
+        steps = Int64(exp2(max_level - level))
+        # xy ordering to match julia col-wise
+        # doesn't actually matter
+        xs = LinRange(lower[1], upper[1], steps)
+        ys = LinRange(upper[2], lower[2], steps)
+        idx = Vector{Int64}(undef, steps^2)
+        for (i,(y,x)) in enumerate(product(ys, xs))
+            sv = SVector{2, Float64}([x, y])
+            idx[i] = pos_to_idx(sv, d)
+        end
+    end
+    return idx
+end
+
+function dist(x::QTNode, y::QTNode)
+    norm(x.pos - y.pos) - (0.5*x.dims[1]) - (0.5*y.dims[1])
+end
 
 struct QTState
     mu::Float64
     u::Float64
     k::Int64
+    leaves::Int64
     node::QTNode
-    # children::Union{QTBranch, QTLeaf}
     children::Vector{QTState}
 end
 
 weight(st::QTState) = st.mu
 dof(st::QTState) = st.u
+leaves(st::QTState) = st.leaves
 node(st::QTState) = st.node
 Base.length(st::QTState) = st.k
+
+function leaf_vec(s::QTState)::Vector{QTState}
+    v = Vector{QTState}(undef, st.leaves)
+    add_leaves!(v, 1, s)
+    return v
+end
+
+function add_leaves!(v::Vector{QTState}, i::Int64, s::QTState)
+    if isempty(s.children)
+        v[i] = s
+        return i + 1
+    end
+    for j = 1:4
+        @inbounds c = s.children[c]
+        i = add_leaves!(v, i, c)
+    end
+    return i
+end
 
 function produce_weight(n::QTNode)::Float64
     @unpack level, max_level = n
@@ -46,7 +102,7 @@ with respect to the center of the parent.
 function produce_qt(n::QTNode)::Vector{QTNode}
     @unpack center, dims, level, max_level = n
     # calculate new centers
-    dc = 0.25 .* dims .* sqrt_v
+    dc = 0.25 .* dims # .* sqrt_v
     # offset by 1/2 the diagonal
     c11 = center + (q1 .* dc) # top left
     c21 = center + (q2 .* dc) # bottom left
@@ -70,25 +126,27 @@ function aggregate_qt(n::QTNode, y::Float64,
         mu = y
         u  = 0.0
         k = 1
+        l = 1
     else
         mu = mean(weight.(children))
         # equal area => mean of variance
         u = sqrt(mean(dof.(children).^2))
         k = sum(length.(children)) + 1
+        l = sum(leaves.(children))
     end
-    QTState(mu, u, k, n, children)
+    QTState(mu, u, k, l, n, children)
 end
 
-function adj_matrix(st::QTState)
+function inh_adj_matrix(st::QTState)
     am = Matrix{Bool}(falses(st.k + 1, st.k + 1))
     if st.k == 1
         am[1,2] = true
     end
-    adj_matrix!(am, st, 1, 1)
+    inh_adj_matrix!(am, st, 1, 1)
     return am
 end
 
-function adj_matrix!(am::Matrix{Bool},
+function inh_adj_matrix!(am::Matrix{Bool},
                      st::QTState,
                      node::Int64,
                      node_index::Int64)
@@ -109,6 +167,23 @@ function adj_matrix!(am::Matrix{Bool},
     println("ret c_index: $(c_index)")
     return c_index
 end
-function graph_from_qt(st::QTState)
-    SimpleDiGraph(adj_matrix(st))
+function inheritance_graph(st::QTState)
+    SimpleDiGraph(inh_adj_matrix(st))
+end
+
+function nav_graph(st::QTState)
+    adj = Matrix{Bool}(falses(st.leaves, st.leaves))
+    ds = fill(Inf, st.leaves, st.leaves)
+    lv = leaf_vec(st)
+    for i = 1:(st.leaves-1), j = (i+1):st.leaves
+        x = lv[i]
+        y = lv[j]
+        d = dist(x.node, y.node)
+        if isapprox(d, 0.)
+            adj[i, j] = true
+            ds[i, j] = 0.5 * (x.node.dims[1] + y.node.dims[1])
+            ds[j, i] = d[i, j]
+        end
+    end
+    (adj, ds, lv)
 end

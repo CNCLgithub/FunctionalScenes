@@ -16,7 +16,7 @@ export ModelParams
     # Room geometry
     #############################################################################
     # Ground truth room
-    gt::Room
+    gt::GridRoom
     # An empty room that has the same size as `gt`
     template::Room = template_from_room(gt)
 
@@ -333,29 +333,6 @@ function image_from_instances(instances, params)
     batch = Array{Float64, 4}(batch.cpu().numpy())
 end
 
-function graphics_from_instances(instances, params)
-    g = params.graphics
-    if length(instances) > 1
-        instances = [instances[1]]
-    end
-    # println("printing instances")
-    # foreach(viz_gt, instances)
-
-    instances = map(r -> translate(r, false, cubes=true), instances)
-    batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
-    features = Array{Float64, 4}(batch.cpu().numpy())
-    # features = @pycall functional_scenes.nn_features.single_feature(params.model,
-    #                                                                 "features.6",
-    #                                                                 batch)::Array{Float64, 4}
-    mu = mean(features, dims = 1)
-    if length(instances) > 1
-        sigma = std(features, mean = mu, dims = 1)
-        sigma .+= params.base_sigma
-    else
-        sigma = fill(params.base_sigma, size(mu))
-    end
-    (mu[1, :, :, :], sigma[1, :, :, :])
-end
 
 
 function all_selections_from_model(params::ModelParams)
