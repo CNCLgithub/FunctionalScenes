@@ -168,6 +168,9 @@ function viz_room(r::GridRoom, ocg::Matrix{Float64})
                 title = "Obstacles + path"))
 
 end
+function viz_room(r::GridRoom, ocg::Matrix{Bool})
+    viz_room(r, Float64.(ocg))
+end
 function viz_room(r::GridRoom)
     c = zeros(steps(r))
     viz_room(r, c)

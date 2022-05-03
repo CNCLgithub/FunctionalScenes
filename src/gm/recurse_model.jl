@@ -63,6 +63,22 @@ function dist(x::QTNode, y::QTNode)
     norm(x.center - y.center) - (0.5*x.dims[1]) - (0.5*y.dims[1])
 end
 
+function contact(a::QTNode, b::QTNode)
+    d = dist(a,b)
+    contact(a, b, d)
+end
+function contact(a::QTNode, b::QTNode, d::Float64)
+    aa = area(a)
+    ab = area(b)
+    # if same size, then contact is simply distance
+    aa == ab && return isapprox(d, 0.)
+    # otherwise must account for diagonal
+    big, small = aa > ab ? (a, b) : (b, a)
+    dlevel = small.level - big.level
+    thresh = 0.5 * big.dims[1] * (1 - exp2(-(dlevel + 1)))
+    d < thresh
+end
+
 struct QTState
     mu::Float64
     u::Float64
@@ -198,7 +214,9 @@ function nav_graph(st::QTState)
         # average obstacle cost of x <-> y
         bw = 0.5 * (weight(x) + weight(y))
         w = dw * bw
-        if isapprox(d, 0.)
+        # println(i => j => d)
+        # println(x.node.center => y.node.center => d)
+        if contact(x.node, y.node, d)
             adj[i, j] = true
             adj[j, i] = true
             ds[i, j] = w

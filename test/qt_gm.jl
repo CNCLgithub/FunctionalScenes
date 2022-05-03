@@ -20,18 +20,25 @@ function mytest()
 
     params = QuadTreeModel(;gt = r)
 
-
+    cm = choicemap()
+    cm[:trackers => (1, Val(:production)) => :produce] = true
+    for i = 1 : 4
+        cm[:trackers => (i + 1, Val(:production)) => :produce] = i == 2
+    end
 
     println(params.device)
     local trace
-    for _ = 1:10
-        trace, ll = generate(qt_model, (params,))
+    for _ = 1:1
+        trace, ll = generate(qt_model, (params,), cm)
     end
+    # display(get_submap(get_choices(trace), :trackers))
     st = get_retval(trace)
     # @time generate(qt_model, (params,))
-    viz_render(trace)
-    viz_gt(trace)
-    viz_room(r)
+
+    # viz_render(trace)
+    # viz_gt(trace)
+    # display(st.pg)
+    viz_room(r, st.pg)
     viz_room(st.instances[1])
     return nothing
 end

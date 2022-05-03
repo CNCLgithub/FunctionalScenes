@@ -1,4 +1,4 @@
-export QuadTreeModel
+export QuadTreeModel, qt_a_star
 
 #################################################################################
 # Model specification
@@ -66,11 +66,11 @@ function _max_depth(r::GridRoom)
 end
 
 
-@with_kw struct QuadTreeState
+struct QuadTreeState
     qt::QTState
     gs::Matrix{Float64}
     instances::Vector{GridRoom}
-    path::Vector{Int64}
+    pg::Matrix{Bool}
 end
 
 function add_from_state_flip(params::QuadTreeModel,
@@ -131,10 +131,12 @@ function graphics_from_instances(instances, params)
     (mu[1, :, :, :], sigma[1, :, :, :])
 end
 
-function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
-    st.leaves < 4 && return Int64[]
+function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)::Matrix{Bool}
+    st.leaves < 4 && return Matrix{Bool}(trues(d,d))
     # adjacency, distance matrix, and leaves
     adj, ds, lv = nav_graph(st)
+    # display(sparse(adj))
+    # display(ds)
     # scale dist matrix by room size
     rmul!(ds, d)
     g = SimpleGraph(adj)
@@ -143,12 +145,15 @@ function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
     a = findfirst(s -> contains(s, ent_p), lv)
     ext_p = idx_to_node_space(ext, d)
     b = findfirst(s -> contains(s, ext_p), lv)
-    # compute and store path
+    # compute path and path grid
     ps = a_star(g, a, b, ds)
-    path = Vector{Int64}(undef, length(ps) + 1)
-    @inbounds for i in eachindex(ps)
-        path[i] = src(ps[i])
+    pg = Matrix{Bool}(falses(d,d))
+    # @show a
+    # @show b
+    for e in ps
+        idxs = node_to_idx(lv[src(e)].node, d)
+        pg[idxs] .= true
     end
-    path[end] = ext
-    return path
+    pg[node_to_idx(lv[b].node, d)] .= true
+    return pg
 end
