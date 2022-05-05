@@ -41,7 +41,7 @@ include("rooms/rooms.jl")
 include("dgp/dgp.jl")
 include("gm/gm.jl")
 include("blender/blender.jl")
-# include("inference/inference.jl")
+include("inference/inference.jl")
 
 #################################################################################
 # Load Gen functions

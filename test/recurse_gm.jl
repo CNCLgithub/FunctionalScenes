@@ -9,7 +9,7 @@ function mytest()
     center = zeros(2)
     dims = [1., 1.]
     max_level = 3
-    start_node = QTNode(center, dims, 1, max_level)
+    start_node = QTNode(center, dims, 1, max_level, 1)
     display(start_node)
     trace, ls = Gen.generate(qt_production, (start_node,))
     trace, ls = Gen.generate(qt_aggregation, (start_node, QTState[]))

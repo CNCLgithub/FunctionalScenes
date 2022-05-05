@@ -16,6 +16,11 @@ from ffcv.transforms import (Convert, NormalizeImage, ToTensor, ToTorchImage,
 
 from . pytypes import *
 
+def load_og(src:str):
+    og = np.asarray(read_image(src)).squeeze()
+    og = og.astype(np.float32) * (1.0/255.0)
+    return og
+
 class OGVAEDataset(Dataset):
     def __init__(self, src: str, render_type: str = 'pytorch'):
         with open(src + '_manifest.json', 'r') as f:
@@ -32,8 +37,7 @@ class OGVAEDataset(Dataset):
         # image = np.asarray(read_image(img_path))
         image = pil_loader(img_path)
         og_path = os.path.join(self.src, str(idx+1), 'og.png')
-        og = np.asarray(read_image(og_path)).squeeze()
-        og = og.astype(np.float32) * (1.0/255.0)
+        og = load_og(og_path)
         # og = pil_loader(og_path)
         return image, og
 

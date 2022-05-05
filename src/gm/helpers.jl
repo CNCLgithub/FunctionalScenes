@@ -257,15 +257,6 @@ function viz_global_state(trace::Gen.Trace)
     return nothing
 end
 
-function viz_ddp_state(grid::Matrix{Float64})
-    grid = reverse(grid, dims = 1)
-    println(heatmap(grid, border = :none,
-                    title = "ddp geometry",
-                    colorbar_border = :none,
-                    colormap = :inferno))
-    return nothing
-end
-
 function viz_ocg(ocg; title = "occupancy grid")
     # ocg = mean(ocg)
     ocg = reverse(ocg, dims = 1)

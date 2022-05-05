@@ -7,12 +7,17 @@ struct QTNode
     dims::SVector{2, Float64}
     level::Int64
     max_level::Int64
+    tree_idx::Int64
 end
 area(n::QTNode) = prod(n.dims)
 
 const _slope =  SVector{2, Float64}([1., -1.])
 const _intercept =  SVector{2, Float64}([0.5, 0.5])
 
+"""
+
+Maps R^2 position of QTNode to a linear index in nxn
+"""
 function pos_to_idx(pos::SVector{2, Float64}, n::Int64)
     # cartesian coordinates
     c = @. ceil(Int64, n * (pos * _slope + _intercept))
@@ -20,6 +25,10 @@ function pos_to_idx(pos::SVector{2, Float64}, n::Int64)
     ceil(Int64, n*(c[1] - 1) + c[2])
 end
 
+"""
+
+Maps R^2 position of QTNode to a linear index in nxn
+"""
 function node_to_idx(n::QTNode, d::Int64)
     @unpack center, level, max_level, dims = n
     if level == max_level
@@ -51,6 +60,10 @@ function contains(n::QTNode, p::SVector{2, Float64})
     all(lower .<= p) && all(p .<= upper)
 end
 
+"""
+
+Maps a linear index in nxn to a R^2 plane [-0.5, 0.5]
+"""
 function idx_to_node_space(i::Int64, d::Int64)
     c = [i / d, ((i - 1) % d) + 1.0]
     c .*= 1.0/d
@@ -141,10 +154,14 @@ function produce_qt(n::QTNode)::Vector{QTNode}
     # half xy dimensions (1/4 area)
     new_dims = 0.5 * dims
     children = Vector{QTNode}(undef, 4)
-    children[1] = QTNode(c11, new_dims, level + 1, max_level)
-    children[2] = QTNode(c12, new_dims, level + 1, max_level)
-    children[3] = QTNode(c21, new_dims, level + 1, max_level)
-    children[4] = QTNode(c22, new_dims, level + 1, max_level)
+    children[1] = QTNode(c11, new_dims, level + 1, max_level,
+                         Gen.get_child(n.tree_idx, 1, 4))
+    children[2] = QTNode(c12, new_dims, level + 1, max_level,
+                         Gen.get_child(n.tree_idx, 2, 4))
+    children[3] = QTNode(c21, new_dims, level + 1, max_level,
+                         Gen.get_child(n.tree_idx, 3, 4))
+    children[4] = QTNode(c22, new_dims, level + 1, max_level,
+                         Gen.get_child(n.tree_idx, 4, 4))
     # SVector{4, QTNode}(children)
     children
 end

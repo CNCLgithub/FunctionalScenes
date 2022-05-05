@@ -388,6 +388,12 @@ git-tree-sha1 = "d9eee53657f6a13ee51120337f98684c9c702264"
 uuid = "08572546-2f56-4bcf-ba4e-bab62c3a3f89"
 version = "0.2.10"
 
+[[deps.Fontconfig]]
+deps = ["Fontconfig_jll", "Libdl", "Printf"]
+git-tree-sha1 = "beef89322ccf3b80062f522ed6f82089a254491e"
+uuid = "186bb1d3-e1f7-5a2c-a377-96d770f13627"
+version = "0.4.0"
+
 [[deps.Fontconfig_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Expat_jll", "FreeType2_jll", "JLLWrappers", "Libdl", "Libuuid_jll", "Pkg", "Zlib_jll"]
 git-tree-sha1 = "21efd19106a55620a188615da6d3d06cd7f6ee03"
@@ -468,6 +474,12 @@ deps = ["Compat", "DataStructures", "Distributions", "ForwardDiff", "FunctionalC
 git-tree-sha1 = "2be3e8d1eee6b2b70cf118c8d655fb11cfcfb9ef"
 uuid = "ea4f424c-a589-11e8-07c0-fd5c91b9da4a"
 version = "0.4.4"
+
+[[deps.Gen_Compose]]
+deps = ["DataStructures", "Distributions", "FileIO", "Fontconfig", "Gen", "JLD2", "Revise", "UnPack"]
+path = "../home/mario/dev/FunctionalScenes/deps/Gen_Compose"
+uuid = "c1ef4dca-b0a6-4a35-b24b-46cbf3979a16"
+version = "0.1.0"
 
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]

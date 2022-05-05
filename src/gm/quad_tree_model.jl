@@ -35,7 +35,7 @@ export QuadTreeModel, qt_a_star
     split_prob::Float64 = 0.5
 
     # coarsest node
-    start_node::QTNode = QTNode(center, bounds, 1, max_depth)
+    start_node::QTNode = QTNode(center, bounds, 1, max_depth, 1)
 
     #############################################################################
     # Multigranular empirical estimation
@@ -65,13 +65,22 @@ function _max_depth(r::GridRoom)
     convert(Int64, minimum(log2.(steps)) + 1)
 end
 
+function load(::Type{QuadTreeModel}, path::String; kwargs...)
+    QuadTreeModel(;read_json(path)..., kwargs...)
+end
 
 struct QuadTreeState
     qt::QTState
     gs::Matrix{Float64}
     instances::Vector{GridRoom}
     pg::Matrix{Bool}
+    lv::Vector{QTState}
 end
+
+function QuadTreeState(qt, gs, instances, pg)
+   QuadTreeState(qt, gs, instances, pg, leaf_vec(qt))
+end
+
 
 function add_from_state_flip(params::QuadTreeModel,
                              occupied::AbstractVector{Bool})::GridRoom
@@ -107,6 +116,19 @@ function instances_from_gen(params::QuadTreeModel, instances)
     return rs
 end
 
+
+function image_from_instances(instances, params)
+    g = params.graphics
+    if length(instances) > 1
+        instances = [instances[1]]
+    end
+    instances = map(r -> translate(r, Int64[], cubes=true), instances)
+    batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
+    Array{Float64, 4}(batch.cpu().numpy())
+end
+
+
+
 function graphics_from_instances(instances, params)
     g = params.graphics
     if length(instances) > 1
@@ -115,15 +137,10 @@ function graphics_from_instances(instances, params)
     # println("printing instances")
     # foreach(viz_gt, instances)
 
-    cubes = map(r -> translate(r, Int64[], cubes=true), instances)
-    batch = @pycall functional_scenes.render_scene_batch(cubes, g)::PyObject
-    features = Array{Float64, 4}(batch.cpu().numpy())
-    # features = @pycall functional_scenes.nn_features.single_feature(params.model,
-    #                                                                 "features.6",
-    #                                                                 batch)::Array{Float64, 4}
-    mu = mean(features, dims = 1)
+    batch = image_from_instances(instances, params)
+    mu = mean(batch, dims = 1)
     if length(instances) > 1
-        sigma = std(features, mean = mu, dims = 1)
+        sigma = std(batch, mean = mu, dims = 1)
         sigma .+= params.base_sigma
     else
         sigma = fill(params.base_sigma, size(mu))
@@ -131,8 +148,8 @@ function graphics_from_instances(instances, params)
     (mu[1, :, :, :], sigma[1, :, :, :])
 end
 
-function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)::Matrix{Bool}
-    st.leaves < 4 && return Matrix{Bool}(trues(d,d))
+function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
+    st.leaves < 4 && return (Matrix{Bool}(trues(d,d)), QTState[st])
     # adjacency, distance matrix, and leaves
     adj, ds, lv = nav_graph(st)
     # display(sparse(adj))
@@ -155,5 +172,20 @@ function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)::Matrix{Bool}
         pg[idxs] .= true
     end
     pg[node_to_idx(lv[b].node, d)] .= true
-    return pg
+    (pg, lv)
+end
+
+function ridx_to_leaf(st::QuadTreeState, ridx::Int64)
+    point = idx_to_node_space(ridx, d)
+    l = findfirst(s -> contains(s, point), st.lv)
+end
+
+const qt_model_all_downstream_selection = StaticSelection(select(:instances))
+all_downstream_selection(p::QuadTreeModel) = qt_model_all_downstream_selection
+
+function create_obs(params::QuadTreeModel, r::GridRoom)
+    mu, _ = graphics_from_instances([r], params)
+    constraints = Gen.choicemap()
+    constraints[:viz] = mu
+    constraints
 end

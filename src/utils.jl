@@ -26,8 +26,8 @@ end
     opens the file at path, parses as JSON and returns a dictionary
 """
 function read_json(path)
+    local data
     open(path, "r") do f
-        global data
         data = JSON.parse(f)
     end
 

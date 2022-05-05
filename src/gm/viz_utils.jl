@@ -21,3 +21,12 @@ function viz_gt(trace::Gen.Trace)
     batch = Array{Float64, 4}(batch.cpu().numpy())
     display(colorview(RGB, batch[1, :, :, :]))
 end
+
+function viz_ddp_state(grid::Matrix{Float64})
+    grid = reverse(grid, dims = 1)
+    println(heatmap(grid, border = :none,
+                    title = "ddp geometry",
+                    colorbar_border = :none,
+                    colormap = :inferno))
+    return nothing
+end

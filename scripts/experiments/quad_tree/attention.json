@@ -1,0 +1,7 @@
+{
+    "samples" : 10,
+    "smoothness" : 1.0,
+    "init_cycles" : 10,
+    "lateral_cycles" : 10,
+    "vertical_cycles" : 10
+}

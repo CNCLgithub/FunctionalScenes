@@ -10,7 +10,10 @@ export lateral_move, vertical_move
 end
 
 function lateral_move(t::Gen.Trace, i::Int64)
-    apply_random_walk(t, qt_node_random_walk, (t, i))
+    (new_trace, w1) = apply_random_walk(t, qt_node_random_walk, (t, i))
+    downstream = downstream_selection(no_change, t, i)
+    (new_trace, w2) = regenerate(new_trace, downstream)
+    (new_trace, w1 + w2)
 end
 
 # @gen function qt_subtree_production(t::Gen.Trace, i::Int64)
@@ -35,14 +38,19 @@ end
     mus = {:steps} ~ Gen.Unfold(split_step)(3, temp, n)
 end
 
+function split_weight(n::QTNode)::Float64
+    @unpack level, max_level = n
+    level == 1 && return 1.0
+    level < max_level && return 0.5
+    0.0
+end
+
 @gen function qt_split_merge_proposal(t::Gen.Trace, i::Int64)
 
     # prop_addr = :trackers => (i, Val(:production))
-    n = t[:trackers => (i, Val(:production))]
-    w = produce_weight(n)
+    st = t[:trackers => (i, Val(:aggregation))]
+    w = split_weight(st.node)
     s = @trace(bernoulli(w), :produce)
-    # what moves are possible?
-    w = produce_weight(n)
 
     # refine or coarsen?
     if ({:split} ~ bernoulli(w))
@@ -87,13 +95,60 @@ end
     else
         # merging nodes
         parent = Gen.get_parent(node, 4)
+        @write(t_prime[:trackers => (parent, Val(:production)) => :produce],
+               false, :discrete)
+        mu = 0.
         for i = 1:4
             cid = get_child(parent, i, 4)
-
+            cmu =  @read(t[:trackers => (cid, Val(:aggregation)) => :mu],
+                         :continuous)
+            mu += cmu
+            if i < 4
+                @write(u_prime[:split_kernel => :steps => i => :u],
+                    cmu, :continuous)
+            end
         end
+        mu *= 0.25
+        @write(t_prime[:trackers => (parent, Val(:aggregation)) => :mu],
+               mu, :continuous)
+        @write(u_prime[:split], true, :discrete)
     end
-
 end
 
-function vertical_move(t::Gen.Trace, i::Int64)
+is_involution!(qt_split_merge_involution)
+
+
+function vertical_move_direction(t::Gen.Trace, t_prime::Gen.Trace,
+                                 node::Int64)::MoveDirection
+    p = first(get_args(t))
+    vertical_move_direction(p, t, t_prime, node)
+end
+
+function vertical_move_direction(p::QuadTreeModel, t::Gen.Trace,
+                                 t_prime::Gen.Trace, node::Int64)
+    parent = Gen.get_parent(node, 4)
+    p_addr = :trackers => (parent, Val(:production)) => :produce
+    split_addr = :trackers => (node, Val(:production)) => :produce
+    # parent no longer splits
+    (t[p_addr] && !(t_prime[p_addr])) &&  return merge_move
+    # node now splits
+    (!(t[split_addr]) && t_prime[split_addr]) && return split_move
+    no_change
+end
+
+function vertical_move(trace::Gen.Trace,
+                       translator::Gen.SymmetricTraceTranslator,
+                       node::Int64)
+    # RJ-mcmc move over tracker resolution
+    (new_trace, w1) = translator(trace; check = false)
+    # determine direction of move
+    direction = vertical_move_direction(trace, new_trace, node)
+    # random walk over tracker state (bernoulli weights)
+    (new_trace, w2) = apply_random_walk(new_trace,
+                                        qt_node_random_walk,
+                                        (node,))
+    # update instance addresses
+    downstream = downstream_selection(direction, new_trace, node)
+    (new_trace, w3) = regenerate(new_trace, selected)
+    (new_trace, w1 + w2 + w3, direction)
 end

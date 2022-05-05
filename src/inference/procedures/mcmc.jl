@@ -30,10 +30,7 @@ export AttentionMH
     # Goal driven belief
     objective::Function = quad_tree_path
     # destance metrics for two task objectives
-    distance::Function = batch_compare_og
-
-    # address schema for IOT sensitivity
-    nodes::Int64
+    distance::Function = sinkhorn_div
 
     # smoothing relative sensitivity for each tracker
     smoothness::Float64 = 1.0
@@ -48,7 +45,7 @@ end
 
 function load(::Type{AttentionMH}, path::String; kwargs...)
     loaded = read_json(path)
-    AttentionMH(; nodes = nodes, selections = selections, loaded...,
+    AttentionMH(; loaded...,
                 kwargs...)
 end
 
@@ -56,8 +53,8 @@ end
 mutable struct AMHTrace <: MCMCTrace
     current_trace::Gen.Trace
     initialized::Bool
-    sensitivities::Vector{Float64}
-    weights::Vector{Float64}
+    sensitivities::Array{Float64}
+    weights::Array{Float64}
 end
 
 function update_weights!(state::AMHTrace, proc::AttentionMH)
@@ -66,44 +63,42 @@ function update_weights!(state::AMHTrace, proc::AttentionMH)
 end
 
 
-function update_structure!(state::AMHTrace, proc::AttentionMH, d::Split,
-                           idx::Int64)
-    @inbounds for i = 1 : 4
-        c = Gen.get_child(idx, i, 4)
-        state.sensitivities[c] = state.sensitivities[idx]
-    end
-    state.sensitivies[idx] = 0.0
-    return nothing
-end
+# function update_structure!(state::AMHTrace, proc::AttentionMH, ::Split,
+#                            idx::Int64)
+#     @inbounds for i = 1 : 4
+#         c = Gen.get_child(idx, i, 4)
+#         state.sensitivities[c] = state.sensitivities[idx]
+#     end
+#     state.sensitivies[idx] = 0.0
+#     return nothing
+# end
 
-function update_structure!(state::AMHTrace, proc::AttentionMH, d::Merge,
-                           idx::Int64)
-    parent = Gen.get_parent(idx, 4)
-    state.sensitivities[parent] = 0.0
-    @inbounds for i = 1 : 4
-        c = Gen.get_child(idx, i, 4)
-        state.sensitivities[parent] += state.sensitivities[c]
-        state.sensitivities[c] = 0.0
-    end
-    return nothing
-end
+# function update_structure!(state::AMHTrace, proc::AttentionMH, ::Merge,
+#                            idx::Int64)
+#     parent = Gen.get_parent(idx, 4)
+#     state.sensitivities[parent] = 0.0
+#     @inbounds for i = 1 : 4
+#         c = Gen.get_child(idx, i, 4)
+#         state.sensitivities[parent] += state.sensitivities[c]
+#         state.sensitivities[c] = 0.0
+#     end
+#     return nothing
+# end
 
 function kernel_init!(state::AMHTrace, proc::AttentionMH)
 
     t = state.current_trace
-    _t  = t
-    # loop through each node in initial trace
-    nodes = proc.get_nodes(t)
-    n = length(nodes)
-    sensitivities = Vector{Float64}(undef, n)
+    st::QaudTreeState = get_retval(t)
     lls = Vector{Float64}(undef, init_cycles)
     distances = Vector{Float64}(undef, init_cycles)
-    for i = 1:n
-        node = nodes[i]
+    # loop through each node in initial trace
+    _t  = t
+    for i = 1:length(st.lv)
+        node = st.lv[i]
         for j = 1:proc.init_cycles
-            _t, lls[j] = lateral_move(t, node)
+            _t, lls[j] = lateral_move(t, node.tree_idx)
             distances[j] = distance(objective(t), objective(_t))
-            if log(rand()) < lls[i]
+            if log(rand()) < lls[j]
                 @debug "accepted"
                 t = _t
             end
@@ -112,7 +107,8 @@ function kernel_init!(state::AMHTrace, proc::AttentionMH)
         # compute expectation over sensitivities
         @debug "distances: $(distances)"
         e_dist = mean(distances) # sum(distances .* exp.((lls .- logsumexp(lls))))
-        state.sensitivities[i] = isinf(e_dist) ? 0. : e_dist # clean up -Inf
+        sidx = node_to_idx(node, size(st.gs, 1))
+        state.sensitivities[sidx] .= isinf(e_dist) ? 0. : e_dist # clean up -Inf
     end
 
     state.current_trace = t
@@ -123,19 +119,21 @@ end
 
 function kernel_move!(state::AMHTrace, proc::AttentionMH)
 
+    t = state.current_trace
+    st::QaudTreeState = get_retval(t)
     # select node to rejuv
-    idx = categorical(state.weights)
+    room_idx = categorical(state.weights)
+    node = ridx_to_leaf(st, room_idx)
 
-    @debug "Attending to tracker $(idx)"
+    @debug "Attending to node $(idx)"
 
     @unpack lateral_cycles, vertical_cycles, objective, distance = proc
 
     # lateral moves
-    t = state.current_trace
     lls = Vector{Float64}(undef, lateral_cycles)
     distances = Vector{Float64}(undef, lateral_cycles)
     for i = 1:lateral_cycles
-        _t, lls[j] = lateral_move(t, idx)
+        _t, lls[j] = lateral_move(t, node.tree_idx)
         distances[j] = distance(objective(t), objective(_t))
         if log(rand()) < lls[i]
             @debug "accepted"
@@ -147,7 +145,8 @@ function kernel_move!(state::AMHTrace, proc::AttentionMH)
     # compute expectation over sensitivities
     @debug "distances: $(distances)"
     e_dist = mean(distances) # sum(distances .* exp.((lls .- logsumexp(lls))))
-    state.sensitivities[idx] = isinf(e_dist) ? 0. : e_dist # clean up -Inf
+    sidx = node_to_idx(node, size(st.gs, 1))
+    state.sensitivities[sidx] .= isinf(e_dist) ? 0. : e_dist # clean up -Inf
 
     # attempt vertical moves
     accepted = false
@@ -163,7 +162,7 @@ function kernel_move!(state::AMHTrace, proc::AttentionMH)
     # update trace
     state.current_trace = t
     # need to update metrics given structure change
-    accepted && update_structure!(state, proc, direction, idx)
+    # accepted && update_structure!(state, proc, direction, idx)
     # finally update weights for next step
     update_weights!(state, proc)
     return idx
@@ -176,11 +175,12 @@ function Gen_Compose.initialize_procedure(proc::AttentionMH,
                            query.observations)
     trace,_ = proc.ddp(trace, proc.ddp_args...)
 
-    n = proc.nodes
-    sensitivities = zeros(proc.nodes)
-    weights = fill(1.0/proc.nodes, proc.nodes)
+    dims = first(get_args(trace)).dims
+    n = prod(dims)
+    sensitivities = zeros(dims)
+    weights = fill(1.0/n, n)
     AMHTrace(trace,
-             false
+             false,
              sensitivities,
              weights)
 end
@@ -203,7 +203,7 @@ function Gen_Compose.mc_step!(state::AMHTrace,
     println("current score $(get_score(state.current_trace))")
     # return packaged aux_state
     aux_state = Dict(
-        :weights => state.weights,
+        :weights => deepcopy(state.weights),
         :sensitivities => deepcopy(state.sensitivities),
         :node => idx)
 end
