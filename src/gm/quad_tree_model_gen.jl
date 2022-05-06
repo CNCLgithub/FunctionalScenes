@@ -19,7 +19,7 @@ Given a global state, sample furniture according to bernoulli weights
     return occupied
 end
 
-@gen (static) function qt_model(params::QuadTreeModel)
+@gen function qt_model(params::QuadTreeModel)
     # initialize trackers
     qt = {:trackers} ~ quad_tree(params.start_node, 1)
 

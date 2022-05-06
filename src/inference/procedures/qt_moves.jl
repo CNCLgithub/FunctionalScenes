@@ -3,16 +3,18 @@ export lateral_move, vertical_move
 
 @gen function qt_node_random_walk(t::Gen.Trace, i::Int64)
     addr = :trackers => (i, Val(:aggregation)) => :mu
-    mu::Float64 = trace[addr]
+    mu::Float64 = t[addr]
     bounds::Vector{Float64} = [mu - 0.05, mu + 0.05]
     clamp!(bounds, 0., 1,)
     {addr} ~ uniform(bounds[1], bounds[2])
 end
 
 function lateral_move(t::Gen.Trace, i::Int64)
-    (new_trace, w1) = apply_random_walk(t, qt_node_random_walk, (t, i))
+    (new_trace, w1) = apply_random_walk(t, qt_node_random_walk, (i,))
     downstream = downstream_selection(no_change, t, i)
-    (new_trace, w2) = regenerate(new_trace, downstream)
+    model_args = get_args(t)
+    argdiffs = map((_) -> NoChange(), model_args)
+    (new_trace, w2) = regenerate(new_trace, model_args, argdiffs, downstream)
     (new_trace, w1 + w2)
 end
 

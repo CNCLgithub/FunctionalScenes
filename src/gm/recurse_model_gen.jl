@@ -8,10 +8,15 @@ export quad_tree
     return result
 end
 
-@gen (static) function qt_aggregation(n::QTNode,
+@gen function qt_aggregation(n::QTNode,
                                       children::Vector{QTState})
-    y = @trace(uniform(0., 1.), :mu)
-    agg_state::QTState = aggregate_qt(n, y, children)
+    if isempty(children)
+        mu = @trace(uniform(0., 1.), :mu)
+    else
+        mu = mean(weight.(children))
+    end
+
+    agg_state::QTState = aggregate_qt(n, mu, children)
     return agg_state
 end
 

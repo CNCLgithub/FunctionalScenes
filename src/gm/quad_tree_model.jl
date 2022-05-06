@@ -148,6 +148,12 @@ function graphics_from_instances(instances, params)
     (mu[1, :, :, :], sigma[1, :, :, :])
 end
 
+struct QTPath
+    g::SimpleGraph
+    ds::Matrix{Float64}
+    p
+end
+
 function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
     st.leaves < 4 && return (Matrix{Bool}(trues(d,d)), QTState[st])
     # adjacency, distance matrix, and leaves
@@ -164,6 +170,8 @@ function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
     b = findfirst(s -> contains(s, ext_p), lv)
     # compute path and path grid
     ps = a_star(g, a, b, ds)
+    @show ps
+    error()
     pg = Matrix{Bool}(falses(d,d))
     # @show a
     # @show b

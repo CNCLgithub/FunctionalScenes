@@ -471,7 +471,7 @@ version = "0.64.2+0"
 
 [[deps.Gen]]
 deps = ["Compat", "DataStructures", "Distributions", "ForwardDiff", "FunctionalCollections", "JSON", "LinearAlgebra", "MacroTools", "Parameters", "Random", "ReverseDiff", "SpecialFunctions"]
-git-tree-sha1 = "2be3e8d1eee6b2b70cf118c8d655fb11cfcfb9ef"
+path = "/home/mario/dev/FunctionalScenes/env.d/jenv/dev/Gen"
 uuid = "ea4f424c-a589-11e8-07c0-fd5c91b9da4a"
 version = "0.4.4"
 

@@ -86,16 +86,16 @@ end
 # end
 
 function kernel_init!(state::AMHTrace, proc::AttentionMH)
-
+    @unpack init_cycles, objective, distance = proc
     t = state.current_trace
-    st::QaudTreeState = get_retval(t)
+    st::QuadTreeState = get_retval(t)
     lls = Vector{Float64}(undef, init_cycles)
     distances = Vector{Float64}(undef, init_cycles)
     # loop through each node in initial trace
     _t  = t
     for i = 1:length(st.lv)
-        node = st.lv[i]
-        for j = 1:proc.init_cycles
+        node = st.lv[i].node
+        for j = 1:init_cycles
             _t, lls[j] = lateral_move(t, node.tree_idx)
             distances[j] = distance(objective(t), objective(_t))
             if log(rand()) < lls[j]
@@ -120,7 +120,7 @@ end
 function kernel_move!(state::AMHTrace, proc::AttentionMH)
 
     t = state.current_trace
-    st::QaudTreeState = get_retval(t)
+    st::QuadTreeState = get_retval(t)
     # select node to rejuv
     room_idx = categorical(state.weights)
     node = ridx_to_leaf(st, room_idx)

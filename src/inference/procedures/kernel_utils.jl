@@ -14,13 +14,15 @@ end
 
 function ddp_init_kernel(trace::Gen.Trace, prop_args, selected)
     # @debug "initial trace score $(get_score(trace))"
-    (new_trace, w1) = apply_random_walk(trace,
-                                        dd_state_proposal,
-                                        prop_args)
+    # (new_trace, w1) = apply_random_walk(trace,
+    #                                     dd_state_proposal,
+    #                                     prop_args)
+    (new_trace, _) = metropolis_hastings(trace, dd_state_proposal, prop_args,
+                                         dd_state_transform)
     # @debug "w1: $(w1)"
-    (new_trace, w2) = regenerate(new_trace, selected)
+    # (new_trace, w2) = regenerate(new_trace, selected)
     # @debug "w2: $(w2)"
-    (new_trace, w1 + w2)
+    (new_trace, 0.)
 end
 
 abstract type MoveDirection end
@@ -32,15 +34,17 @@ const split_move = Split()
 const no_change  = NoChange()
 
 function downstream_selection(t::Gen.Trace, node::Int64)
-    st::QTState = t[:trackers => (node, Val(:aggregation))]
+    params = first(get_args(t))
+    head::QTState = t[:trackers]
+    st::QTState = traverse_qt(head, node)
     # associated rooms samples
-    idxs = node_to_idx(params, st.node)
+    idxs = node_to_idx(st.node, params.dims[1])
     v = Vector{Pair}(undef, length(idxs) * params.instances)
     lis = LinearIndices((params.instances, length(idxs)))
     for i = 1:params.instances, j in idxs
         v[lis[i, j]] = :instances => i => :obstacle => j => :flip
     end
-    StaticSelection(select(v...))
+    select(v...)
 end
 
 function downstream_selection(::Union{NoChange,Split}, t::Gen.Trace, node::Int64)

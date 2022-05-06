@@ -12,7 +12,7 @@ function cart_dm(p::Matrix{Float64})
         ds[x, y] = sqrt((i - a)^2 + (j - b)^2)
         # ds[y, x] = sqrt((i - a)^2 + (j - b)^2)
     end
-    vec(ds)
+    ds
 end
 
 const dm_32x32 = cart_dm(zeros(32, 32))
@@ -29,15 +29,27 @@ const dm_32x32 = cart_dm(zeros(32, 32))
 #     d = sum(ot .* dm)
 #     isnan(d) || d < 0. ? 0. : d
 # end
-function sinkhorn_div(p::Matrix{Float64}, q::Matrix{Float64};
+
+function discrete_measure(x::QTPath)
+    ws = zeros(nv(x.g))
+    ws[x.path] .= (1.0 / length(x.path))
+    return ws
+end
+
+function sinkhorn_div(p::QTPath, q::QTPath;
                       λ::Float64 = 1.0,
                       ε::Float64 = 0.01,
-                      scale::Float64 = 1.0) where {K, V}
+                      scale::Float64 = 1.0)
     # discrete measures
-    measure_p = vec(p) ./ sum(p)
-    measure_q = vec(q) ./ sum(q)
-    dm = size(p) == (32, 32) ? dm_32x32 : cart_dm(p)
-    ot = sinkhorn_unbalanced(measure_p, measure_q, dm, λ, λ, ε)
-    d = sum(ot .* dm)
+    measure_p = discrete_measure(p)
+    measure_q = discrete_measure(q)
+    dm = p.dm
+    ot = sinkhorn(measure_p, measure_q, dm, ε)
+                  # atol = 1E-4,
+                  # maxiter=10_000)
+    # ot = log.(ot)
+    # d = logsumexp(ot .+ log.(c))
+    d = OptimalTransport.sinkhorn_cost_from_plan(ot, dm, ε;
+                                                 regularization=false)
     isnan(d) || d < 0. ? 0. : d
 end

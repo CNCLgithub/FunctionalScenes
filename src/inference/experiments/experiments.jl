@@ -16,7 +16,7 @@ function run_inference(query::StaticQuery,
 end
 
 function ex_choicemap(tr::Gen.Trace)
-    s = Gen.complement(select(:viz))
+    s = Gen.complement(select(:viz, :instances))
     choices = get_choices(tr)
     get_selected(choices, s)
 end

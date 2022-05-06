@@ -1,8 +1,8 @@
 using Gen
 using FunctionalScenes
 # using Graphs
-using GraphRecipes
-using Plots
+# using GraphRecipes
+# using Plots
 using FunctionalScenes: QTNode, qt_production, qt_aggregation, quad_tree
 
 function mytest()
@@ -18,9 +18,11 @@ function mytest()
 
 
     cm = choicemap()
+    fwd = choicemap()
     cm[(1, Val(:production)) => :produce] = true
     for i = 2 : 5
-        cm[(i, Val(:production)) => :produce] = i == 3
+        cm[(i, Val(:production)) => :produce] = false
+        fwd[(i, Val(:aggregation)) => :mu] = 0.5
     end
     @time trace, ls = Gen.generate(quad_tree, (start_node, 1), cm)
     st = get_retval(trace)
@@ -32,7 +34,11 @@ function mytest()
 
     display(qt_a_star(st, 4, 2, 14))
 
-    # display(get_choices(trace))
+
+    (new_trace, weight, retdiff, discard) = update(trace, fwd)
+    display(weight)
+    display(get_choices(new_trace))
+    display(discard)
     # display(g)
     # display(graphplot(g, method = :buchheim))
     return nothing

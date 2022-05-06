@@ -7,6 +7,9 @@ using DataFrames
 using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
+using Random
+Random.seed!(1234)
+
 dataset = "vss_pilot_11f_32x32_restricted"
 
 function parse_commandline(vs)

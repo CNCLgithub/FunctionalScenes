@@ -124,6 +124,32 @@ function add_leaves!(v::Vector{QTState}, i::Int64, s::QTState)
     return i
 end
 
+function get_depth(n::Int64)
+    n == 1 && return 1
+    p = Gen.get_parent(n, 4)
+    d = 1
+    while p != 1
+        p = Gen.get_parent(p, 4)
+        d += 1
+    end
+    d
+end
+
+
+function traverse_qt(head::QTState, dst::Int64)
+    d = get_depth(dst) - 1
+    path = Vector{Int64}(undef, d)
+    idx = dst
+    @inbounds for i = d:1
+        path[i] = Gen.get_child_num(idx, 4)
+        idx = Gen.get_parent(idx, 4)
+    end
+    for i = 1:d
+        head = head.children[path[i]]
+    end
+    head
+end
+
 function produce_weight(n::QTNode)::Float64
     @unpack level, max_level = n
     # maximum depth, do not split
@@ -170,18 +196,16 @@ end
 function aggregate_qt(n::QTNode, y::Float64,
                       children::Vector{QTState})::QTState
     if isempty(children)
-        mu = y
         u  = 0.0
         k = 1
         l = 1
     else
-        mu = mean(weight.(children))
         # equal area => mean of variance
         u = sqrt(mean(dof.(children).^2))
         k = sum(length.(children)) + 1
         l = sum(leaves.(children))
     end
-    QTState(mu, u, k, l, n, children)
+    QTState(y, u, k, l, n, children)
 end
 
 function inh_adj_matrix(st::QTState)
