@@ -28,9 +28,9 @@ export AttentionMH
     #############################################################################
 
     # Goal driven belief
-    objective::Function = quad_tree_path
+    objective::Function = qt_path_cost
     # destance metrics for two task objectives
-    distance::Function = sinkhorn_div
+    distance::Function = norm
 
     # smoothing relative sensitivity for each tracker
     smoothness::Float64 = 1.0
@@ -50,15 +50,17 @@ function load(::Type{AttentionMH}, path::String; kwargs...)
 end
 
 
-mutable struct AMHTrace <: MCMCTrace
-    current_trace::Gen.Trace
+mutable struct AttentionAux <: AuxillaryState
     initialized::Bool
     sensitivities::Array{Float64}
     weights::Array{Float64}
+    node::Int64
 end
 
-function update_weights!(state::AMHTrace, proc::AttentionMH)
-    state.weights = softmax(proc.smoothness .* state.sensitivities)
+function update_weights!(chain::StaticMHChain, proc::AttentionMH)
+    @unpack auxillary = chain
+    auxillary.weights = softmax(proc.smoothness .* vec(auxillary.sensitivities))
+    chain.auxillary = auxillary
     return nothing
 end
 
@@ -85,9 +87,10 @@ end
 #     return nothing
 # end
 
-function kernel_init!(state::AMHTrace, proc::AttentionMH)
+function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
+    @unpack state = chain
     @unpack init_cycles, objective, distance = proc
-    t = state.current_trace
+    t = state
     st::QuadTreeState = get_retval(t)
     lls = Vector{Float64}(undef, init_cycles)
     distances = Vector{Float64}(undef, init_cycles)
@@ -108,24 +111,25 @@ function kernel_init!(state::AMHTrace, proc::AttentionMH)
         @debug "distances: $(distances)"
         e_dist = mean(distances) # sum(distances .* exp.((lls .- logsumexp(lls))))
         sidx = node_to_idx(node, size(st.gs, 1))
-        state.sensitivities[sidx] .= isinf(e_dist) ? 0. : e_dist # clean up -Inf
+        chain.auxillary.sensitivities[sidx] .= isinf(e_dist) ? 0. : e_dist # clean up -Inf
     end
 
-    state.current_trace = t
-    state.initialized = true
-    update_weights!(state, proc)
+    chain.state = t
+    chain.auxillary.initialized = true
+    update_weights!(chain, proc)
     return nothing
 end
 
-function kernel_move!(state::AMHTrace, proc::AttentionMH)
-
-    t = state.current_trace
+function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
+    @unpack state, auxillary = chain
+    t = state
+    params = first(get_args(t))
     st::QuadTreeState = get_retval(t)
     # select node to rejuv
-    room_idx = categorical(state.weights)
-    node = ridx_to_leaf(st, room_idx)
+    room_idx = categorical(auxillary.weights)
+    node = ridx_to_leaf(st, room_idx, params.dims[1]).node
 
-    @debug "Attending to node $(idx)"
+    @debug "Attending to node $(node.tree_idx)"
 
     @unpack lateral_cycles, vertical_cycles, objective, distance = proc
 
@@ -133,10 +137,10 @@ function kernel_move!(state::AMHTrace, proc::AttentionMH)
     lls = Vector{Float64}(undef, lateral_cycles)
     distances = Vector{Float64}(undef, lateral_cycles)
     for i = 1:lateral_cycles
-        _t, lls[j] = lateral_move(t, node.tree_idx)
-        distances[j] = distance(objective(t), objective(_t))
+        _t, lls[i] = lateral_move(t, node.tree_idx)
+        distances[i] = distance(objective(t), objective(_t))
         if log(rand()) < lls[i]
-            @debug "accepted"
+            @debug "accepted lateral move"
             t = _t
         end
     end
@@ -146,13 +150,15 @@ function kernel_move!(state::AMHTrace, proc::AttentionMH)
     @debug "distances: $(distances)"
     e_dist = mean(distances) # sum(distances .* exp.((lls .- logsumexp(lls))))
     sidx = node_to_idx(node, size(st.gs, 1))
-    state.sensitivities[sidx] .= isinf(e_dist) ? 0. : e_dist # clean up -Inf
+    auxillary.sensitivities[sidx] .= isinf(e_dist) ? 0. : e_dist # clean up -Inf
+    auxillary.node = node.tree_idx
 
     # attempt vertical moves
     accepted = false
     for i = 1 : proc.vertical_cycles
-        _t, _ls, direction = vertical_move(t, node)
+        _t, _ls, direction = vertical_move(t, node.tree_idx)
         if log(rand()) < _ls
+            @debug "accepted vertical move"
             accepted = true
             t = _t
             break
@@ -160,50 +166,54 @@ function kernel_move!(state::AMHTrace, proc::AttentionMH)
     end
 
     # update trace
-    state.current_trace = t
+    chain.state = t
+    chain.auxillary = auxillary
     # need to update metrics given structure change
     # accepted && update_structure!(state, proc, direction, idx)
     # finally update weights for next step
-    update_weights!(state, proc)
-    return idx
+    update_weights!(chain, proc)
+    return nothing
 end
 
-function Gen_Compose.initialize_procedure(proc::AttentionMH,
-                                          query::StaticQuery)
+# function Gen_Compose.initialize_procedure(proc::AttentionMH,
+#                                           query::StaticQuery)
+# end
+function Gen_Compose.initialize_chain(proc::AttentionMH,
+                                      query::StaticQuery)
     trace,_ = Gen.generate(query.forward_function,
                            query.args,
                            query.observations)
     trace,_ = proc.ddp(trace, proc.ddp_args...)
-
     dims = first(get_args(trace)).dims
     n = prod(dims)
     sensitivities = zeros(dims)
     weights = fill(1.0/n, n)
-    AMHTrace(trace,
-             false,
-             sensitivities,
-             weights)
+    aux = AttentionAux(false,
+                       sensitivities,
+                       weights,
+                       0)
+    StaticMHChain(query,  proc, trace, aux)
 end
 
-function Gen_Compose.mc_step!(state::AMHTrace,
+function Gen_Compose.mc_step!(chain::StaticMHChain,
                               proc::AttentionMH,
-                              query::StaticQuery)
+                              i::Int)
 
+    @debug "mc step $(i)"
+
+    @unpack auxillary = chain
     # initialize kernel by exploring nodes
-    state.initialized || kernel_init!(state, proc)
+    auxillary.initialized || kernel_init!(chain, proc)
 
     # proposal
-    idx = kernel_move!(state, proc)
+    kernel_move!(chain, proc)
 
     # viz_render(state.current_trace)
     # viz_compute_weights(state.weights)
     # viz_sensitivity(state.current_trace, state.sensitivities)
     # viz_global_state(state.current_trace)
     # viz_ocg(state.current_objective)
-    println("current score $(get_score(state.current_trace))")
+    println("current score $(get_score(chain.state))")
     # return packaged aux_state
-    aux_state = Dict(
-        :weights => deepcopy(state.weights),
-        :sensitivities => deepcopy(state.sensitivities),
-        :node => idx)
+    return nothing
 end

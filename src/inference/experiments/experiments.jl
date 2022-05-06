@@ -15,16 +15,27 @@ function run_inference(query::StaticQuery,
                                  path = path)
 end
 
+function ex_choicemap(c::StaticMHChain)
+    ex_choicemap(c.state)
+end
 function ex_choicemap(tr::Gen.Trace)
     s = Gen.complement(select(:viz, :instances))
     choices = get_choices(tr)
     get_selected(choices, s)
 end
 
+function ex_attention(c::StaticMHChain)
+    @unpack auxillary = c
+    Dict(:weights => deepcopy(auxillary.weights),
+         :sensitivities => deepcopy(auxillary.sensitivities),
+         :node => deepcopy(auxillary.node))
+end
+
 function query_from_params(room::GridRoom, path::String; kwargs...)
 
     _lm = Dict{Symbol, Any}(
-        :trace => ex_choicemap
+        :trace => ex_choicemap,
+        :attention => ex_attention
     )
     latent_map = LatentMap(_lm)
 

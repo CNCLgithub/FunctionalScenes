@@ -141,9 +141,11 @@ function traverse_qt(head::QTState, dst::Int64)
     path = Vector{Int64}(undef, d)
     idx = dst
     @inbounds for i = d:1
+        @show idx
         path[i] = Gen.get_child_num(idx, 4)
         idx = Gen.get_parent(idx, 4)
     end
+    @show path
     for i = 1:d
         head = head.children[path[i]]
     end

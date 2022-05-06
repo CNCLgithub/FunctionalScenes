@@ -1,12 +1,12 @@
 export sinkhorn_div
-
-using Distances
-
-function cart_dm(p::Matrix{Float64})
+# using Distances
+#
+function cart_dm(p::Matrix)
     s1, s2 = size(p)
-    ds = zeros(length(p), length(p))
+    lp = length(p)
+    ds = zeros(lp, lp)
     lis = LinearIndices(p)
-    for i = 1:s1, j = 1:s2, a = 1:s1, b = 1:s2
+    @inbounds for i = 1:s1, j = 1:s2, a = 1:s1, b = 1:s2
         x = lis[i, j]
         y = lis[a, b]
         ds[x, y] = sqrt((i - a)^2 + (j - b)^2)
@@ -15,7 +15,7 @@ function cart_dm(p::Matrix{Float64})
     ds
 end
 
-const dm_32x32 = cart_dm(zeros(32, 32))
+# const dm_32x32 = cart_dm(zeros(32, 32))
 
 # function sinkhorn_div(p::SMatrix{32, 32, Float64},
 #                       q::SMatrix{32, 32, Float64};
@@ -31,8 +31,16 @@ const dm_32x32 = cart_dm(zeros(32, 32))
 # end
 
 function discrete_measure(x::QTPath)
-    ws = zeros(nv(x.g))
-    ws[x.path] .= (1.0 / length(x.path))
+    # ws = zeros(nv(x.g))
+    # ws[x.vs] .= (1.0 / length(x.vs))
+    length(x.vs) == 1 && return ones(1)
+    # display(x.dm)
+    ws = vec(x.dm)
+    clamp!(ws, 0., 10.0)
+    # @inbounds for i  = 1:length(ws)
+    #     ws[i] = 1.0 - ws[i]
+    # end
+    rmul!(ws, 1.0 / sum(ws))
     return ws
 end
 
@@ -43,7 +51,7 @@ function sinkhorn_div(p::QTPath, q::QTPath;
     # discrete measures
     measure_p = discrete_measure(p)
     measure_q = discrete_measure(q)
-    dm = p.dm
+    dm = cart_dm(p.dm)
     ot = sinkhorn(measure_p, measure_q, dm, ε)
                   # atol = 1E-4,
                   # maxiter=10_000)

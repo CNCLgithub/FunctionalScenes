@@ -28,16 +28,17 @@ end
                          n::Int64)
     hi::Float64 = min(1.0, temp)
     lo::Float64 = max(0.0, temp - (n - i))
-    u_i::Float64 = {:u} ~ uniform(lo, hi)
+    u_i::Float64 = {:mu} ~ uniform(lo, hi)
     res::Float64 = temp - u_i
+    # println("i $i, temp $temp, lo $lo, hi $hi")
     return res
 end
 
 @gen function split_kernel(mu::Float64)
-    # n = prod(kdim)
-    # k = n - 1
-    temp::Float64 = mu * 4
+    n = 4
+    temp::Float64 = mu * n
     mus = {:steps} ~ Gen.Unfold(split_step)(3, temp, n)
+    return mus
 end
 
 function split_weight(n::QTNode)::Float64
@@ -50,7 +51,9 @@ end
 @gen function qt_split_merge_proposal(t::Gen.Trace, i::Int64)
 
     # prop_addr = :trackers => (i, Val(:production))
-    st = t[:trackers => (i, Val(:aggregation))]
+    head::QTState = t[:trackers]
+    st::QTState = traverse_qt(head, i)
+    # st = t[:trackers => (i, Val(:aggregation))]
     w = split_weight(st.node)
     s = @trace(bernoulli(w), :produce)
 
@@ -70,21 +73,25 @@ end
 
     if split
         # splitting node
-        @write(t_prime[:trackers => (i, Val(:production)) => :produce],
+        @write(t_prime[:trackers => (node, Val(:production)) => :produce],
                true, :discrete)
         # computing residual for 4th child
-        mu = @read(t[:trackers => (i, Val(:aggregation)) => :mu], :continuous)
-        steps = @read(u[:split_kernel => :steps], :continuous)
-        res = mu - sum(steps)
+        mu = @read(t[:trackers => (node, Val(:aggregation)) => :mu], :continuous)
+        dof = 0.0
+        # steps = @read(u[:split_kernel => :steps], :continuous)
+        # res = mu - sum(steps)
         # assigning to first 3 children
         for i = 1:3
+            c_mu = @read(u[:split_kernel => :steps => i => :mu], :continuous)
+            dof += c_mu
             cid = Gen.get_child(node, i, 4)
-            @copy(u[:split_kernel => :steps => i => :u],
-                  t_prime[:trackers => (cid, Val(:aggregation)) => :mu])
+            @write(t_prime[:trackers => (cid, Val(:aggregation)) => :mu],
+                   c_mu, :continuous)
             @write(t_prime[:trackers => (cid, Val(:production)) => :produce],
                    false, :discrete)
         end
         # 4th child
+        res = 4 * mu - dof
         cid = Gen.get_child(node, 4, 4)
         @write(t_prime[:trackers => (cid, Val(:aggregation)) => :mu],
                res, :continuous)
@@ -97,8 +104,8 @@ end
     else
         # merging nodes
         parent = Gen.get_parent(node, 4)
-        @write(t_prime[:trackers => (parent, Val(:production)) => :produce],
-               false, :discrete)
+
+        # compute average of children
         mu = 0.
         for i = 1:4
             cid = get_child(parent, i, 4)
@@ -106,13 +113,17 @@ end
                          :continuous)
             mu += cmu
             if i < 4
-                @write(u_prime[:split_kernel => :steps => i => :u],
+                @write(u_prime[:split_kernel => :steps => i => :mu],
                     cmu, :continuous)
             end
         end
         mu *= 0.25
         @write(t_prime[:trackers => (parent, Val(:aggregation)) => :mu],
                mu, :continuous)
+
+        # prevent productio of children
+        @write(t_prime[:trackers => (parent, Val(:production)) => :produce],
+               false, :discrete)
         @write(u_prime[:split], true, :discrete)
     end
 end
@@ -139,18 +150,20 @@ function vertical_move_direction(p::QuadTreeModel, t::Gen.Trace,
 end
 
 function vertical_move(trace::Gen.Trace,
-                       translator::Gen.SymmetricTraceTranslator,
                        node::Int64)
     # RJ-mcmc move over tracker resolution
+    translator = SymmetricTraceTranslator(qt_split_merge_proposal,
+                                          (node,),
+                                          qt_split_merge_involution)
     (new_trace, w1) = translator(trace; check = false)
     # determine direction of move
     direction = vertical_move_direction(trace, new_trace, node)
-    # random walk over tracker state (bernoulli weights)
-    (new_trace, w2) = apply_random_walk(new_trace,
-                                        qt_node_random_walk,
-                                        (node,))
+    # # random walk over tracker state (bernoulli weights)
+    # (new_trace, w2) = apply_random_walk(new_trace,
+    #                                     qt_node_random_walk,
+    #                                     (node,))
     # update instance addresses
     downstream = downstream_selection(direction, new_trace, node)
-    (new_trace, w3) = regenerate(new_trace, selected)
-    (new_trace, w1 + w2 + w3, direction)
+    (new_trace, w2) = regenerate(new_trace, downstream)
+    (new_trace, w1 + w2, direction)
 end

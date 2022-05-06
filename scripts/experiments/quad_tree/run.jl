@@ -8,7 +8,7 @@ using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
 using Random
-Random.seed!(1234)
+Random.seed!(1235)
 
 dataset = "vss_pilot_11f_32x32_restricted"
 

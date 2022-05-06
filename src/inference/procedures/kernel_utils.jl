@@ -26,9 +26,9 @@ function ddp_init_kernel(trace::Gen.Trace, prop_args, selected)
 end
 
 abstract type MoveDirection end
-struct Merge end
-struct Split end
-struct NoChange end
+struct Merge <: MoveDirection end
+struct Split <: MoveDirection end
+struct NoChange <: MoveDirection end
 const merge_move = Merge()
 const split_move = Split()
 const no_change  = NoChange()
@@ -41,8 +41,8 @@ function downstream_selection(t::Gen.Trace, node::Int64)
     idxs = node_to_idx(st.node, params.dims[1])
     v = Vector{Pair}(undef, length(idxs) * params.instances)
     lis = LinearIndices((params.instances, length(idxs)))
-    for i = 1:params.instances, j in idxs
-        v[lis[i, j]] = :instances => i => :obstacle => j => :flip
+    for i = 1:params.instances, j = 1:length(idxs)
+        v[lis[i, j]] = :instances => i => :obstacle => idxs[j] => :flip
     end
     select(v...)
 end

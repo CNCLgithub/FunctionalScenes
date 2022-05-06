@@ -69,11 +69,19 @@ function load(::Type{QuadTreeModel}, path::String; kwargs...)
     QuadTreeModel(;read_json(path)..., kwargs...)
 end
 
+
+struct QTPath
+    g::SimpleGraph
+    dm::Matrix{Float64}
+    vs::Vector{Int64}
+end
+
+
 struct QuadTreeState
     qt::QTState
     gs::Matrix{Float64}
     instances::Vector{GridRoom}
-    pg::Matrix{Bool}
+    path::QTPath
     lv::Vector{QTState}
 end
 
@@ -81,6 +89,11 @@ function QuadTreeState(qt, gs, instances, pg)
    QuadTreeState(qt, gs, instances, pg, leaf_vec(qt))
 end
 
+function QTPath(st::QuadTreeState)
+    ws = Matrix{Float64}(undef, 1, 1)
+    ws[1] = weight(st) * st.node.dims[1]
+    QTPath(SimpleGraph(ones(1,1)), ws, Int64[1, 1])
+end
 
 function add_from_state_flip(params::QuadTreeModel,
                              occupied::AbstractVector{Bool})::GridRoom
@@ -148,14 +161,8 @@ function graphics_from_instances(instances, params)
     (mu[1, :, :, :], sigma[1, :, :, :])
 end
 
-struct QTPath
-    g::SimpleGraph
-    ds::Matrix{Float64}
-    p
-end
-
 function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
-    st.leaves < 4 && return (Matrix{Bool}(trues(d,d)), QTState[st])
+    st.leaves < 4 && return (QTPath(st), QTState[st])
     # adjacency, distance matrix, and leaves
     adj, ds, lv = nav_graph(st)
     # display(sparse(adj))
@@ -170,22 +177,14 @@ function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
     b = findfirst(s -> contains(s, ext_p), lv)
     # compute path and path grid
     ps = a_star(g, a, b, ds)
-    @show ps
-    error()
-    pg = Matrix{Bool}(falses(d,d))
-    # @show a
-    # @show b
-    for e in ps
-        idxs = node_to_idx(lv[src(e)].node, d)
-        pg[idxs] .= true
-    end
-    pg[node_to_idx(lv[b].node, d)] .= true
-    (pg, lv)
+    path = src.(ps)
+    (QTPath(g, ds, path), lv)
 end
 
-function ridx_to_leaf(st::QuadTreeState, ridx::Int64)
+function ridx_to_leaf(st::QuadTreeState, ridx::Int64, d::Int64)
     point = idx_to_node_space(ridx, d)
     l = findfirst(s -> contains(s, point), st.lv)
+    st.lv[l]
 end
 
 const qt_model_all_downstream_selection = StaticSelection(select(:instances))
