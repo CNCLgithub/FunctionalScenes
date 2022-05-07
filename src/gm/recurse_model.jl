@@ -127,7 +127,7 @@ end
 function get_depth(n::Int64)
     n == 1 && return 1
     p = Gen.get_parent(n, 4)
-    d = 1
+    d = 2
     while p != 1
         p = Gen.get_parent(p, 4)
         d += 1
@@ -140,12 +140,10 @@ function traverse_qt(head::QTState, dst::Int64)
     d = get_depth(dst) - 1
     path = Vector{Int64}(undef, d)
     idx = dst
-    @inbounds for i = d:1
-        @show idx
-        path[i] = Gen.get_child_num(idx, 4)
+    @inbounds for i = 1:d
+        path[d - i + 1] = Gen.get_child_num(idx, 4)
         idx = Gen.get_parent(idx, 4)
     end
-    @show path
     for i = 1:d
         head = head.children[path[i]]
     end
