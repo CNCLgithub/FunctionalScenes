@@ -105,7 +105,7 @@ function load_moved_scene(base_p::String, args)
     move = args["move"]
     furn = args["furniture"]
     door = args["door"]
-    base = load_base_scene(base_p, door)
+    base = load_base_scene(base_p)
     room = shift_furniture(base,
                            furniture(base)[furn],
                            move)
@@ -151,14 +151,18 @@ function main(cmd)
     c = args["chain"]
     out = joinpath(out_path, "$(c).jld2")
 
-    if isfile(out) && !args["restart"]
-        println("chain $c complete")
-        return
+    if isfile(out) && args["restart"]
+        println("chain $c restarting")
+        rm(out)
     end
-
-    println("running chain $c")
-    results = run_inference(query, proc, out )
-    FunctionalScenes.viz_gt(room)
+    local results 
+    if isfile(out)
+        println("resuming chain $c")
+        results = resume_inference(out, proc)
+    else
+        println("starting chain $c")
+    	results = run_inference(query, proc, out )
+    end
     return nothing
 end
 
@@ -169,20 +173,20 @@ function outer()
     # args = parse_outer()
     i = args["scene"]
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
-    cmd = ["$(i)","1", "1", "A"]
+    cmd = ["--restart", "$(i)","1", "1", "A"]
     main(cmd);
-    cmd = ["$(i)", "2", "1", "A"]
-    main(cmd);
-    for r in eachrow(df[df.id  .== i, :])
-        cmd = [
-            "-f=$(r.furniture)",
-            "-m=$(r.move)",
-            "$(i)", "$(r.door)", "1", "A",
-        ]
+    # cmd = ["$(i)", "2", "1", "A"]
+    # main(cmd);
+    # for r in eachrow(df[df.id  .== i, :])
+    #     cmd = [
+    #         "-f=$(r.furniture)",
+    #         "-m=$(r.move)",
+    #         "$(i)", "$(r.door)", "1", "A",
+    #     ]
 
-        display(cmd)
-        main(cmd);
-    end
+    #     display(cmd)
+    #     main(cmd);
+    # end
 end
 
 

@@ -41,6 +41,6 @@ end
                                                     params.exit)
 
     result::QuadTreeState = QuadTreeState(qt, global_state, instances,
-                                          qtpath, lv)
+                                          viz[1], qtpath, lv)
     return result
 end

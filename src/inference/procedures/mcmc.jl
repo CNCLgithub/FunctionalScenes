@@ -96,14 +96,18 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
     distances = Vector{Float64}(undef, init_cycles)
     # loop through each node in initial trace
     _t  = t
+    accept_ct = 0
     for i = 1:length(st.lv)
         node = st.lv[i].node
+        accept_ct = 0
+        println("INIT KERNEL: node $(node.tree_idx)")
         for j = 1:init_cycles
             _t, lls[j] = lateral_move(t, node.tree_idx)
             distances[j] = distance(objective(t), objective(_t))
             if log(rand()) < lls[j]
                 @debug "accepted"
                 t = _t
+                accept_ct += 1
             end
         end
         # clamp!(lls, -Inf, 0.)
@@ -112,6 +116,8 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
         e_dist = mean(distances) # sum(distances .* exp.((lls .- logsumexp(lls))))
         sidx = node_to_idx(node, size(st.gs, 1))
         chain.auxillary.sensitivities[sidx] .= isinf(e_dist) ? 0. : e_dist # clean up -Inf
+        println("\t avg distance: $(e_dist)")
+        println("\t acceptance ratio: $(accept_ct/init_cycles)")
     end
 
     chain.state = t
@@ -154,12 +160,14 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     auxillary.node = node.tree_idx
 
     # attempt vertical moves
-    accepted = false
     for i = 1 : proc.vertical_cycles
         _t, _ls, direction = vertical_move(t, node.tree_idx)
+        if direction == no_change
+            @debug "node not balanced for split-merge"
+            break
+        end
         if log(rand()) < _ls
             @debug "accepted vertical move"
-            accepted = true
             t = _t
             break
         end
@@ -175,9 +183,15 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     return nothing
 end
 
-# function Gen_Compose.initialize_procedure(proc::AttentionMH,
-#                                           query::StaticQuery)
-# end
+function viz_chain(chain::StaticMHChain)
+    @unpack auxillary, state = chain
+    params = first(get_args(state))
+    trace_st = get_retval(state)
+    viz_room(params.gt)
+    viz_grid(auxillary.sensitivities, "Attention")
+    viz_grid(trace_st.gs, "Inferred state")
+end
+
 function Gen_Compose.initialize_chain(proc::AttentionMH,
                                       query::StaticQuery)
     trace,_ = Gen.generate(query.forward_function,
@@ -208,12 +222,7 @@ function Gen_Compose.mc_step!(chain::StaticMHChain,
     # proposal
     kernel_move!(chain, proc)
 
-    # viz_render(state.current_trace)
-    # viz_compute_weights(state.weights)
-    # viz_sensitivity(state.current_trace, state.sensitivities)
-    # viz_global_state(state.current_trace)
-    # viz_ocg(state.current_objective)
+    viz_chain(chain)
     println("current score $(get_score(chain.state))")
-    # return packaged aux_state
     return nothing
 end

@@ -1,4 +1,4 @@
-export run_inference, query_from_params, proc_from_params
+export run_inference, resume_inference, query_from_params, proc_from_params
 
 function run_inference(query::StaticQuery,
                        proc::AttentionMH)
@@ -14,6 +14,9 @@ function run_inference(query::StaticQuery,
                                  buffer_size = proc.samples,
                                  path = path)
 end
+function resume_inference(path::String, proc::AttentionMH)
+    Gen_Compose.resume_mc_chain(path, proc.samples)
+end
 
 function ex_choicemap(c::StaticMHChain)
     ex_choicemap(c.state)
@@ -22,6 +25,16 @@ function ex_choicemap(tr::Gen.Trace)
     s = Gen.complement(select(:viz, :instances))
     choices = get_choices(tr)
     get_selected(choices, s)
+end
+
+function ex_global_state(c::StaticMHChain)
+     st = get_retval(c.state)
+     deepcopy(st.gs)
+end
+
+function ex_img_mu(c::StaticMHChain)
+    st = get_retval(c.state)
+    deepcopy(st.img_mu)
 end
 
 function ex_attention(c::StaticMHChain)
@@ -34,7 +47,9 @@ end
 function query_from_params(room::GridRoom, path::String; kwargs...)
 
     _lm = Dict{Symbol, Any}(
-        :trace => ex_choicemap,
+        :trackers => ex_choicemap,
+        :global_state => ex_global_state,
+        :img_mu => ex_img_mu,
         :attention => ex_attention
     )
     latent_map = LatentMap(_lm)

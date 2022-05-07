@@ -1,3 +1,14 @@
+import Gen.regenerate
+
+function Gen.regenerate(trace::Gen.RecurseTrace{S,T,U,V,W,X,Y},
+                    new_args::Tuple{U,Int},
+                    argdiffs::Tuple,
+                    selection::EmptySelection) where {S,T,U,V,W,X,Y}
+    (trace, 0.0, Gen.NoChange())
+end
+
+
+
 function apply_random_walk(trace::Gen.Trace, proposal, proposal_args)
     model_args = get_args(trace)
     argdiffs = map((_) -> NoChange(), model_args)

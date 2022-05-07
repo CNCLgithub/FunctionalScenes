@@ -55,11 +55,13 @@ end
     st::QTState = traverse_qt(head, i)
     # st = t[:trackers => (i, Val(:aggregation))]
     w = split_weight(st.node)
-    s = @trace(bernoulli(w), :produce)
+    # s = @trace(bernoulli(w), :produce)
 
     # refine or coarsen?
     if ({:split} ~ bernoulli(w))
-        mu = t[:trackers => (i, Val(:aggregation)) => :mu]
+        # refer to tree_idx since st could 
+        # be from parent in "merge" backward (split)
+        mu = t[:trackers => (st.node.tree_idx, Val(:aggregation)) => :mu]
         {:split_kernel} ~ split_kernel(mu)
     end
 end
@@ -73,6 +75,7 @@ end
 
     if split
         # splitting node
+        @debug "splitting node $(node)"
         @write(t_prime[:trackers => (node, Val(:production)) => :produce],
                true, :discrete)
         # computing residual for 4th child
@@ -105,10 +108,12 @@ end
         # merging nodes
         parent = Gen.get_parent(node, 4)
 
+        @debug "MERGE: parent of $(node) is $(parent)"
         # compute average of children
         mu = 0.
         for i = 1:4
             cid = get_child(parent, i, 4)
+            @debug "MERGE: reading $cid"
             cmu =  @read(t[:trackers => (cid, Val(:aggregation)) => :mu],
                          :continuous)
             mu += cmu
@@ -149,19 +154,33 @@ function vertical_move_direction(p::QuadTreeModel, t::Gen.Trace,
     no_change
 end
 
+function balanced_split_merge(t::Gen.Trace, node::Int64)::Bool
+    head::QTState = t[:trackers]
+    # balanced if root node is terminal
+    node == 1 && return isempty(head.children)
+            
+    parent = Gen.get_parent(node, 4)
+    parent_st = traverse_qt(head, parent)
+    siblings = parent_st.children
+    # balanced if all siblings are terminal
+    all(x -> isempty(x.children), siblings)
+end
+
 function vertical_move(trace::Gen.Trace,
                        node::Int64)
+    # determine if split-merge is defined
+    #  - all siblings same level
+    #  
+    balanced_split_merge(trace, node) || return (trace, -Inf, no_change)
     # RJ-mcmc move over tracker resolution
+    @debug "vertical kernel - $node"
     translator = SymmetricTraceTranslator(qt_split_merge_proposal,
                                           (node,),
                                           qt_split_merge_involution)
     (new_trace, w1) = translator(trace; check = false)
     # determine direction of move
     direction = vertical_move_direction(trace, new_trace, node)
-    # # random walk over tracker state (bernoulli weights)
-    # (new_trace, w2) = apply_random_walk(new_trace,
-    #                                     qt_node_random_walk,
-    #                                     (node,))
+    @debug "direction: $direction"
     # update instance addresses
     downstream = downstream_selection(direction, new_trace, node)
     (new_trace, w2) = regenerate(new_trace, downstream)

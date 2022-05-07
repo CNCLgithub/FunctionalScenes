@@ -37,7 +37,7 @@ end
     # state = Matrix{Float64}(state')
     # clamp!(state, 0., 1.0)
     # state = clean_state(state)
-    viz_ddp_state(state)
+    viz_grid(state, "DDP")
 
     qt::QuadTreeState = get_retval(tr)
     lv = qt.lv

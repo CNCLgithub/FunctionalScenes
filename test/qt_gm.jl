@@ -33,12 +33,12 @@ function mytest()
     end
     # display(get_submap(get_choices(trace), :trackers))
     st = get_retval(trace)
-    # @time generate(qt_model, (params,))
+    @time generate(qt_model, (params,))
 
     # viz_render(trace)
     # viz_gt(trace)
     # display(st.pg)
-    viz_room(r, st.pg)
+    # viz_room(r, st.pg)
     viz_room(st.instances[1])
     return nothing
 end

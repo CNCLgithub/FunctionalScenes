@@ -22,11 +22,11 @@ function viz_gt(trace::Gen.Trace)
     display(colorview(RGB, batch[1, :, :, :]))
 end
 
-function viz_ddp_state(grid::Matrix{Float64})
+function viz_grid(grid::Matrix{Float64}, title::String)
     grid = reverse(grid, dims = 1)
+    UnicodePlots.brightcolors!()
     println(heatmap(grid, border = :none,
-                    title = "ddp geometry",
-                    colorbar_border = :none,
-                    colormap = :inferno))
+                    title = title,
+                    colorbar_border = :none))
     return nothing
 end

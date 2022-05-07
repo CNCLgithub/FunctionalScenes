@@ -1,7 +1,7 @@
 {
-    "samples" : 10,
+    "samples" : 100,
     "smoothness" : 1.0,
-    "init_cycles" : 2,
-    "lateral_cycles" : 2,
-    "vertical_cycles" : 2
+    "init_cycles" : 5,
+    "lateral_cycles" : 10,
+    "vertical_cycles" : 10
 }

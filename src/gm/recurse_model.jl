@@ -137,6 +137,7 @@ end
 
 
 function traverse_qt(head::QTState, dst::Int64)
+    (isempty(head.children) || dst == 1) && return head
     d = get_depth(dst) - 1
     path = Vector{Int64}(undef, d)
     idx = dst
@@ -145,6 +146,10 @@ function traverse_qt(head::QTState, dst::Int64)
         idx = Gen.get_parent(idx, 4)
     end
     for i = 1:d
+        # in the context of split-merge,
+        # for the backward of a merge, t_prime will not
+        # have a child at the last step
+        isempty(head.children) && break
         head = head.children[path[i]]
     end
     head
@@ -154,7 +159,9 @@ function produce_weight(n::QTNode)::Float64
     @unpack level, max_level = n
     # maximum depth, do not split
     # otherwise uniform
-    level == max_level ? 0.0 : 0.5
+    level == max_level && return 0.0
+    level == 1 && return 0.9
+    return 0.3
 end
 
 const sqrt_v = SVector{2, Float64}(fill(sqrt(2), 2))

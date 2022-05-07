@@ -1,4 +1,4 @@
 {
     "instances" : 10,
-    "base_sigma" : 0.01
+    "base_sigma" : 0.1
 }

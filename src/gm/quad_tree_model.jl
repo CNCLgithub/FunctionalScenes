@@ -81,15 +81,16 @@ struct QuadTreeState
     qt::QTState
     gs::Matrix{Float64}
     instances::Vector{GridRoom}
+    img_mu::Array{Float64, 3}
     path::QTPath
     lv::Vector{QTState}
 end
 
-function QuadTreeState(qt, gs, instances, pg)
-   QuadTreeState(qt, gs, instances, pg, leaf_vec(qt))
+function QuadTreeState(qt, gs, instances, img_mu,  pg)
+   QuadTreeState(qt, gs, instances, img_mu, pg, leaf_vec(qt))
 end
 
-function QTPath(st::QuadTreeState)
+function QTPath(st::QTState)
     ws = Matrix{Float64}(undef, 1, 1)
     ws[1] = weight(st) * st.node.dims[1]
     QTPath(SimpleGraph(ones(1,1)), ws, Int64[1, 1])
