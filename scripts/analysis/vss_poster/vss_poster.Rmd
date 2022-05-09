@@ -1,0 +1,128 @@
+---
+title: "**Navigational affordances are automatically computed during scene perception**: Evidence from behavioral change blindness and a computational model of active attention <br />"
+title_textsize: "70pt"
+author_textcol: "#ffffff"
+author:
+  - name: Mario Belledonne
+    affil: 1
+  - name: Yihan Bao
+    affil: 2
+  - name: Ilker Yildirim
+  - affil: 1,2
+affiliation:
+  - num: 1
+    address: Department of Psycholgy, Yale University
+  - num: 2
+    address: Department of Statistics and Data Science, Yale University
+affiliation_textcol: "#B3D4E5"
+column_numbers: 3
+# logoright_name: https&#58;//raw.githubusercontent.com/brentthorne/posterdown/master/images/betterhexlogo.png
+# logoleft_name: https&#58;//raw.githubusercontent.com/brentthorne/posterdown/master/images/betterhexlogo.png
+output: 
+  posterdown::posterdown_html:
+    self_contained: false
+bibliography: packages.bib
+
+primary_colour: "#2d6686"
+secondary_colour: "#193b4d"
+# accent_colour: "#0b4545"
+titlebox_bordercol: "#193B4D"
+titlebox_borderwidth: "0.75cm"
+# accent_colour: "#193b4d"
+
+sectitle_bgcol: "#193b4d"
+sectitle_textsize: "55pt"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+# knitr::opts_knit$set(root.dir = '~/project')
+
+
+```
+
+# Selective processing in Scene perception
+
+## *What do you see?*
+
+<!-- See path without knowning what is along path -->
+<!-- add real world image -->
+
+<!-- See overall geometry, how to get to the end, and some objects in between.  -->
+<!-- But its selective -->
+
+Our minds capture actionable info about our surroundings
+
+<!-- study in context of rooms of this sort -->
+
+```{r fig1, fig.align = 'center', out.width = "75%", }
+knitr::include_graphics("vss_poster_files/figure-html/1_1.png")
+
+```
+
+## Goals
+
+- understand what derives such selective processing 
+- understand the formats of the resulting scene percept
+
+## Implicit Goal Hypothesis: Navigational Attention
+
+<!-- say this  -->
+<!-- 1. Implicit goal of navigational affordances impacts what we see -->
+<!-- cog neuro evidence of navigational affordances but not attention and implicit goals -->
+1. Humans spontaneously compute exit paths 
+<!-- in the context of indoor scene -->
+
+<!-- it is if people are looking to get out  -->
+
+<!-- This implicit goal induces selective percepts which I will quantify in a change -->
+<!-- detection paradigm and realize in a new model of attention -->
+2. This implicit goal induces selective percepts: multigranular scene state
+
+<!-- First hypothesis requires behavioral innovation  -->
+<!-- Second demands computational account of attention in the context in scene perception -->
+<!-- that we need to reverse engineer the goal and how it impacts scene perception formation -->
+
+
+# Change Detection Paradigm
+
+
+Scene pairs share the same change in <span style="color:blue"> **blue** </span> obstacles
+
+Except, this change impacts 
+
+## A new behavioral phenomena: Humans spontaneoulsy compute navigational affordances
+
+<!-- ways to describe the details of the behavioral results  -->
+
+
+
+## Inversion control
+
+
+Super excited about behavioral scientist 
+What are the computational principles, specifically the processes and representations underlying this phenomena
+
+based on a new way to think about attention (presented last year). and here is how it works
+
+# Active attention architecture (A3)
+
+## Attention can help and hurt
+
+## Explaning between trial performance
+
+<!-- planning to write two papers.  -->
+<!-- 1. behavioral finding -->
+<!-- 2. computational model predicts this phenoemna but also makes fine grained predctions about attention across time and space, buildup on a separate paper.  -->
+
+
+# Acknowledgements and Citations
+
+<!-- AFOSR -->
+
+
+Try `posterdown` out! Hopefully you like it!
+
+```{r, include=FALSE}
+knitr::write_bib(c('knitr','rmarkdown','posterdown','pagedown'), 'packages.bib')
+```
