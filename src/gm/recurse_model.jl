@@ -160,8 +160,9 @@ function produce_weight(n::QTNode)::Float64
     # maximum depth, do not split
     # otherwise uniform
     level == max_level && return 0.0
-    level == 1 && return 0.9
-    return 0.3
+    return 0.5
+    # level == 1 && return 0.9
+    # return 0.3
 end
 
 const sqrt_v = SVector{2, Float64}(fill(sqrt(2), 2))

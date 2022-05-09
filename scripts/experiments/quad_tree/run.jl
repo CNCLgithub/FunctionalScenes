@@ -8,11 +8,10 @@ using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
 using Random
-Random.seed!(1235)
 
 dataset = "vss_pilot_11f_32x32_restricted"
 
-function parse_commandline(vs)
+function parse_commandline()
     s = ArgParseSettings()
 
     @add_arg_table! s begin
@@ -89,7 +88,7 @@ function parse_commandline(vs)
         default = "$(@__DIR__)/naive.json"
     end
 
-    return parse_args(vs, s)
+    return parse_args(s)
 end
 
 function load_base_scene(path::String)
@@ -113,8 +112,8 @@ end
 
 
 
-function main(cmd)
-    args = parse_commandline(cmd)
+function main()
+    args = parse_commandline()
     att_mode = args["%COMMAND%"]
 
     base_path = "/spaths/datasets/$(dataset)/scenes"
@@ -148,35 +147,38 @@ function main(cmd)
     catch e
         println("could not make dir $(out_path)")
     end
-    c = args["chain"]
-    out = joinpath(out_path, "$(c).jld2")
-
-    if isfile(out) && args["restart"]
-        println("chain $c restarting")
-        rm(out)
+    for c = 1:args["chain"]
+        Random.seed!(c)
+        out = joinpath(out_path, "$(c).jld2")
+        
+        if isfile(out) && args["restart"]
+            println("chain $c restarting")
+            rm(out)
+        end
+        local results 
+        if isfile(out)
+            println("resuming chain $c")
+            results = resume_inference(out, proc)
+        else
+            println("starting chain $c")
+            results = run_inference(query, proc, out )
+        end
     end
-    local results 
-    if isfile(out)
-        println("resuming chain $c")
-        results = resume_inference(out, proc)
-    else
-        println("starting chain $c")
-    	results = run_inference(query, proc, out )
-    end
+    save_gt_image(results.state, "$(out_path)/pytorch.png")
     return nothing
 end
 
 
 
 function outer()
-    args = Dict("scene" => 1)
+    args = Dict("scene" => 7)
     # args = parse_outer()
     i = args["scene"]
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
-    cmd = ["--restart", "$(i)","1", "1", "A"]
-    main(cmd);
-    # cmd = ["$(i)", "2", "1", "A"]
+    # cmd = ["--restart", "$(i)","1", "1", "A"]
     # main(cmd);
+    cmd = ["--restart", "$(i)", "2", "1", "A"]
+    main(cmd);
     # for r in eachrow(df[df.id  .== i, :])
     #     cmd = [
     #         "-f=$(r.furniture)",
@@ -205,4 +207,4 @@ function parse_outer()
     return parse_args(s)
 end
 
-outer();
+main();

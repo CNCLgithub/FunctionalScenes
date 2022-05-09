@@ -104,15 +104,16 @@ function add_from_state_flip(params::QuadTreeModel,
     add(template, Set{Int64}(findall(possible)))
 end
 
-function consolidate_qt_states(params::QuadTreeModel, qt::QTState)::Matrix{Float64}
-    @unpack dims = params
+function consolidate_qt_states(params::QuadTreeModel, qt::QTState)
+    @unpack dims, instances = params
     gs = Matrix{Float64}(undef, dims[1], dims[2])
     consolidate_qt_states!(gs, qt)
-    gs
+    return gs
 end
 
 
-function consolidate_qt_states!(gs::Matrix{Float64}, st::QTState)
+function consolidate_qt_states!(gs::Matrix{Float64}, 
+                                st::QTState)
     foreach(s -> consolidate_qt_states!(gs, s), st.children)
     # only update for terminal states
     !isempty(st.children) && return nothing
@@ -189,7 +190,13 @@ function ridx_to_leaf(st::QuadTreeState, ridx::Int64, d::Int64)
 end
 
 const qt_model_all_downstream_selection = StaticSelection(select(:instances))
-all_downstream_selection(p::QuadTreeModel) = qt_model_all_downstream_selection
+function all_downstream_selection(p::QuadTreeModel)
+    s = select()
+    for i = 1:p.instances
+        push!(s, :instances => i)
+    end
+    return s
+end
 
 function create_obs(params::QuadTreeModel, r::GridRoom)
     mu, _ = graphics_from_instances([r], params)

@@ -30,7 +30,7 @@ export AttentionMH
     # Goal driven belief
     objective::Function = qt_path_cost
     # destance metrics for two task objectives
-    distance::Function = norm
+    distance::Function = (x, y) -> norm(x - y)
 
     # smoothing relative sensitivity for each tracker
     smoothness::Float64 = 1.0
@@ -100,20 +100,20 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
     for i = 1:length(st.lv)
         node = st.lv[i].node
         accept_ct = 0
+        e_dist = 0
         println("INIT KERNEL: node $(node.tree_idx)")
         for j = 1:init_cycles
             _t, lls[j] = lateral_move(t, node.tree_idx)
-            distances[j] = distance(objective(t), objective(_t))
+            # distances[j] = distance(objective(t), objective(_t))
             if log(rand()) < lls[j]
-                @debug "accepted"
+                e_dist += distance(objective(t), objective(_t))
                 t = _t
                 accept_ct += 1
             end
         end
         # clamp!(lls, -Inf, 0.)
         # compute expectation over sensitivities
-        @debug "distances: $(distances)"
-        e_dist = mean(distances) # sum(distances .* exp.((lls .- logsumexp(lls))))
+        # e_dist = sum(distances .* exp.((lls .- logsumexp(lls))))
         sidx = node_to_idx(node, size(st.gs, 1))
         chain.auxillary.sensitivities[sidx] .= isinf(e_dist) ? 0. : e_dist # clean up -Inf
         println("\t avg distance: $(e_dist)")
@@ -137,41 +137,50 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
 
     @debug "Attending to node $(node.tree_idx)"
 
+    println("ATTENTION KERNEL: node $(node.tree_idx)")
     @unpack lateral_cycles, vertical_cycles, objective, distance = proc
 
     # lateral moves
     lls = Vector{Float64}(undef, lateral_cycles)
     distances = Vector{Float64}(undef, lateral_cycles)
+    accept_ct = 0
+    e_dist = 0
     for i = 1:lateral_cycles
         _t, lls[i] = lateral_move(t, node.tree_idx)
-        distances[i] = distance(objective(t), objective(_t))
+        # distances[i] = distance(objective(t), objective(_t))
         if log(rand()) < lls[i]
-            @debug "accepted lateral move"
+            e_dist += distance(objective(t), objective(_t))
             t = _t
+            accept_ct += 1
         end
     end
-
     # clamp!(lls, -Inf, 0.)
     # compute expectation over sensitivities
-    @debug "distances: $(distances)"
-    e_dist = mean(distances) # sum(distances .* exp.((lls .- logsumexp(lls))))
+    # @debug "distances: $(distances)"
+    # e_dist = sum(distances .* exp.((lls .- logsumexp(lls))))
     sidx = node_to_idx(node, size(st.gs, 1))
     auxillary.sensitivities[sidx] .= isinf(e_dist) ? 0. : e_dist # clean up -Inf
     auxillary.node = node.tree_idx
 
+    println("\t avg distance: $(e_dist)")
+    println("\t lateral acceptance ratio: $(accept_ct/lateral_cycles)")
+
     # attempt vertical moves
+    accept_ct = 0
     for i = 1 : proc.vertical_cycles
         _t, _ls, direction = vertical_move(t, node.tree_idx)
+        @debug "vmove log score: $(_ls)" 
         if direction == no_change
             @debug "node not balanced for split-merge"
             break
         end
         if log(rand()) < _ls
-            @debug "accepted vertical move"
             t = _t
+            accept_ct += 1
             break
         end
     end
+    println("\t accepted vertical move: $(accept_ct == 1)")
 
     # update trace
     chain.state = t
@@ -187,7 +196,7 @@ function viz_chain(chain::StaticMHChain)
     @unpack auxillary, state = chain
     params = first(get_args(state))
     trace_st = get_retval(state)
-    viz_room(params.gt)
+    #  viz_room(params.gt)
     viz_grid(auxillary.sensitivities, "Attention")
     viz_grid(trace_st.gs, "Inferred state")
 end
@@ -197,6 +206,15 @@ function Gen_Compose.initialize_chain(proc::AttentionMH,
     trace,_ = Gen.generate(query.forward_function,
                            query.args,
                            query.observations)
+    cm = choicemap()
+    cm[:trackers => (1, Val(:production)) => :produce] = true
+    for i = 1:4
+        cm[:trackers => (i+1, Val(:production)) => :produce] = true
+        for j = 1:4
+            cm[:trackers => (Gen.get_child(i+1, j, 4), Val(:production)) => :produce] = false
+        end 
+    end
+    trace, _ = update(trace, cm)
     trace,_ = proc.ddp(trace, proc.ddp_args...)
     dims = first(get_args(trace)).dims
     n = prod(dims)

@@ -15,9 +15,9 @@ Given a global state, sample furniture according to bernoulli weights
 """
 @gen (static) function obst_gen(state::Matrix{Float64})
     occupied = {:obstacle} ~ Gen.Map(tile_flip)(state)
-    # result::GridRoom = add_from_state_flip(params, occupied)
     return occupied
 end
+
 
 @gen function qt_model(params::QuadTreeModel)
     # initialize trackers

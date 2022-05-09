@@ -24,16 +24,18 @@ end
 
 
 function ddp_init_kernel(trace::Gen.Trace, prop_args, selected)
-    # @debug "initial trace score $(get_score(trace))"
-    # (new_trace, w1) = apply_random_walk(trace,
-    #                                     dd_state_proposal,
-    #                                     prop_args)
-    (new_trace, _) = metropolis_hastings(trace, dd_state_proposal, prop_args,
-                                         dd_state_transform)
-    # @debug "w1: $(w1)"
-    # (new_trace, w2) = regenerate(new_trace, selected)
-    # @debug "w2: $(w2)"
-    (new_trace, 0.)
+    trace_translator = SymmetricTraceTranslator(dd_state_proposal, prop_args, dd_state_transform)
+    (new_trace, w1) = trace_translator(trace)
+    st = get_retval(new_trace)
+    w2 = 0
+    for i = 1:length(st.lv)
+        node = st.lv[i].node.tree_idx
+        s = downstream_selection(new_trace, node)
+        (new_trace, _w) = regenerate(new_trace, s)
+        w2 += _w
+    end
+    @debug "w1 $w1  + w2 $w2 = $(w1 + w2)"
+    (new_trace, w1 + w2)
 end
 
 abstract type MoveDirection end

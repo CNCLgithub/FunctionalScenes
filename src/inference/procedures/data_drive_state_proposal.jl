@@ -28,15 +28,10 @@ end
     dims = mparams.dims
 
     @unpack nn, device, var = params
-    # raw state output from python
-    # _state = @pycall functional_scenes.og_proposal.dd_state(nn, img, device)::P
-    # @show _state.shape
-    # state = Array{Float64, 3}(_state)
     state = @pycall functional_scenes.og_proposal.dd_state(nn, img, device)::Matrix{Float64}
-    # reverse!(state, dims = 1)
-    # state = Matrix{Float64}(state')
-    # clamp!(state, 0., 1.0)
-    # state = clean_state(state)
+
+    # dampen predictions to lower noise
+    # rmul!(state, 0.1)
     viz_grid(state, "DDP")
 
     qt::QuadTreeState = get_retval(tr)
@@ -47,11 +42,8 @@ end
     for i = 1:nlv
         node = lv[i].node
         tree_ids[i] = node.tree_idx
-        agg_addr = (node.tree_idx, Val(:aggregation)) => :mu
-        # agg_addr = :trackers => node.tree_idx => :mu
         sidxs = node_to_idx(node, dims[1])
         mus[i] = mean(state[sidxs])
-        # @trace(qt_mu_proposal(tree_ids[i], mus[i], var), :trackers)
     end
     @trace(Map(qt_mu_proposal)(tree_ids, mus, fill(var, nlv)),
                                :subtree)
@@ -74,21 +66,10 @@ function _dd_state_involution(trace, fwd_choices::ChoiceMap, tree_ids, proposal_
     model_args = get_args(trace)
 
     # populate constraints
-    display(fwd_choices)
     constraints = choicemap()
     # populate backward assignment
     bwd_choices = choicemap()
-    # @inbounds for i = 1:length(tree_ids)
-    #     t_addr = :trackers => (tree_ids[i], Val(:aggregation))
-    #     p_addr = :subtree =>  i => (tree_ids[i], Val(:aggregation))
-    #     # p_addr = :trackers => tree_ids[i]  => :mu
-    #     set_submap!(constraints, t_addr, get_submap(fwd_choices, p_addr))
-    #     # set_submap!(bwd_choices, p_addr, get_submap(trace, t_addr))
-    #     # constraints[t_addr] = fwd_choices[p_addr]
-    #     # bwd_choices[p_addr] = trace[t_addr]
-    # end
     set_submap!(constraints, :trackers, get_submap(fwd_choices, :trackers))
-    display(constraints)
     choices = get_choices(trace)
     display(get_submap(choices, :trackers))
     display(get_submap(constraints, :trackers))
