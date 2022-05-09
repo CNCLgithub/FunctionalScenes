@@ -1,5 +1,6 @@
 import Statistics: mean
 import ImageFiltering: Kernel, imfilter
+import SparseArrays: sparse
 
 export navigability, compare, occupancy_grid, diffuse_og, safe_shortest_paths
 
@@ -127,11 +128,9 @@ function wsd(a::Matrix{Float64}, b::Matrix{Float64}; n::Int64 = 500)::Float64
     d / n
 end
 
-function occupancy_position(r::Room)::Matrix{Float64}
-    g = pathgraph(r) # r is the room
+function occupancy_position(r::GridRoom)::Matrix{Float64}
     grid = zeros(steps(r))
-    vs = @>> g vertices Base.filter(v -> istype(g, v, :furniture))
-    grid[vs] .= 1.0
+    grid[data(r) .== obstacle_tile] .= 1.0
     grid
 end
 
@@ -166,23 +165,15 @@ function occupancy_grid(r::Room, p::Vector{Int64};
     m = zeros(steps(r))
     lp = length(p)
     iszero(lp) && return m
-    gs = @>> r entrance gdistances(g)
-
-    for v in p
-        is_floor(r, v) || error("invalid path at tile $(v)")
-        # m[v] = exp(decay * (i - 1))  + exp(decay * (lp - i))
-        m[v] = exp(decay * gs[v])
-        # m[v] = exp(decay * (lp - i))
+    for i = 1:lp
+        m[p[i]] = exp(decay * i)
     end
     # apply gaussian blur
     gf = Kernel.gaussian(sigma)
     m = imfilter(m, gf, "symmetric")
-    mm = maximum(m)
-    mm = iszero(mm) ? m : m ./ mm # normalize to [0,1]
-    # remove blur along walls and obstacles
-    mask = zeros(steps(r))
-    mask[get_tiles(r, floor_tile)] .= 1
-    m .* mask
+    # remove blur along walls
+    m[get_tiles(r, wall_tile)] .= 0
+    m
 end
 
 function navigability(r::Room)

@@ -1,5 +1,15 @@
-torch==1.7.1
-torchvision==0.8.2
-# torchaudio==0.7.2
+pandas
+scipy
+sqlalchemy
+numba
+opencv-python
+ninja
+--extra-index-url https://download.pytorch.org/whl/cu113
+torch
+torchvision
+fvcore==0.1.5.post20220305
+iopath==0.1.9
+ffcv
+pytorch-lightning
 -e deps/slurmpy
 -e .

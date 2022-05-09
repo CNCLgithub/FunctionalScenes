@@ -16,7 +16,7 @@ export ModelParams
     # Room geometry
     #############################################################################
     # Ground truth room
-    gt::Room
+    gt::GridRoom
     # An empty room that has the same size as `gt`
     template::Room = template_from_room(gt)
 
@@ -84,12 +84,6 @@ function load(::Type{ModelParams}, path::String; kwargs...)
     ModelParams(;read_json(path)..., kwargs...)
 end
 
-function _init_graphics(r, img_size, device)
-    graphics = functional_scenes.SimpleGraphics(img_size, device)
-    base_d = translate(r, false)
-    graphics.set_from_scene(base_d)
-    return graphics
-end
 
 function _tracker_ref(r::Room, dims::Tuple{Int64, Int64},
                       offset::CartesianIndex{2})
@@ -263,15 +257,6 @@ function viz_global_state(trace::Gen.Trace)
     return nothing
 end
 
-function viz_ddp_state(grid::Matrix{Float64})
-    grid = reverse(grid, dims = 1)
-    println(heatmap(grid, border = :none,
-                    title = "ddp geometry",
-                    colorbar_border = :none,
-                    colormap = :inferno))
-    return nothing
-end
-
 function viz_ocg(ocg; title = "occupancy grid")
     # ocg = mean(ocg)
     ocg = reverse(ocg, dims = 1)
@@ -315,7 +300,7 @@ function viz_render(trace::Gen.Trace)
     _, instances = get_retval(trace)
     params = first(get_args(trace))
     g = params.graphics
-    translated = translate(first(instances), false, cubes = true)
+    translated = translate(first(instances), Int64[], cubes = true)
     batch = @pycall functional_scenes.render_scene_batch([translated], g)::PyObject
     batch = Array{Float64, 4}(batch.cpu().numpy())
     display(colorview(RGB, batch[1, :, :, :]))
@@ -339,29 +324,6 @@ function image_from_instances(instances, params)
     batch = Array{Float64, 4}(batch.cpu().numpy())
 end
 
-function graphics_from_instances(instances, params)
-    g = params.graphics
-    if length(instances) > 1
-        instances = [instances[1]]
-    end
-    # println("printing instances")
-    # foreach(viz_gt, instances)
-
-    instances = map(r -> translate(r, false, cubes=true), instances)
-    batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
-    features = Array{Float64, 4}(batch.cpu().numpy())
-    # features = @pycall functional_scenes.nn_features.single_feature(params.model,
-    #                                                                 "features.6",
-    #                                                                 batch)::Array{Float64, 4}
-    mu = mean(features, dims = 1)
-    if length(instances) > 1
-        sigma = std(features, mean = mu, dims = 1)
-        sigma .+= params.base_sigma
-    else
-        sigma = fill(params.base_sigma, size(mu))
-    end
-    (mu[1, :, :, :], sigma[1, :, :, :])
-end
 
 
 function all_selections_from_model(params::ModelParams)

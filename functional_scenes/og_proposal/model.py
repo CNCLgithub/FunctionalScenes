@@ -1,217 +1,302 @@
-"""model.py"""
-
 import torch
-import torch.nn as nn
-#import torch.nn.functional as F
-import torch.nn.init as init
-from torch.autograd import Variable
+from torch import nn
+import torch.nn.functional as F
+from abc import abstractmethod
 
+from . pytypes import *
 
-def reparametrize(mu, logvar):
-    std = logvar.div(2).exp()
-    eps = Variable(std.data.new(std.size()).normal_())
-    return mu + std*eps
+class BaseVAE(nn.Module):
 
+    def __init__(self) -> None:
+        super(BaseVAE, self).__init__()
 
-class View(nn.Module):
-    def __init__(self, size):
-        super(View, self).__init__()
-        self.size = size
+    def encode(self, input: Tensor) -> List[Tensor]:
+        raise NotImplementedError
 
-    def forward(self, tensor):
-        return tensor.view(self.size)
+    def decode(self, input: Tensor) -> Any:
+        raise NotImplementedError
 
+    def sample(self, batch_size:int, current_device: int, **kwargs) -> Tensor:
+        raise NotImplementedError
 
-class BetaVAE_H(nn.Module):
-    """Model proposed in original beta-VAE paper(Higgins et al, ICLR, 2017)."""
+    def generate(self, x: Tensor, **kwargs) -> Tensor:
+        raise NotImplementedError
 
-    def __init__(self, z_dim=10, nc=3):
-        super(BetaVAE_H, self).__init__()
-        self.z_dim = z_dim
-        self.nc = nc
-        self.encoder = nn.Sequential(
-            nn.Conv2d(nc, 32, 4, 2, 1),          # B,  32, 32, 32
-            nn.ReLU(True),
-            nn.Conv2d(32, 32, 4, 2, 1),          # B,  32, 16, 16
-            nn.ReLU(True),
-            nn.Conv2d(32, 64, 4, 2, 1),          # B,  64,  8,  8
-            nn.ReLU(True),
-            nn.Conv2d(64, 64, 4, 2, 1),          # B,  64,  4,  4
-            nn.ReLU(True),
-            nn.Conv2d(64, 256, 4, 1),            # B, 256,  1,  1
-            nn.ReLU(True),
-            View((-1, 256*1*1)),                 # B, 256
-            nn.Linear(256, z_dim*2),             # B, z_dim*2
-        )
-        self.decoder = nn.Sequential(
-            nn.Linear(z_dim, 256),               # B, 256
-            View((-1, 256, 1, 1)),               # B, 256,  1,  1
-            nn.ReLU(True),
-            nn.ConvTranspose2d(256, 64, 4),      # B,  64,  4,  4
-            nn.ReLU(True),
-            nn.ConvTranspose2d(64, 64, 4, 2, 1), # B,  64,  8,  8
-            nn.ReLU(True),
-            nn.ConvTranspose2d(64, 32, 4, 2, 1), # B,  32, 16, 16
-            nn.ReLU(True),
-            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32, 32, 32
-            nn.ReLU(True),
-            nn.ConvTranspose2d(32, nc, 4, 2, 1),  # B, nc, 64, 64
-        )
+    @abstractmethod
+    def forward(self, *inputs: Tensor) -> Tensor:
+        pass
 
-        self.weight_init()
+    @abstractmethod
+    def loss_function(self, *inputs: Any, **kwargs) -> Tensor:
+        pass
 
-    def weight_init(self):
-        for block in self._modules:
-            for m in self._modules[block]:
-                kaiming_init(m)
+class PrintLayer(nn.Module):
+    def __init__(self):
+        super(PrintLayer, self).__init__()
 
     def forward(self, x):
-        distributions = self._encode(x)
-        mu = distributions[:, :self.z_dim]
-        logvar = distributions[:, self.z_dim:]
-        z = reparametrize(mu, logvar)
-        x_recon = self._decode(z)
+        # Do your print / debug stuff here
+        print(x.shape)
+        return x
 
-        return x_recon, mu, logvar
+class BetaVAE(BaseVAE):
 
-    def _encode(self, x):
-        return self.encoder(x)
+    num_iter = 0 # Global static variable to keep track of iterations
 
-    def _decode(self, z):
-        return self.decoder(z)
+    def __init__(self,
+                 in_channels: int,
+                 latent_dim: int,
+                 hidden_dims: List = None,
+                 beta: int = 4,
+                 gamma:float = 1000.,
+                 max_capacity: int = 25,
+                 Capacity_max_iter: int = 1e5,
+                 loss_type:str = 'B',
+                 **kwargs) -> None:
+        super(BetaVAE, self).__init__()
 
+        self.latent_dim = latent_dim
+        self.beta = beta
+        self.gamma = gamma
+        self.loss_type = loss_type
+        self.C_max = torch.Tensor([max_capacity])
+        self.C_stop_iter = Capacity_max_iter
 
-class BetaVAE_B(BetaVAE_H):
-    """Model proposed in understanding beta-VAE paper(Burgess et al, arxiv:1804.03599, 2018)."""
+        modules = []
+        if hidden_dims is None:
+            hidden_dims = [32, 32, 64, 128, 256, 256]
 
-    def __init__(self, z_dim=10, nc=1):
-        super(BetaVAE_B, self).__init__()
-        self.nc = nc
-        self.z_dim = z_dim
+        # Build Encoder
+        for h_dim in hidden_dims:
+            modules.append(
+                nn.Sequential(
+                    nn.Conv2d(in_channels, out_channels=h_dim,
+                              kernel_size= 4, stride= 2, padding  = 1),
+                    # PrintLayer(),
+                    nn.BatchNorm2d(h_dim),
+                    nn.LeakyReLU())
+            )
+            in_channels = h_dim
 
-        self.encoder = nn.Sequential(
-            nn.Conv2d(nc, 32, 4, 2, 1),          # B,  32, 32, 32
-            nn.ReLU(True),
-            nn.Conv2d(32, 32, 4, 2, 1),          # B,  32, 16, 16
-            nn.ReLU(True),
-            nn.Conv2d(32, 32, 4, 2, 1),          # B,  32,  8,  8
-            nn.ReLU(True),
-            nn.Conv2d(32, 32, 4, 2, 1),          # B,  32,  4,  4
-            nn.ReLU(True),
-            View((-1, 32*4*4)),                  # B, 512
-            nn.Linear(32*4*4, 256),              # B, 256
-            nn.ReLU(True),
-            nn.Linear(256, 256),                 # B, 256
-            nn.ReLU(True),
-            nn.Linear(256, z_dim*2),             # B, z_dim*2
-        )
-
-        self.decoder = nn.Sequential(
-            nn.Linear(z_dim, 256),               # B, 256
-            nn.ReLU(True),
-            nn.Linear(256, 256),                 # B, 256
-            nn.ReLU(True),
-            nn.Linear(256, 32*4*4),              # B, 512
-            nn.ReLU(True),
-            View((-1, 32, 4, 4)),                # B,  32,  4,  4
-            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32,  8,  8
-            nn.ReLU(True),
-            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32, 16, 16
-            nn.ReLU(True),
-            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32, 32, 32
-            nn.ReLU(True),
-            nn.ConvTranspose2d(32, nc, 4, 2, 1), # B,  nc, 64, 64
-        )
-        self.weight_init()
-
-    def weight_init(self):
-        for block in self._modules:
-            for m in self._modules[block]:
-                kaiming_init(m)
-
-    def forward(self, x):
-        distributions = self._encode(x)
-        mu = distributions[:, :self.z_dim]
-        logvar = distributions[:, self.z_dim:]
-        z = reparametrize(mu, logvar)
-        x_recon = self._decode(z).view(x.size())
-
-        return x_recon, mu, logvar
-
-    def _encode(self, x):
-        return self.encoder(x)
-
-    def _decode(self, z):
-        return self.decoder(z)
-
-class BetaVAE_OG(nn.Module):
-    def __init__(self, encoder, z_dim=10):
-        super(BetaVAE_OG, self).__init__()
-        self.z_dim = z_dim
-        self.encoder = encoder
-        for p in self.encoder.parameters():
-            p.requires_grad = False
-            
-        self.decoder = nn.Sequential(
-            nn.Linear(z_dim, 256),               # B, 256
-            nn.ReLU(True),
-            nn.Linear(256, 256),                 # B, 256
-            nn.ReLU(True),
-            nn.Linear(256, 32*4*4),              # B, 512
-            nn.ReLU(True),
-            View((-1, 32, 4, 4)),                # B,  32,  4,  4
-            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32,  8,  8
-            nn.ReLU(True),
-            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32, 16, 16
-            nn.ReLU(True),
-            nn.ConvTranspose2d(32, 32, 4, 2, 1), # B,  32, 32, 32
-            nn.ReLU(True),
-            nn.ConvTranspose2d(32, 1, [9,3], 1, [0,6]),
-        )
-        
-    def weight_init(self):
-        for block in self._modules:
-            for m in self._modules[block]:
-                kaiming_init(m)
-
-    def forward(self, x):
-        distributions = self._encode(x)
-        mu = distributions[:, :self.z_dim]
-        logvar = distributions[:, self.z_dim:]
-        z = reparametrize(mu, logvar)
-        z_recon = self._decode(z)
-        #.view(x.size())
-
-        return z_recon, mu, logvar
-
-    def _encode(self, x):
-        return self.encoder(x)
-
-    def _decode(self, z):
-        return self.decoder(z)
+        self.encoder = nn.Sequential(*modules)
+        self.fc_mu = nn.Linear(hidden_dims[-1] * 16, latent_dim)
+        self.fc_var = nn.Linear(hidden_dims[-1] * 16, latent_dim)
 
 
-def kaiming_init(m):
-    if isinstance(m, (nn.Linear, nn.Conv2d)):
-        init.kaiming_normal(m.weight)
-        if m.bias is not None:
-            m.bias.data.fill_(0)
-    elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d)):
-        m.weight.data.fill_(1)
-        if m.bias is not None:
-            m.bias.data.fill_(0)
+        # Build Decoder
+        modules = []
+
+        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * 16)
+
+        hidden_dims.reverse()
+
+        for i in range(len(hidden_dims) - 1):
+            modules.append(
+                nn.Sequential(
+                    nn.ConvTranspose2d(hidden_dims[i],
+                                       hidden_dims[i + 1],
+                                       kernel_size=4,
+                                       stride = 2,
+                                       padding=1),
+                    # PrintLayer(),
+                    nn.BatchNorm2d(hidden_dims[i + 1]),
+                    nn.LeakyReLU())
+            )
 
 
-def normal_init(m, mean, std):
-    if isinstance(m, (nn.Linear, nn.Conv2d)):
-        m.weight.data.normal_(mean, std)
-        if m.bias.data is not None:
-            m.bias.data.zero_()
-    elif isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
-        m.weight.data.fill_(1)
-        if m.bias.data is not None:
-            m.bias.data.zero_()
+
+        self.decoder = nn.Sequential(*modules)
+
+        self.final_layer = nn.Sequential(
+            nn.ConvTranspose2d(hidden_dims[-1],
+                               hidden_dims[-1],
+                               kernel_size=3,
+                               stride=2,
+                               padding=1,
+                               output_padding=1),
+            # PrintLayer(),
+            nn.BatchNorm2d(hidden_dims[-1]),
+            nn.LeakyReLU(),
+            nn.Conv2d(hidden_dims[-1], out_channels= 3,
+                      kernel_size= 3, padding= 1),
+            # PrintLayer(),
+            nn.ReLU())
+
+    def encode(self, input: Tensor) -> List[Tensor]:
+        """
+        Encodes the input by passing through the encoder network
+        and returns the latent codes.
+        :param input: (Tensor) Input tensor to encoder [N x C x H x W]
+        :return: (Tensor) List of latent codes
+        """
+        result = self.encoder(input)
+        result = torch.flatten(result, start_dim=1)
+        # Split the result into mu and var components
+        # of the latent Gaussian distribution
+        # print(result.shape)
+        mu = self.fc_mu(result)
+        log_var = self.fc_var(result)
+
+        return [mu, log_var]
+
+    def decode(self, z: Tensor) -> Tensor:
+        # print(z.shape)
+        result = self.decoder_input(z)
+        # print(result.shape)
+        # print('decode view')
+        result = result.view(z.shape[0], -1, 4, 4)
+        # result = result.unsqueeze(-1)
+        # print(result.shape)
+        result = self.decoder(result)
+        result = self.final_layer(result)
+        return result
+
+    def reparameterize(self, mu: Tensor, logvar: Tensor) -> Tensor:
+        """
+        Will a single z be enough ti compute the expectation
+        for the loss??
+        :param mu: (Tensor) Mean of the latent Gaussian
+        :param logvar: (Tensor) Standard deviation of the latent Gaussian
+        :return:
+        """
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return eps * std + mu
+
+    def forward(self, input: Tensor, **kwargs) -> Tensor:
+        mu, log_var = self.encode(input)
+        z = self.reparameterize(mu, log_var)
+        return  [self.decode(z), input, mu, log_var]
+
+    def loss_function(self,
+                      *args,
+                      **kwargs) -> dict:
+        self.num_iter += 1
+        recons = args[0]
+        input = args[1]
+        mu = args[2]
+        log_var = args[3]
+        kld_weight = kwargs['M_N']  # Account for the minibatch samples from the dataset
+
+        recons_loss =F.mse_loss(recons, input)
+
+        kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+
+        if self.loss_type == 'H': # https://openreview.net/forum?id=Sy2fzU9gl
+            loss = recons_loss + self.beta * kld_weight * kld_loss
+        elif self.loss_type == 'B': # https://arxiv.org/pdf/1804.03599.pdf
+            self.C_max = self.C_max.to(input.device)
+            C = torch.clamp(self.C_max/self.C_stop_iter * self.num_iter, 0, self.C_max.data[0])
+            loss = recons_loss + self.gamma * kld_weight* (kld_loss - C).abs()
+        else:
+            raise ValueError('Undefined loss type.')
+
+        return {'loss': loss, 'Reconstruction_Loss':recons_loss, 'KLD':kld_loss}
+
+    def sample(self,
+               num_samples:int,
+               current_device: int, **kwargs) -> Tensor:
+        """
+        Samples from the latent space and return the corresponding
+        image space map.
+        :param num_samples: (Int) Number of samples
+        :param current_device: (Int) Device to run the model
+        :return: (Tensor)
+        """
+        z = torch.randn(num_samples,
+                        self.latent_dim)
+
+        z = z.to(current_device)
+
+        samples = self.decode(z)
+        return samples
+
+    def generate(self, x: Tensor, **kwargs) -> Tensor:
+        """
+        Given an input image x, returns the reconstructed image
+        :param x: (Tensor) [B x C x H x W]
+        :return: (Tensor) [B x C x H x W]
+        """
+
+        return self.forward(x)[0]
+
+class Decoder(nn.Module):
+
+    def __init__(self,
+                 in_channels: int,
+                 latent_dim: int,
+                 hidden_dims: List = None,
+                 **kwargs) -> None:
+        super(Decoder, self).__init__()
+
+        self.latent_dim = latent_dim
+        # Build Decoder
+        if hidden_dims is None:
+            hidden_dims = [32, 64, 128, 256]
+        modules = []
+        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * 16)
+        hidden_dims.reverse()
+        for i in range(len(hidden_dims) - 1):
+            modules.append(
+                nn.Sequential(
+                    nn.ConvTranspose2d(hidden_dims[i],
+                                       hidden_dims[i + 1],
+                                       kernel_size=4,
+                                       stride = 2,
+                                       padding=1),
+                    # PrintLayer(),
+                    nn.BatchNorm2d(hidden_dims[i + 1]),
+                    nn.LeakyReLU())
+            )
+        self.decoder = nn.Sequential(*modules)
+        self.final_layer = nn.Sequential(
+                            nn.Conv2d(hidden_dims[-1], out_channels= 1,
+                                      kernel_size= 3, padding= 1),
+                            # PrintLayer(),
+                            # nn.LeakyReLU(),
+                            # nn.Conv2d(hidden_dims[-1], out_channels= 1,
+                            #           kernel_size= 3, padding= 1),
+                            # PrintLayer(),
+                            nn.Sigmoid())
+
+    def decode(self, z: Tensor) -> Tensor:
+        result = self.decoder_input(z)
+        result = result.view(z.shape[0], -1, 4, 4)
+        result = self.decoder(result)
+        result = self.final_layer(result)
+        return result.squeeze()
 
 
-if __name__ == '__main__':
-    pass
+    def forward(self, mu: Tensor, **kwargs) -> Tensor:
+        return self.decode(mu)
+
+    def loss_function(self,
+                      pred_og,
+                      real_og,
+                      **kwargs) -> dict:
+        loss = F.mse_loss(pred_og, real_og)
+        return {'loss': loss}
+
+    def generate(self, z: Tensor, **kwargs) -> Tensor:
+        """
+        Given an input image x, returns the reconstructed image
+        :param x: (Tensor) [B x C x H x W]
+        :return: (Tensor) [B x C x H x W]
+        """
+        return self.forward(z)[0]
+
+    def sample(self,
+               num_samples:int,
+               current_device: int, **kwargs) -> Tensor:
+        """
+        Samples from the latent space and return the corresponding
+        image space map.
+        :param num_samples: (Int) Number of samples
+        :param current_device: (Int) Device to run the model
+        :return: (Tensor)
+        """
+        z = torch.randn(num_samples,
+                        self.latent_dim)
+        z = z.to(current_device)
+        samples = self.decode(z)
+        return samples

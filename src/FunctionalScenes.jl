@@ -24,12 +24,12 @@ using FunctionalCollections
 # Runtime configuration
 #################################################################################
 
-# const torch = PyNULL()
-# const functional_scenes = PyNULL()
-# function __init__()
-#     copy!(torch, pyimport("torch"))
-#     copy!(functional_scenes, pyimport("functional_scenes"))
-# end
+const torch = PyNULL()
+const functional_scenes = PyNULL()
+function __init__()
+    copy!(torch, pyimport("torch"))
+    copy!(functional_scenes, pyimport("functional_scenes"))
+end
 
 #################################################################################
 # Module imports
@@ -39,9 +39,9 @@ include("utils.jl")
 include("dists.jl")
 include("rooms/rooms.jl")
 include("dgp/dgp.jl")
-# include("gm/gm.jl")
+include("gm/gm.jl")
 include("blender/blender.jl")
-# include("inference/inference.jl")
+include("inference/inference.jl")
 
 #################################################################################
 # Load Gen functions

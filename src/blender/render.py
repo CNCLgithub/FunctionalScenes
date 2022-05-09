@@ -249,6 +249,10 @@ class Scene:
         if not (resolution is None):
             self.set_rendering_params(resolution)
 
+        if os.path.isfile(output_name):
+            print('File {0!s} exists'.format(output_name))
+            return
+
         bpy.context.scene.render.filepath = output_name
         t0 = time.time()
         print('Rendering ')

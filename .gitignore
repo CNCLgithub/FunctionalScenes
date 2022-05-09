@@ -27,3 +27,4 @@ user.conf
 .local/
 scripts/analysis/*.tex
 scripts/analysis/*.pdf
+.Rproj.user

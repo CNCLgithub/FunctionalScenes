@@ -1,36 +1,48 @@
-# native packages go first
 import os
-
-# external packages order by "generality"
+import yaml
 import numpy as np
-
 from PIL import Image
 
-# try to sort related imports by length
 import torch
 from torchvision import transforms
 from torch.autograd import Variable
 from torchvision.datasets import ImageFolder
-from torch.utils.data import Dataset, DataLoader
 
 # place interal imports at the end
-from . dataset import CustomImageFolder
-from . model import BetaVAE_H, BetaVAE_OG
+# from . dataset import CustomImageFolder
+from . model import BetaVAE, Decoder
+from . tasks import OGVAE, OGDecoder
 
+archs = {
+    'BetaVAE' : BetaVAE,
+    'Decoder' : Decoder
+}
 
-# intialization of neural network
-def init_dd_state(enc_path:str, dec_path:str, device,
-                  z_dim:int = 20, nc:int = 3):
+# intialization of neural network for forward execution
+def init_dd_state(config_path:str, device):
+
+   with open(config_path, 'r') as file:
+      config = yaml.safe_load(file)
    # first load encoder
-   enc = BetaVAE_H(z_dim, nc).to(device)
-   enc_weights = torch.load(enc_path)['model_states']['net']
-   enc.load_state_dict(enc_weights)
-
-   # then load decoder
-   dec = BetaVAE_OG(enc.encoder,z_dim).to(device)
-   dec_weights = torch.load(dec_path)['model_states']['net']
-   dec.decoder.load_state_dict(dec_weights)
-   return dec
+   decoder_arch = archs[config['model_params']['name']](**config['model_params'])
+   vae_arch = archs[config['vae_params']['name']](**config['vae_params'])
+   vae = OGVAE.load_from_checkpoint(config['vae_chkpt'],
+                                    vae_model = vae_arch,
+                                    params = config['exp_params'])
+   decode_path = config['logging_params']['save_dir']
+   decode_path = os.path.join(decode_path,
+                              config['mode'] + '_' + config['model_params']['name'])
+   decode_path = os.path.join(decode_path,
+                              'version_6',
+                              'checkpoints',
+                              'last.ckpt')
+   task = OGDecoder.load_from_checkpoint(decode_path,
+                                          vae = vae,
+                                          decoder = decoder_arch,
+                                          params = config['exp_params'])
+   task.eval()
+   task.freeze()
+   return task
 
 def dd_state(nn, img, device):
    """ dd_state
@@ -45,27 +57,7 @@ def dd_state(nn, img, device):
        A 1xMxN matrix containting probability of occupancy for each
        cell in the room
    """
-   img_tensor = torch.from_numpy(img).float()
-   img_tensor = Variable(img_tensor).to(device)
-   z, mu, logvar = nn(img_tensor)
-   z = z.cpu().detach().numpy()
-   return z
-
-if __name__ == "__main__":
-    transform = transforms.Compose([
-        transforms.Resize((64, 64)),
-        transforms.ToTensor(),])
-    dset = CustomImageFolder('output/datasets/test_occupancy_grid_data_driven_twodoors/', transform)
-    loader = DataLoader(dset,
-                       batch_size=1,
-                       shuffle=True,
-                       num_workers=1,
-                       pin_memory=False,
-                       drop_last=True)
-
-    nn = init_dd_state(nn_weights,use_cuda)
-    for x, path in loader:
-        img = np.array(x) #img is np.array with dimension (1, 3, 64, 64)
-        z_recon = dd_state(nn,img) #z_recon is np.array with dimension (1, 1, 40, 22)
-        #print(z_recon.shape)
-    print("Everything passed")
+   img_tensor = torch.Tensor(img).float()
+   x = nn.forward(img_tensor)
+   x = x.cpu().detach().numpy()
+   return x

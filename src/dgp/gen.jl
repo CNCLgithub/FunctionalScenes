@@ -28,7 +28,7 @@ function grow_rec(max_size::Int64)
             Set{Int64})
 end
 
-const fixed_grow = grow_rec(10);
+const fixed_grow = grow_rec(1); # max 1 child
 
 """
     furnish
@@ -84,7 +84,7 @@ function furnish_rec(max_count::Int64)
             Set{Int64})
 end
 
-const fixed_furnish = furnish_rec(20);
+const fixed_furnish = furnish_rec(1); # max 1 child
 
 """
 Adds a randomly generated piece of furniture

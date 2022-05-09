@@ -2,59 +2,111 @@ export DataDrivenState, dd_state_proposal
 
 @with_kw struct DataDrivenState
     # neural network details
-    vae_weights::String
-    ddp_weights::String
+    config_path::String
     device::PyObject = _load_device()
-    nn::PyObject = _init_dd_state(vae_weights, ddp_weights, device)
+    nn::PyObject = _init_dd_state(config_path, device)
 
-    # proposal formatting
-    level::Int64 = 2 # should be 3x3
+    # proposal variables
     var::Float64 = 0.05
 
 end
 
-function _init_dd_state(vae::String, ddp::String, device::PyObject)
-    functional_scenes.init_dd_state(vae, ddp, device)::PyObject
+function _init_dd_state(config_path::String, device::PyObject)
+    @show config_path
+    functional_scenes.og_proposal.init_dd_state(config_path, device)::PyObject
 end
 
+@gen function qt_mu_proposal(tid, mu, var)
+    bounds::Vector{Float64} = clamp.([mu - var, mu + var], 0., 1.)
+    # clamp!(bounds, 0., 1,)
+    {:mu} ~ uniform(bounds[1], bounds[2])
+end
 
 @gen function dd_state_proposal(tr::Gen.Trace, params::DataDrivenState, img::Array{Float64, 4})
 
     mparams = first(Gen.get_args(tr))
+    dims = mparams.dims
 
-    @unpack nn, device, var, level = params
-    # raw state output from python
-    state = @pycall functional_scenes.dd_state(nn, img, device)::Array{Float64, 4}
-    state = state[1, 1, :, :]
-    state = Matrix{Float64}(state')
-    clamp!(state, 0., 1.0)
-    # state = clean_state(state)
-    viz_ddp_state(state)
+    @unpack nn, device, var = params
+    state = @pycall functional_scenes.og_proposal.dd_state(nn, img, device)::Matrix{Float64}
 
-    # format state for proposal to gm trace
-    @unpack levels, tracker_ps, dims, tracker_size, n_trackers = mparams
+    # dampen predictions to lower noise
+    # rmul!(state, 0.1)
+    viz_grid(state, "DDP")
 
-    state_ref = CartesianIndices((dims..., n_trackers))
-
-    for i = 1:n_trackers
-
-        lvl = tr[:trackers => i => :level]
-
-        tracker_spread = tracker_ps[i] - 1E-5
-        # extract info from `state`
-        vs = state_to_room(mparams, vec(state_ref[:, :, i]))
-        dat = reshape(state[vs], dims)
-
-        ldims = level_dims(mparams, lvl)
-        mus = coarsen_state(dat, ldims)
-        args = Array{Tuple{Float64, Float64}}(undef, ldims)
-        for i in eachindex(mus)
-            prop_bounds = (mus[i] - var, mus[i] + var)
-            args[i] = clamp.(prop_bounds, 0., tracker_spread)
-        end
-
-        @trace(broadcasted_uniform(args),
-               :trackers => i => :state)
+    qt::QuadTreeState = get_retval(tr)
+    lv = qt.lv
+    nlv = length(lv)
+    tree_ids = Vector{Int64}(undef, nlv)
+    mus = Vector{Float64}(undef, nlv)
+    for i = 1:nlv
+        node = lv[i].node
+        tree_ids[i] = node.tree_idx
+        sidxs = node_to_idx(node, dims[1])
+        mus[i] = mean(state[sidxs])
     end
+    @trace(Map(qt_mu_proposal)(tree_ids, mus, fill(var, nlv)),
+                               :subtree)
+    return tree_ids
+end
 
+@transform dd_state_transform (t, u) to (t_p, u_p) begin
+    tree_ids = @read(u[], :discrete)
+    for i = 1:length(tree_ids)
+        tid = tree_ids[i]
+        t_addr = :trackers => (tid, Val(:aggregation)) => :mu
+        p_addr = :subtree => i => :mu
+        @copy(u[p_addr], t_p[t_addr])
+        @copy(t[t_addr], u_p[p_addr])
+    end
+end
+
+function _dd_state_involution(trace, fwd_choices::ChoiceMap, tree_ids, proposal_args::Tuple)
+    #fwd_ret is tree_ids
+    model_args = get_args(trace)
+
+    # populate constraints
+    constraints = choicemap()
+    # populate backward assignment
+    bwd_choices = choicemap()
+    set_submap!(constraints, :trackers, get_submap(fwd_choices, :trackers))
+    choices = get_choices(trace)
+    display(get_submap(choices, :trackers))
+    display(get_submap(constraints, :trackers))
+    # (new_trace, weight, _, discard) = update(trace, model_args, (NoChange(),), constraints)
+    # results = update(trace, model_args, (NoChange(),), constraints)
+    # w, rv = assess(get_gen_fn(trace), model_args, constraints)
+    (t, w) = generate(get_gen_fn(trace), model_args, constraints)
+    @show w
+    results = update(trace, constraints)
+
+    for i = 1:length(results)
+        @show typeof(results[i])
+    end
+    set_submap!(bwd_choices, :subtree, get_submap(discard, :tree))
+    # @inbounds for i = 1:length(tree_ids)
+    #     t_addr = :trackers => (tree_ids[i], Val(:aggregation)) => :mu
+    #     p_addr = :trackers => tree_ids[i]  => :mu
+    #     constraints[t_addr] = fwd_choices[p_addr]
+    #     bwd_choices[p_addr] = trace[t_addr]
+    # end
+
+    # populate backward assignment
+    # bwd_choices = choicemap()
+    # for i = 1:length(tree_ids)
+    #     t_addr = :trackers => (tree_ids[i], Val(:aggregation)) => :mu
+    #     p_addr = (tree_ids[i], Val(:aggregation)) => :mu
+    #     # constraints[t_addr] = fwd_choices[p_addr]
+    #     bwd_choices[p_addr] = trace[t_addr]
+    # end
+    # set_submap!(bwd_choices, :subtree, get_submap(discard, :trackers))
+    # obtain new trace and discard, which contains the previous subtree
+    # display(constraints)
+    # cm = get_choices(trace)
+    # display(get_submap(cm, :trackers))
+    # error()
+    # (new_trace, weight) = results[[1,2]]
+    # (new_trace, weight, _, discard) = update(trace, model_args, (NoChange(),), constraints)
+
+    (results[1], bwd_choices, results[2])
 end

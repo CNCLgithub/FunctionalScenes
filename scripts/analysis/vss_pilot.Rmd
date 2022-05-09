@@ -1,0 +1,438 @@
+---
+title: "pilot"
+output:
+  pdf_document: default
+  html_document:
+df_print: paged
+header-includes:
+ \usepackage{booktabs}
+ \usepackage{longtable}
+ \usepackage{array}
+ \usepackage{multirow}
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+
+---
+
+# Pilot
+
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'H', 
+                      echo=TRUE, warning=FALSE, message=FALSE)
+# knitr::opts_knit$set(root.dir = '~/project/spaths/experiments/')
+
+```
+
+
+
+```{r includes}
+
+# dependencies and ggplot settings
+
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(boot)
+
+
+# devtools::install_github("topfunky/gghighcontrast")
+# library(gghighcontrast)
+
+# th <- theme_classic() +
+#   theme(axis.text = element_text(size=26)) +
+#   theme(axis.title = element_text(size=30)) 
+# theme_set(th)
+
+# update_geom_defaults("point", list(size = 10))
+```
+
+
+
+```{r load}
+# Loading data
+
+exp_name = "vss_pilot_11f_32x32_restricted"
+# exp_name = "vss_pilot_inverted"
+dataset = "vss_pilot_11f_32x32_restricted"
+exp_path = paste("~/project/spaths/experiments", exp_name,
+                 "parsed_trials.csv", sep = "/")
+exp_scenes = paste("~/project/spaths/datasets", dataset,
+                   "scenes.csv", sep = "/")
+
+parsed_trials <- read_csv(exp_path) %>%
+    mutate(resp_same = Response == "j",
+           correct = !xor(base, resp_same)) %>%
+  # trying to remove extra responses at the end
+  group_by(ID, TrialOrder) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+exp_data <- read_csv(exp_scenes) %>%
+  rename(scene = id) 
+# %>%
+#   right_join(parsed_trials, by = c("scene", "door", "furniture", "move", "flip"))
+
+# covariates <- read_csv("~/env.d/spaths/experiments/1_exit_22x40_doors_rep/covariates.csv") %>%
+#   rename(scene = id) %>%
+#   mutate(summed_cycles = base_cycles_furniture + move_cycles_furniture,
+#          summed_cycles_total = base_cycles_total + move_cycles_total,
+#          summed_cycles_pct = summed_cycles / summed_cycles_total)
+
+# exp_data <- exp_data %>%
+#   left_join(covariates, by = c("scene", "door", "furniture", "move"))
+
+```
+
+
+Screening subjects based on overall hit rate (`hr`) and false-positivity rate
+(`fp`).
+```{r}
+by_subj <- parsed_trials %>%
+  group_by(ID)
+
+hr_by_subj <- by_subj %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct),
+            n = n())
+
+fp_by_subj <- by_subj %>%
+  filter(base) %>%
+  summarise(fp = 1.0 - mean(correct))
+
+subject_performance <- hr_by_subj %>%
+  left_join(fp_by_subj, by = "ID") %>%
+  mutate(d_hr_fr = hr - fp)
+
+# passed_subjects <- subject_performance
+passed_subjects <- subject_performance %>%
+  filter(hr > 1.0 * fp) %>%
+  # filter(hr > 2.0 * fp) %>%
+  filter(n == 60)
+
+good_data <- passed_subjects %>%
+  left_join(parsed_trials, by = "ID")
+
+
+subject_performance %>%
+  ggplot(aes(d_hr_fr)) + 
+  geom_histogram(binwidth = 0.05)
+```
+
+
+Compute the hit rate per trial as well as the difference in hit rate between
+scene pairs
+```{r} 
+
+passed_hits <- good_data %>%
+  filter(!base) %>%
+  group_by(scene, door) %>%
+  summarise(c = sum(correct), # hit count
+            n = n(),          # number of subjects
+            f = c / n) %>%    # hit rate
+  left_join(exp_data, by = c("scene", "door"))
+
+passed_hits %>%
+ group_by(scene, d > 0) %>%
+ summarise(c = sum(c),
+           f = mean(f)) %>%
+  group_by(scene) %>%
+  summarise(dc = diff(c),
+            df = diff(f)) %>%
+  ggplot(aes(df)) + 
+  geom_histogram(bins = 15)
+
+
+hr_by_door <- passed_hits %>%
+  group_by(door, d > 0) %>%
+  summarise(c = sum(c),
+            f = mean(f))
+
+delta_hr_by_scene <- passed_hits %>%
+  arrange(scene, door) %>%
+  group_by(scene) %>%
+  select(c, f, d, starts_with("og"), contains("cycles")) %>%
+  summarise(across(everything(), 
+                   list(mean = mean, max = max, min = min, diff = diff))) %>%
+  mutate(rel_hr_min = f_min - mean(f_mean),
+         rel_hr_max = f_max - mean(f_mean),
+         abs_f_diff = abs(f_diff))
+
+delta_hr_by_scene %>%
+  summarise(mu = mean(abs_f_diff),
+            sd = sd(abs_f_diff),
+            n = n(),
+            se = sd / sqrt(n))
+
+t.test(delta_hr_by_scene$abs_f_diff)
+
+delta_hr_by_scene %>%
+  ggplot(aes(abs_f_diff)) +
+  # geom_density()
+  geom_histogram(bins = 10)
+# summary(path_diff)
+
+
+```
+
+Bootstrap analysis on average absolute difference between pairs.
+```{r}
+
+set.seed(0) # TODO: Should we set this seed?
+# Returns the absolute pairwise difference (N=30 pairs)
+ad_function <- function(data) {
+  x <- data %>%
+    filter(!base) %>%
+    group_by(scene, door) %>%
+    summarise(c = sum(!resp_same), # hit count
+              hr = c / n(),     # hit rate
+              .groups = "keep") %>%
+    group_by(scene) %>%
+    arrange(door) %>%
+    summarise(abs_hr_diff = abs(diff(hr)),
+              .groups = "keep")
+  return(x$abs_hr_diff) 
+}
+# Computes the mean absolute pairwise difference
+mad_function <- function(data, indices) {
+  d <- data[indices,] #allows boot to permute sample
+  nr = nrow(d)
+  # shuffle responses
+  d$resp_same = data$resp_same[0:nr]
+  abs_diff <- ad_function(d)
+  return(mean(abs_diff)) #return mean absolute difference
+}
+reps <- boot(data = good_data, 
+             statistic=mad_function,
+             sim = "permutation",
+             R=1000)
+#view results of boostrapping
+reps
+plot(reps)
+#calculate adjusted bootstrap percentile (BCa) interval
+# boot.ci(reps, type="bca")
+
+sum((reps$t0 < reps$t)) / length(reps$t)
+
+```
+
+
+
+
+```{r}
+
+hr_by_scene_door <- passed_hits %>%
+  group_by(scene, door) %>%
+  summarise(across(f, 
+                   list(mean = mean)),
+            across(-c(f), first))
+
+model <- t.test(f_mean ~ d > 0,
+                data = hr_by_scene_door, paired = T)
+model
+```
+
+```{r}
+
+diff_in_path <- passed_hits %>%
+  select(scene, door, f) %>%
+  pivot_wider(names_from = door, values_from = f,
+              names_glue = "door_{door}")
+model <- t.test(diff_in_path$door_1,diff_in_path$door_2,  paired = TRUE)
+model
+
+diff_in_path %>%
+  ungroup() %>%
+  summarise(mu_door_1 = mean(door_1),
+            mu_door_2 = mean(door_2),
+            se_1 = sd(door_1) / sqrt(n()),
+            se_2 = sd(door_2) / sqrt(n())
+            )
+```
+
+```{r}
+bar_fig1_df <- data.frame(mu = c(0.29375		,0.40625),
+                          std_err = c(0.04707953, 0.02976301),
+                          x = factor(c("No Difference", "Difference"))) %>%
+  mutate(conf.low = mu - std_err,
+         conf.high = mu + std_err)
+
+
+bar_fig1_df %>%
+  ggplot(aes(x = x, y = mu, fill = x)) +
+  geom_col() + 
+  geom_errorbar(aes(ymin = conf.low, 
+                    ymax = conf.high),
+                colour = "green",
+                size = 2) +
+  # xlab("Sensitivity") + 
+  # ylab("Diff. in Hit Rate") + 
+  # theme_void() + 
+  theme_high_contrast(
+  foreground_color = "white",
+  background_color = "black",
+  base_family = "InputMono"
+) + 
+  theme(axis.text = element_text(size=26),
+        axis.title = element_text(size=0))
+
+
+                          
+```
+
+
+```{r}
+model <- good_data %>%
+  filter(!base) %>%
+  left_join(exp_data, by = c("scene", "door")) %>%
+  # with(lm(correct ~ summed_cycles))
+  with(lm(correct ~ d > 0))
+model %>%
+  summary()
+```
+
+```{r}
+passed_hits %>%
+  ungroup() %>%
+  select(f, pixeld, contains("cycles"), contains("og")) %>%
+  cor
+
+model <- passed_hits %>%
+  filter(door == 2) %>%
+  with(lm(f ~ summed_cycles)) %>%
+  summary()
+model
+```
+
+```{r}
+
+# th <- theme_minimal() + theme_void() + 
+#   theme(axis.text = element_text(size=30)) +
+#   theme(axis.title = element_text(size=0))
+# theme_set(th)
+
+delta_hr_by_scene %>%
+  ggplot(aes(x = summed_cycles_diff, y = f_diff)) +
+  geom_point(color = "green", size = 5) + 
+  geom_smooth(method = "lm", colour = "purple", size = 2) + 
+  xlab("Sensitivity") + 
+  ylab("Diff. in Hit Rate") + 
+  # theme_void() + 
+  theme_high_contrast(
+  foreground_color = "white",
+  background_color = "black",
+  base_family = "InputMono"
+) + 
+  theme(axis.text = element_text(size=30),
+        axis.title = element_text(size=0),
+        panel.grid = element_blank()) + 
+  coord_fixed(ratio = 0.45)
+
+
+model <- delta_hr_by_scene %>%
+  with(lm(f_diff ~ summed_cycles_diff)) %>%
+  summary()
+model
+```
+
+```{r}
+delta_hr_by_scene %>%
+  ggplot(aes(x = pixeld_diff, y = f_diff)) +
+  geom_point(colour = "red", size = 5) + 
+  geom_smooth(method = "lm") + 
+  theme_high_contrast(
+  foreground_color = "white",
+  background_color = "black",
+  base_family = "InputMono"
+) + 
+  theme(axis.text = element_text(size=30),
+        axis.title = element_text(size=0),
+        panel.grid = element_blank())
+
+model <- delta_hr_by_scene %>%
+  with(lm(f_diff ~ pixeld_diff)) %>%
+  summary()
+model
+```
+
+
+```{r split-half correlation, message=FALSE}
+test <- function(x) {
+  group_a_names <- good_data %>%
+  select(ID) %>%
+  distinct %>%
+  sample_n(length(ID) / 2)
+
+group_a <- group_a_names %>%
+  left_join(good_data, by = 'ID')
+
+group_b <- good_data %>%
+  filter(!(ID %in% group_a_names$ID))
+
+a_hr <- group_a %>%
+  group_by(scene, door) %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct),
+            n = n()) %>%
+  ungroup()
+
+b_hr <- group_b %>%
+  group_by(scene, door) %>%
+  filter(!base) %>%
+  summarise(hr = mean(correct),
+            n = n()) %>%
+  ungroup()
+
+a_fp <- group_a %>%
+  group_by(scene) %>%
+  filter(base) %>%
+  summarise(fp = 1 - mean(correct)) %>%
+  ungroup
+
+b_fp <- group_b %>%
+  group_by(scene) %>%
+  filter(base) %>%
+  summarise(fp = 1 - mean(correct)) %>%
+  ungroup
+
+a_dprime <- a_hr %>%
+  left_join(a_fp, by = "scene") %>%
+  # filter(between(hr, 0.0001, 0.999), between(fp, 0.001, 0.999)) %>%
+  mutate(ad.prime = qnorm(hr*0.99 + 0.001) - qnorm(fp*0.99 + 0.001)) %>%
+  select(scene, door, ad.prime)
+
+
+ab_dprime <- b_hr %>%
+  left_join(b_fp, by = "scene") %>%
+  # filter(between(hr, 0.0001, 0.999), between(fp, 0.001, 0.999)) %>%
+  mutate(bd.prime = qnorm(hr*0.99 + 0.001) - qnorm(fp*0.99 + 0.001)) %>%
+  select(scene, door, bd.prime) %>%
+  left_join(a_dprime, by = c("scene", "door"))
+
+# ab_dprime %>%
+#   ggplot(aes(x = ad.prime, y = bd.prime)) +
+#   geom_point() +
+#   geom_smooth(method="lm")
+
+  m <- ab_dprime %>%
+    with(lm(bd.prime ~ ad.prime)) %>%
+    summary()
+  result = m$r.squared
+}
+
+split_half <- data.frame(r2 = replicate(1000, test()))
+
+split_half %>%
+  ggplot(aes(x = r2)) +
+  geom_histogram()
+
+print(mean(split_half$r2))
+quantile(split_half$r2, 0.05) %>% print
+quantile(split_half$r2, 0.95) %>% print
+```
+
+
+
+
+
+

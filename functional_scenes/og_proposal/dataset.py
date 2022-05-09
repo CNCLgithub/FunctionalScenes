@@ -1,67 +1,93 @@
 import os
-import numpy as np
-
+import json
 import torch
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
-#from natsort import natsorted
-from PIL import Image
-from torchvision.datasets import ImageFolder
+import numpy as np
+# from PIL import Image
+from torch.utils.data import Dataset
+from torchvision.io import read_image
+from torchvision.datasets.folder import pil_loader
+from ffcv.writer import DatasetWriter
+from ffcv.loader import Loader, OrderOption
+from ffcv.fields import RGBImageField, NDArrayField
+from ffcv.pipeline.operation import Operation
+from ffcv.fields.decoders import NDArrayDecoder, SimpleRGBImageDecoder
+from ffcv.transforms import (Convert, NormalizeImage, ToTensor, ToTorchImage, 
+    ToDevice)
 
-class CustomImageFolder(ImageFolder):
-    def __init__(self, root, transform=None):
-        super(CustomImageFolder, self).__init__(root, transform)
+from . pytypes import *
 
-    def __getitem__(self, index):
-        path = self.imgs[index][0]
-        img = self.loader(path)
-        if self.transform is not None:
-            img = self.transform(img)
+def load_og(src:str):
+    og = np.asarray(read_image(src)).squeeze()
+    og = og.astype(np.float32) * (1.0/255.0)
+    return og
 
-        return (img,path)
+class OGVAEDataset(Dataset):
+    def __init__(self, src: str, render_type: str = 'pytorch'):
+        with open(src + '_manifest.json', 'r') as f:
+            manifest = json.load(f)
+        self.src = src
+        self.manifest = manifest
+        self.render_type = render_type
 
+    def __len__(self):
+        return self.manifest['n']
 
-def return_data(args):
-    batch_size = args.batch_size
-    num_workers = args.num_workers
-    image_size = args.image_size
-    assert image_size == 64, 'currently only image size of 64 is supported'
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.src, str(idx+1), self.render_type + '.png')
+        # image = np.asarray(read_image(img_path))
+        image = pil_loader(img_path)
+        og_path = os.path.join(self.src, str(idx+1), 'og.png')
+        og = load_og(og_path)
+        # og = pil_loader(og_path)
+        return image, og
 
-    # TODO: refine this logic
+def write_ffcv_data(d: OGVAEDataset,
+                    path: str,
+                    img_kwargs: dict,
+                    og_kwargs: dict,
+                    w_kwargs: dict) -> None:
+    writer = DatasetWriter(path,
+                           { 'image': RGBImageField(**img_kwargs),
+                             'og': NDArrayField(**og_kwargs)},
+                           **w_kwargs)
+    writer.from_indexed_dataset(d)
 
-    root = os.path.join(args.dset_dir, args.dataset)
-    transform = transforms.Compose([
-            transforms.Resize((image_size, image_size)),
-            transforms.ToTensor(),])
-    train_kwargs = {'root':root, 'transform':transform}
+def img_pipeline(mu, sd) -> List[Operation]:
+    return [SimpleRGBImageDecoder(),
+            NormalizeImage(mu, sd, np.float32),
+            ToTensor(),
+            ToTorchImage(convert_back_int16 =False),
+            Convert(torch.float32),
+            ]
 
-    train_data = CustomImageFolder(**train_kwargs)
-    loader = DataLoader(train_data,
-                        batch_size=batch_size,
-                        shuffle=True,
-                        num_workers=num_workers,
-                        pin_memory=True,
-                        drop_last=True)
+def og_pipeline() -> List[Operation]:
+    return [NDArrayDecoder(),
+            ToTensor(),
+            Convert(torch.float32)]
 
-    return loader
+def ogvae_loader(path: str, device,  **kwargs) -> Loader:
+    with open(path + '_manifest.json', 'r') as f:
+        manifest = json.load(f)
+    mu = np.zeros(3)
+    sd = np.array([255, 255, 255])
+    l =  Loader(path + '.beton',
+                pipelines= {'image' : img_pipeline(mu,
+                                                   sd) + 
+                                      [ToDevice(device)],
+                            'og': None},
+                **kwargs)
+    return l
 
-if __name__ == '__main__':
-    transform = transforms.Compose([
-        transforms.Resize((64, 64)),
-        transforms.ToTensor(),])
+def ogdecoder_loader(path: str, device, **kwargs) -> Loader:
+    with open(path + '_manifest.json', 'r') as f:
+        manifest = json.load(f)
 
-    # for debugging purpose
-    #dset = CustomDataSet('output/datasets', transform)
-    dset = CustomImageFolder('output/datasets', transform)
-    loader = DataLoader(dset,
-                       batch_size=32,
-                       shuffle=True,
-                       num_workers=1,
-                       pin_memory=False,
-                       drop_last=True)
-
-    images1 = iter(loader).next()
-    import ipdb; ipdb.set_trace()
-
-
-
+    mu = np.zeros(3)
+    sd = np.array([255, 255, 255])
+    l =  Loader(path + '.beton',
+                pipelines= {'image' : img_pipeline(mu,
+                                                   sd) +
+                                      [ToDevice(device)],
+                            'og': og_pipeline() + [ToDevice(device)]},
+                **kwargs)
+    return l
