@@ -34,6 +34,8 @@ library(dplyr)
 library(ggplot2)
 library(readr)
 library(boot)
+library(svglite)
+
 
 
 # devtools::install_github("topfunky/gghighcontrast")
@@ -106,15 +108,19 @@ subject_performance <- hr_by_subj %>%
 
 # passed_subjects <- subject_performance
 passed_subjects <- subject_performance %>%
-  filter(hr > 1.0 * fp) %>%
-  # filter(hr > 2.0 * fp) %>%
+  filter(hr > 0.15) %>%
+  filter(d_hr_fr > 0.0) %>%
+  # filter(d_hr_fr > 0.07) %>%
   filter(n == 60)
+
+# passed_subjects <- passed_subjects[sample(1:nrow(passed_subjects)),][1:33,]
+  
 
 good_data <- passed_subjects %>%
   left_join(parsed_trials, by = "ID")
 
 
-subject_performance %>%
+passed_subjects %>%
   ggplot(aes(d_hr_fr)) + 
   geom_histogram(binwidth = 0.05)
 ```
@@ -140,7 +146,7 @@ passed_hits %>%
   summarise(dc = diff(c),
             df = diff(f)) %>%
   ggplot(aes(df)) + 
-  geom_histogram(bins = 15)
+  geom_density()
 
 
 hr_by_door <- passed_hits %>%
@@ -164,15 +170,28 @@ delta_hr_by_scene %>%
             n = n(),
             se = sd / sqrt(n))
 
-t.test(delta_hr_by_scene$abs_f_diff)
+t0 = mean(delta_hr_by_scene$abs_f_diff)
 
-delta_hr_by_scene %>%
+
+f1 <- delta_hr_by_scene %>%
   ggplot(aes(abs_f_diff)) +
-  # geom_density()
-  geom_histogram(bins = 10)
+  geom_vline(xintercept = `t0`, 
+             size = 1.25, 
+             linetype = "dashed",
+             color = "blue") + 
+  geom_density(size = 2) + 
+  geom_histogram(aes(fill = factor(sign(f_diff)))) +
+  theme_classic() + 
+  xlab("Absolute Change in Hit Rate") +
+  ylab("Frequency") +
+  theme(axis.title = element_text(size = 35),
+        axis.text = element_text(size = 30),
+        legend.position = "none",
+        axis.ticks = element_blank())
 # summary(path_diff)
 
-
+ggsave(file="vss_poster/vss_poster_files/figure-html/abs_chng.svg", plot=f1,
+       width = 9, height = 6)
 ```
 
 Bootstrap analysis on average absolute difference between pairs.
@@ -185,7 +204,7 @@ ad_function <- function(data) {
     filter(!base) %>%
     group_by(scene, door) %>%
     summarise(c = sum(!resp_same), # hit count
-              hr = c / n(),     # hit rate
+            hr = c / n(),     # hit rate
               .groups = "keep") %>%
     group_by(scene) %>%
     arrange(door) %>%
@@ -195,28 +214,144 @@ ad_function <- function(data) {
 }
 # Computes the mean absolute pairwise difference
 mad_function <- function(data, indices) {
-  d <- data[indices,] #allows boot to permute sample
-  nr = nrow(d)
+  d <- data.frame(data)
+  nr = length(indices)
+  d <- d[1:nr,]
+  d$resp_same = data$resp_same[indices]
+  # d <- data[indices,] #allows boot to permute sample
   # shuffle responses
-  d$resp_same = data$resp_same[0:nr]
+  # d$resp_same = data$resp_same[0:nr]
   abs_diff <- ad_function(d)
   return(mean(abs_diff)) #return mean absolute difference
 }
 reps <- boot(data = good_data, 
              statistic=mad_function,
              sim = "permutation",
-             R=1000)
+           R=3000)
 #view results of boostrapping
 reps
-plot(reps)
+p <- plot(reps)
 #calculate adjusted bootstrap percentile (BCa) interval
 # boot.ci(reps, type="bca")
 
 sum((reps$t0 < reps$t)) / length(reps$t)
 
+#t0 inv is 0.063
+#n = 33
+inv_t0 = 0.063
+
+sum((inv_t0 < reps$t)) / length(reps$t)
+
+rdf = data.frame(t = reps$t)
+p <- rdf %>%
+  ggplot(aes(x = t)) +
+  geom_histogram(fill = "grey") +
+  geom_vline(xintercept = reps$t0,
+             linetype = "dotted",
+             size = 3,
+             color = "blue") +
+   geom_vline(xintercept = inv_t0,
+             linetype = "dotted",
+             size = 3,
+             color = "red") +
+  # geom_text(aes(reps$t0, 50),
+  #           label = "Observed Change",
+  #           vjust = + 30, 
+  #           hjust = -0.1) + 
+  theme_classic() + 
+  xlab("Abs. Change in Hit Rate") +
+  ylab("Frequency") +
+  theme(axis.title = element_text(size = 25),
+        axis.text = element_text(size = 20)) + 
+  coord_flip()
+
+# CAREFUL: don't run unless ready to update figure
+# ggsave(file="vss_poster/vss_poster_files/figure-html/bs.svg", plot=p,
+#        width = 9, height = 7)
+
 ```
 
 
+```{r}
+
+upright_dhr_analysis <- upright_dhr %>%
+  rename(upright = f_mean, 
+         up_diff = abs_f_diff) %>%
+  select(scene, upright, up_diff) %>%
+  right_join(delta_hr_by_scene)
+
+
+f2 <- upright_dhr_analysis %>%
+  ggplot(aes(x = f_mean, y = upright)) + 
+  geom_point(size = 4.0) + 
+  geom_smooth(method = "lm") + 
+  theme_classic() + 
+  theme(axis.title = element_blank(),
+        axis.text = element_text(size = 20),
+        ) 
+
+ggsave(file="vss_poster/vss_poster_files/figure-html/results_2_1.svg", plot=f2,
+       width = 9, height = 7)
+
+f3 <- upright_dhr_analysis %>%
+  ggplot(aes(x = abs_f_diff, y = up_diff)) + 
+  geom_point(size = 4.0) + 
+  geom_smooth(method = "lm") + 
+  theme_classic() + 
+  theme(axis.title = element_blank(),
+        axis.text = element_text(size = 20))
+
+ggsave(file="vss_poster/vss_poster_files/figure-html/results_2_2.svg", plot=f3,
+       width = 9, height = 7)
+
+upright_dhr_analysis %>%
+  with(lm(upright ~ f_mean)) %>%
+  summary()
+
+
+upright_dhr_analysis %>%
+  with(lm(up_diff ~ abs_f_diff)) %>%
+  summary()
+
+
+
+t.test(upright_dhr_analysis$up_diff, upright_dhr_analysis$abs_f_diff)
+
+```
+
+```{r}
+model_raw <- read_csv("~/project/spaths/experiments/vss_pilot_11f_32x32_restricted/chain_summary.csv")
+
+
+between_trials <- model_raw %>%
+  left_join(passed_hits)
+
+between_trials %>%
+  # filter(prop_att > 0) %>%
+  ggplot(aes(x = prop_att, y = f)) + 
+  geom_point()
+
+between_trials %>%
+  with(lm(f ~ prop_att)) %>%
+  summary()
+
+model <- model_raw %>%
+  select(-c(move, furniture)) %>%
+group_by(scene) %>%
+  arrange(door) %>%
+  summarise(across(-door, 
+                   list(mean = mean, max = max, min = min, diff = diff))) %>%
+  left_join(delta_hr_by_scene)
+  
+model %>%
+  with(lm(abs_f_diff ~ raw_att_diff)) %>%
+  summary()
+
+model %>%
+  ggplot(aes(x = raw_att_diff, y = f_diff)) +
+  geom_point()
+
+```
 
 
 ```{r}
