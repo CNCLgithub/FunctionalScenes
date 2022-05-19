@@ -1,0 +1,222 @@
+---
+title: "**Navigational affordances are automatically computed during scene perception**: <br /> Evidence from behavioral change blindness and a computational model of active attention"
+title_textsize: "105pt"
+author_textcol: "#ffffff"
+author_textsize: "75pt"
+author:
+  - name: Mario Belledonne
+    affil: 1
+  - name: Yihan Bao
+    affil: 2
+  - name: Ilker Yildirim
+  - affil: 1,2
+affiliation:
+  - num: 1
+    address: Department of Psycholgy, Yale University
+  - num: 2
+    address: Department of Statistics and Data Science, Yale University
+affiliation_textcol: "#B3D4E5"
+column_numbers: 4
+logoright_name: "vss_poster_files/figure-html/VSS_logo.svg"
+logoleft_name: "vss_poster_files/figure-html/lab_logo.svg"
+
+output: 
+  posterdown::posterdown_html:
+    self_contained: false
+    
+bibliography: main.bib
+
+poster_height: "36in"
+poster_width: "82in"
+primary_colour: "#2d6686"
+secondary_colour: "#193b4d"
+# accent_colour: "#0b4545"
+titlebox_bordercol: "#193B4D"
+titlebox_borderwidth: "1.0cm"
+# accent_colour: "#193b4d"
+
+sectitle_bgcol: "#193b4d"
+sectitle_textsize: "80pt"
+
+sectitle2_textsize: "70pt"
+body_textsize: "65pt"
+
+columnline_width: "0.3cm"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+# knitr::opts_knit$set(root.dir = '~/project')
+
+
+```
+
+<!-- make fonts bigger! -->
+
+# Selective processing in Scene perception
+
+You are meeting a friend upstairs at the cafe...
+
+*What do you see?*
+
+```{r fig1, fig.align = 'center', out.width = "95%", }
+knitr::include_graphics("vss_poster_files/figure-html/museum.svg")
+
+```
+
+Now imagine that your friend is at the art gallery...
+
+<!-- two tasks  -->
+
+<!-- See overall geometry, how to get to the end, and some objects in between.  -->
+<!--  its selective , especially the "stuff" or obstacles in the rooma-->
+
+<!-- what is the default goal for scenes?  -->
+
+<!-- Get me out of here -->
+
+
+<!-- in the context of indoor scenes of this sort-->
+
+## <u>Navigational goals drive selectivity in scene perception</u>
+
+<!-- <!--what drives this selective processing, is it just stimulus driven?  --> 
+
+<!-- &nbsp;&nbsp;&nbsp;&nbsp; 1. To understand what derives such selective processing -->
+
+<!-- <!-- Inspired by recent work in cog neuro that have enumerated a constellation of representational targets  -->
+<!-- <!-- including the navigational affordances of the scene --> 
+
+<!-- &nbsp;&nbsp;&nbsp;&nbsp; 2. To understand the formats of the resulting scene percept -->
+
+
+# "Get Me Out of Here!" Hypothesis:
+
+<!-- ```{r fig2, fig.align = 'center', out.width = "70%", } -->
+<!-- knitr::include_graphics("vss_poster_files/figure-html/1_1.png") -->
+<!-- ``` -->
+
+
+<!-- say this  -->
+<!-- 1. Implicit goal of navigational affordances impacts what we see -->
+&nbsp;&nbsp;&nbsp;&nbsp; 1. Humans **spontaneously compute exit paths** when viewing scenes
+<!-- in the context of indoor scene -->
+
+<!-- it is if people are looking to get out  -->
+
+<!-- This implicit goal induces selective percepts which I will quantify in a change -->
+<!-- detection paradigm and realize in a new model of attention -->
+&nbsp;&nbsp;&nbsp;&nbsp; 2. This **implicit goal** induces selective processing of **scene geometry**
+
+<!-- First hypothesis requires behavioral innovation  -->
+<!-- Second demands computational account of attention in the context in scene perception -->
+<!-- that we need to reverse engineer the goal and how it impacts scene perception formation -->
+ <br />
+
+
+# Change Detection: Human sensitivity to pathing
+
+<!-- second column larger -->
+
+## With *no explicit reference to navigation*, subjects simply compared images 
+
+
+<!-- make preamble bigger -->
+**Different path trials**: 
+<!-- when discussing, refer to as "furniture" -->
+Scenes had a change in geometry (one of the <span style="color:blue"> **blue** </span> obstacles) that impacted the path to the exit. 
+
+```{r path_chng, fig.align = 'center', out.width = "95%", }
+knitr::include_graphics("vss_poster_files/figure-html/path_chng.svg")
+```
+
+**Same path trials**: Scenes had a change in geometry that did **not** impact the path to the exit. 
+
+<!-- <u>**one**</u> but **not** the other exit  -->
+
+```{r no_path_chng, fig.align = 'center', out.width = "95%", }
+knitr::include_graphics("vss_poster_files/figure-html/no_path_chng.svg")
+```
+
+> Crucially, each *different path* trial had a geometry-matched *same path* trial expect for the position of the exit
+
+
+# Humans spontaneoulsy compute navigational affordances
+
+<!-- ways to describe the details of the behavioral results  -->
+<!-- more labels, more dashes -->
+<!-- observed value -->
+<!-- permutation test -->
+
+
+<!-- better summary than intro -->
+
+
+<!-- show thumbnail scenes, for up-isde and down side -->
+
+<!-- colour borders of stimulu to match analysis  -->
+
+<!-- talk through graph -->
+
+<!-- start with absolute graph -->
+
+<!-- replace perm with bimodal graph  -->
+
+<!-- talk through interesting trials  -->
+
+<!-- move inversion to after initial results -->
+
+## Comparing detection rate between **Same** and ***Different*** path pairs
+
+```{r abs_chng, fig.align = 'center', out.width = "85%"}
+knitr::include_graphics("vss_poster_files/figure-html/abs_chng_full.svg")
+```
+
+Attention can **help** or **hurt**!
+
+```{r help_hurt, fig.align = 'center', out.width = "85%"}
+knitr::include_graphics("vss_poster_files/figure-html/help_hurt.svg")
+```
+
+Path Effect is nullified by inverting images! (p = .89)
+
+
+<!-- Super excited about behavioral scientist  -->
+<!-- What are the computational principles, specifically the processes and representations underlying this phenomena -->
+
+<!-- based on a new way to think about attention (presented last year). and here is how it works -->
+
+
+# Reverse-engineering selective formation of scene percepts
+
+<!-- ## Attention can help and hurt -->
+
+
+
+## Modelling scene perception based on a new a way to think about attention
+
+## Explaning between trial performance
+
+<!-- planning to write two papers.  -->
+<!-- 1. behavioral finding -->
+<!-- 2. computational model predicts this phenoemna but also makes fine grained predctions about attention across time and space, buildup on a separate paper.  -->
+
+# Conclusions
+
+&nbsp;&nbsp;&nbsp;&nbsp; 1.  Revealing implicit goals (in this case, computation of navigational affordances) that drive perception during “passive” viewing.
+
+&nbsp;&nbsp;&nbsp;&nbsp; 2.  A new kind of internal models: multigranular world states
+
+task-driven world models
+
+<!-- can merge with conclusions if needed -->
+# Acknowledgements and Citations
+
+AFOSR (grant number?) for funding.
+
+Special thanks to Brian Scholl, Qi Lin, Kim Wong for feedback on experimental design and analysis
+
+
+```{r, include=FALSE}
+knitr::write_bib(c('knitr','rmarkdown','posterdown','pagedown'), "packages.bib")
+```
