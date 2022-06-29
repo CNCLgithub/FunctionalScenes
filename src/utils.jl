@@ -51,9 +51,9 @@ end
 # Math
 #################################################################################
 
-function softmax(x)
+function softmax(x; t::Float64 = 1.0)
     x = x .- maximum(x)
-    exs = exp.(x)
+    exs = exp.(x ./ t)
     sxs = sum(exs)
     n = length(x)
     isnan(sxs) || iszero(sxs) ? fill(1.0/n, n) : exs ./ sxs

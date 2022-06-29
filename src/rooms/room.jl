@@ -175,6 +175,11 @@ function viz_room(r::GridRoom)
     c = zeros(steps(r))
     viz_room(r, c)
 end
+function viz_room(r::GridRoom, p::Vector{Int64})
+    m = zeros(steps(r))
+    m[p] .= 1
+    viz_room(r, m)
+end
 
 
 function viz_ocg(ocg; title = "occupancy grid")

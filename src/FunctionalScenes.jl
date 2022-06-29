@@ -7,7 +7,6 @@ module FunctionalScenes
 using Gen
 using JSON
 using Graphs
-using PyCall
 using Setfield
 using Statistics
 using Parameters
@@ -24,6 +23,7 @@ using FunctionalCollections
 # Runtime configuration
 #################################################################################
 
+using PyCall
 const torch = PyNULL()
 const functional_scenes = PyNULL()
 function __init__()

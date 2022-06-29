@@ -147,6 +147,7 @@ function main()
     catch e
         println("could not make dir $(out_path)")
     end
+    save_gt_image(model_params, "$(out_path)/pytorch.png")
     for c = 1:args["chain"]
         Random.seed!(c)
         out = joinpath(out_path, "$(c).jld2")
@@ -164,7 +165,6 @@ function main()
             results = run_inference(query, proc, out )
         end
     end
-    save_gt_image(results.state, "$(out_path)/pytorch.png")
     return nothing
 end
 

@@ -967,12 +967,6 @@ git-tree-sha1 = "2af69ff3c024d13bde52b34a2a7d6887d4e7b438"
 uuid = "626554b9-1ddb-594c-aa3c-2596fe9399a5"
 version = "0.7.1"
 
-[[deps.MetaGraphsNext]]
-deps = ["Graphs", "JLD2"]
-git-tree-sha1 = "f8e0351036278130f6bf966cb903e5fddb93778c"
-uuid = "fa8bd995-216d-47f1-8a91-f3b68fbeb377"
-version = "0.2.0"
-
 [[deps.Missings]]
 deps = ["DataAPI"]
 git-tree-sha1 = "bf210ce90b6c9eed32d25dbcae1ebc565df2687f"
@@ -1399,12 +1393,6 @@ deps = ["LinearAlgebra", "Random", "Statistics"]
 git-tree-sha1 = "4f6ec5d99a28e1a749559ef7dd518663c5eca3d5"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
 version = "1.4.3"
-
-[[deps.StaticGraphs]]
-deps = ["Graphs", "JLD2", "SparseArrays"]
-git-tree-sha1 = "855371d8fdfaed46dbb32a7c57a42db4441b9247"
-uuid = "4c8beaf5-199b-59a0-a7f2-21d17de635b6"
-version = "0.3.0"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
