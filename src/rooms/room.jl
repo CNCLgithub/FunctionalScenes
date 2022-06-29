@@ -165,7 +165,10 @@ function viz_room(r::GridRoom, ocg::Matrix{Float64})
     c[d .== obstacle_tile] .= -1.
     c[d .== wall_tile] .= -2.
     println(spy(c,
-                title = "Obstacles + path"))
+                title = "Obstacles + path",
+                canvas = BrailleCanvas,
+                # height = 30,
+                width = 60))
 
 end
 function viz_room(r::GridRoom, ocg::Matrix{Bool})
