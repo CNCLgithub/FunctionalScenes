@@ -1,5 +1,7 @@
 export PathState, recurse_path_gm, fix_shortest_path
 
+using DataStructures: Stack
+
 struct PathState
     # graph of the room so far
     g::PathGraph
@@ -28,7 +30,7 @@ end
 function head_weights(st::PathState, ns)
     @unpack gs, temp, step = st
     ds = gs[ns]
-    ws = softmax(ds; t = temp / step)
+    ws = softmax(ds; t = temp / (0.1 * step))
 end
 
 function find_step(path::Pair{Int64, Int64}, k::Int64)::Pair
@@ -62,24 +64,82 @@ function parse_recurse_path(x::Pair)
     return p
 end
 
+function find_invalid_path(omat, g, x, gs, pmat)
+    y::Int64 = 0
+    @inbounds for n in collect(neighbors(g, x))
+        omat[n] && continue        # already blocked
+        pmat[n] && continue        # part of the path
+        gs[n] == 0 && continue     # end of path
+        # block if shorter
+        if gs[x] >= gs[n]
+            y = n
+            break
+        end
+    end
+    return y
+end
+
+const MoveDeque = Vector{Tuple{Int64, Int64, Int64}}
+
 function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
+    isempty(p) && return r
+    ent = first(entrance(r))
     ext = first(exits(r))
-    g = pathgraph(r)
-    gs = gdistances(g, ext)
+    g = deepcopy(pathgraph(r))
+    ref_g = @>> r clear_room pathgraph
+    gs = gdistances(g, ent)
     omat = Matrix{Bool}(data(r) .== obstacle_tile)
     pmat = Matrix{Bool}(falses(steps(r)))
     pmat[p] .= true
-    @inbounds for xi in eachindex(p)
-        x = p[xi]
-        for n in neighbors(g, x)
-            omat[n] && continue     # already blocked
-            pmat[n] && continue     # part of the path
-            gs[n] == 0 && continue  # end of path
-            omat[n] = xi >= gs[n]   # block if shorter
+    saturated = Vector{Bool}(falses(length(p)))
+    s = MoveDeque()
+    np = length(p)
+    i = 1
+    @inbounds while i <= np
+        # @show i => saturated[i]
+        if saturated[i]
+            i += 1
+            continue
+        end
+        x = p[i]
+        y::Int64 = find_invalid_path(omat, g, x, gs, pmat)
+        if y == 0
+            saturated[i] = true
+            i += 1
+        else
+            # not able to fix further up the path
+            if i == 1 || saturated[i-1]
+                # reset saturation
+                saturated[:] .= false
+                # clear later placements
+                # in case they are no longer needed
+                j,v,o = isempty(s) ? (i, x, y) : last(s)
+                # @show (i, x, y)
+                # @show s
+                while j > i && !isempty(s)
+                    # @show (j, v, o)
+                    pop!(s)
+                    for n = collect(neighbors(ref_g, o))
+                        # only reconnect if open
+                        omat[n] || add_edge!(g, Edge(o, n))
+                    end
+                    omat[o] = false
+                    (j, v, o) = isempty(s) ? (i,x,y) : last(s)
+                end
+                # add block move
+                omat[y] = true
+                for ny in collect(neighbors(g, y))
+                    rem_edge!(g, Edge(y, ny))
+                end
+                push!(s, (i, x, y))
+                # synchronize distances
+                gs = gdistances(g, ent)
+            end
+            # restart
+            i = 1
         end
     end
     new_r::GridRoom = @>> omat vec findall Set add(r)
-    return new_r
 end
 
 include("gen.jl")
