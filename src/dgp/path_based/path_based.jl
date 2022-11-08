@@ -30,7 +30,7 @@ end
 function head_weights(st::PathState, ns)
     @unpack gs, temp, step = st
     ds = gs[ns]
-    ws = softmax(ds; t = temp / (0.1 * step))
+    ws = softmax(ds; t = temp / step)
 end
 
 function find_step(path::Pair{Int64, Int64}, k::Int64)::Pair
@@ -71,7 +71,8 @@ function find_invalid_path(omat, g, x, gs, pmat)
         pmat[n] && continue        # part of the path
         gs[n] == 0 && continue     # end of path
         # block if shorter
-        if gs[x] >= gs[n]
+        # if gs[x] >= gs[n]
+        if gs[x] > gs[n]
             y = n
             break
         end
@@ -82,15 +83,21 @@ end
 const MoveDeque = Vector{Tuple{Int64, Int64, Int64}}
 
 function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
+    # no path to fix
     isempty(p) && return r
+    # info of current room
     ent = first(entrance(r))
     ext = first(exits(r))
     g = deepcopy(pathgraph(r))
+    # an empty room for reference
     ref_g = @>> r clear_room pathgraph
+    # distances from entrance
     gs = gdistances(g, ent)
+    # matrices representing obstacles and paths
     omat = Matrix{Bool}(data(r) .== obstacle_tile)
     pmat = Matrix{Bool}(falses(steps(r)))
     pmat[p] .= true
+    #
     saturated = Vector{Bool}(falses(length(p)))
     s = MoveDeque()
     np = length(p)
@@ -133,7 +140,7 @@ function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
                 end
                 push!(s, (i, x, y))
                 # synchronize distances
-                gs = gdistances(g, ent)
+                gdistances!(g, ent, gs)
             end
             # restart
             i = 1

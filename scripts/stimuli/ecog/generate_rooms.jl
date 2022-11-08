@@ -12,53 +12,18 @@ Random.seed!(1235)
 # using Profile
 # using StatProfilerHTML
 
-# function move_change(r::GridRoom,
-#                      f::Furniture,
-#                      m::Move,
-#                      base_og)
-#     shifted = shift_furniture(r,f,m)
-#     shifted_og = occupancy_grid(shifted; sigma = 0., decay = 0.)
-#     # compute impact of shift
-#     d = norm(base_og - shifted_og)
-# end
 
-# function paired_change_in_path(x)
-#     # door 1 has no change in path
-#     min_i = argmin(x[:, :d])
-#     c1 = x[min_i, :door] == 1 && x[min_i, :d] == 0.0
-#     # door 2 changes
-#     max_i = argmax(x[:, :d])
-#     c2 = x[max_i, :door] == 2 && x[max_i, :d] < 17.0 && x[max_i, :d] > 13.0
-#     c1 && c2
-# end
-
-# function examine_furniture(r::GridRoom)::DataFrame
-
-
-#     gdf = @>> DataFrames.groupby(df, :furniture) begin
-#         # look find change for one but not another door
-#         filter(paired_change_in_path)
-#     end
-#     isempty(gdf) && return DataFrame()
-#     # pick furniture, move pair with biggest difference
-#     selected_i = @> gdf begin
-#         combine(:d => maximum)
-#         sortperm(:d_maximum)
-#         last
-#     end
-#     gdf[selected_i]
-# end
-
-function build(template::GridRoom;
-               temp::Float64 = 1,
+function build(template::GridRoom, p;
+               temp::Float64 = 1.,
                max_f::Int64 = 5,
-               max_size::Int64 = 5,
+               max_size::Int64 = 3,
                factor::Int64 = 2,
                pct_open::Float64 = 0.15,
                side_buffer::Int64 = 2)
 
-    p = recurse_path_gm(template, temp)
-    template = fix_shortest_path(template, p)
+    # p = recurse_path_gm(template, temp)
+    # template = fix_shortest_path(template, p)
+    # # viz_room(template, p)
     dims = steps(template)
 
     # prevent furniture generated in either:
@@ -83,6 +48,8 @@ function build(template::GridRoom;
     # generate furniture once and then apply to
     # each door condition
     with_furn = furniture_gm(template, vmap, max_f, max_size)
+    # with_furn = template
+    # viz_room(with_furn, p)
     with_furn = expand(with_furn, factor)
     # perform path analysis
     # results = examine_furniture(with_furn)
@@ -103,42 +70,53 @@ function main()
     # Parameters
     room_dims = (16, 16)
     entrance = [8, 9]
-    door_rows = [5]
+    door_rows = [8]
     inds = LinearIndices(room_dims)
     doors = inds[door_rows, room_dims[2]]
-    t_factor = 1.0
+    # unused for now - Mario 11/08/2022
+    # t_max = 1.0
+    # f_factor = 2
 
-    # number of trials
-    n = 30
+    groups = 5
+    group_size = 5
+    n = groups * group_size
     template = GridRoom(room_dims, room_dims, entrance, doors)
 
     # will store summary of generated rooms here
     df = DataFrame(id = Int64[],
-                   flip = Bool[],
-                   temp = Float64[])
+                   temp = Float64[],
+                   density = Float64[])
     # generate rooms
-    i = 1
-    while i <= n
-        # generate a room pair
-        temp = t_factor * i / n
-        (r, _) = build(template; temp = temp)
-        _df = DataFrame(id = i,
-                        flip = (i - 1) % 2,
-                        temp = temp)
-        # invalid room generated, try again or finish
-        # isempty(_df) && continue
+    # temps = LinRange(0.1, t_max, groups)
+    temp = 0.5
+    max_f = 7 # limit of additional obstacles to add
+    for i = 1:groups
+        # sample a random path in an empty room (the template)
+        # with a temperature parameter determining complextiy
+        p = recurse_path_gm(template, temp)
+        # solve for the placement of obstacles such that path
+        # `p` is the shortest path in the room
+        ri = fix_shortest_path(template, p)
+        for j = 1:group_size
+            # adds the obstacle to the room object `ri`
+            #
+            (r, _) = build(ri, p; max_f = max_f)
+            id = (i - 1) * group_size + j
+            _df = DataFrame(id = id,
+                            temp = temp,
+                            density = max_f)
+            # invalid room generated, try again or finish
+            # isempty(_df) && continue
 
-        # valid pair found, organize and store
-        append!(df, _df)
+            # valid pair found, organize and store
+            append!(df, _df)
 
-        # save scenes as json
-        open("$(scenes_out)/$(i).json", "w") do f
-            _d = r |> json
-            write(f, _d)
+            # save scenes as json
+            open("$(scenes_out)/$(id).json", "w") do f
+                _d = r |> json
+                write(f, _d)
+            end
         end
-
-        print("step: $(i)/$(n)\r")
-        i += 1
     end
     @show df
     # saving summary / manifest

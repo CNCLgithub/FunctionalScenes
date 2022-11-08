@@ -1,5 +1,5 @@
 export GridRoom, pathgraph, data, entrance, exits, bounds, steps, expand,
-    from_json, viz_room
+    from_json, viz_room, print_room
 
 #################################################################################
 # Type aliases
@@ -159,17 +159,28 @@ end
 
 # Debug visualization
 
-function viz_room(r::GridRoom, ocg::Matrix{Float64})
+function print_room(r::GridRoom, ocg::Matrix{Float64})
     d = data(r)
     c = deepcopy(ocg)
     c[d .== obstacle_tile] .= -1.
     c[d .== wall_tile] .= -2.
-    println(spy(c,
-                title = "Obstacles + path",
-                canvas = BrailleCanvas,
-                # height = 30,
-                width = 60))
+    spy(c,
+        title = "Obstacles + path",
+        # canvas = BrailleCanvas,
+        canvas = BlockCanvas,
+        font = "JuliaMono",
+        # height = 30,
+        background = UnicodePlots.ansi_color((0, 0, 0)),
+        width = 60)
+end
+function print_room(r::GridRoom, p::Vector{Int64})
+    m = zeros(steps(r))
+    m[p] .= 1
+    print_room(r, m)
+end
 
+function viz_room(r::GridRoom, ocg::Matrix{Float64})
+    println(print_room(r, ocg))
 end
 function viz_room(r::GridRoom, ocg::Matrix{Bool})
     viz_room(r, Float64.(ocg))
@@ -179,9 +190,7 @@ function viz_room(r::GridRoom)
     viz_room(r, c)
 end
 function viz_room(r::GridRoom, p::Vector{Int64})
-    m = zeros(steps(r))
-    m[p] .= 1
-    viz_room(r, m)
+    println(print_room(r, p))
 end
 
 
