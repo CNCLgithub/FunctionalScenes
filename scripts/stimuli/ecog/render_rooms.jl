@@ -60,7 +60,7 @@ end
 function main()
     args = Dict(
         "dataset" => "ecog_pilot",
-        "scene" => 0,
+        "scene" => 1,
         "threads" => Sys.CPU_THREADS
     )
     # args = parse_commandline()

@@ -26,7 +26,8 @@ function camera(r::Room)
     y = pos[1][2] - 1.75 * space[2]
     x = mean(first.(pos)) + 0.5
     # center of x-y for entrances
-    pos = [x, y, 0.75 * tile_height]
+    camera_height = 0.85 * tile_height
+    pos = [x, y, camera_height]
     orientation = [0.475 * pi, 0., 0.]
     Dict(:position => pos,
          :orientation => orientation)
