@@ -60,7 +60,7 @@ end
 function main()
     args = Dict(
         "dataset" => "ecog_pilot",
-        "scene" => 1,
+        "scene" => 0,
         "threads" => Sys.CPU_THREADS
     )
     # args = parse_commandline()
@@ -76,7 +76,7 @@ function main()
         ids = df.id
     end
 
-    render_debug(ids, name)
+    # render_debug(ids, name)
     render_stims(ids, name,
                  threads = args["threads"]
                  )

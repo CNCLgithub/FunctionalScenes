@@ -78,7 +78,7 @@ function main()
     # f_factor = 2
 
     groups = 5
-    group_size = 5
+    group_size = 4
     n = groups * group_size
     template = GridRoom(room_dims, room_dims, entrance, doors)
 
