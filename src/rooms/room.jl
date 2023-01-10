@@ -49,6 +49,19 @@ function GridRoom(steps, bounds)
     GridRoom(steps, bounds, Int64[], Int64[], g, d)
 end
 
+# using this GridRoom in render_rooms to change to wall_tiles
+# instead of changing struct to mutable
+function GridRoom(room::GridRoom, newdata::Matrix{Tile})
+    return GridRoom(
+        room.steps,
+        room.bounds,
+        room.entrance,
+        room.exits,
+        room.graph,
+        newdata,
+    )
+end
+
 """
 Builds a room given ...
 """
