@@ -221,7 +221,7 @@ function main()
                 _d = JSON.lower(r)
                 _d["paths"] = p
 
-                _d = r |> json
+                _d = _d |> json
  
                 write(f, _d)
             end
