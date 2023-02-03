@@ -20,7 +20,7 @@ function build(template::GridRoom, p;
                factor::Int64 = 2,
                pct_open::Float64 = 0.15,
                side_buffer::Int64 = 2,
-               quant::Float64 = 0.01)
+               quant::Float64 = 0.5)
 
     # p = recurse_path_gm(template, temp)
     # template = fix_shortest_path(template, p)
@@ -47,15 +47,15 @@ function build(template::GridRoom, p;
 
     obstacles = length(FunctionalScenes.get_tiles(template, obstacle_tile))
 
-
-    adjusted_f = ceil(Int64, max_f - obstacles * quant)
     # generate furniture once and then apply to
     # each door condition
-    with_furn = furniture_gm(template, vmap, adjusted_f, max_size)
+    # adjusted_f = ceil(Int64, max_f - obstacles * quant)
+    # with_furn = furniture_gm(template, vmap, adjusted_f, max_size)
 
     # uncomment lines below if using `main()`
-    # adjusted_f = ceil(Int64, max_f - obstacles * 0.5)
-    # with_furn = furniture_gm(template, vmap, max_f, max_size)
+    adjusted_f = abs.(ceil(Int64, max_f - obstacles * 0.5))
+    with_furn = furniture_gm(template, vmap, adjusted_f, max_size)
+
 
     # with_furn = template
     # viz_room(with_furn, p)
@@ -68,13 +68,13 @@ end
 # essentially the same function as main, just wrapped in 3 loops to set params
 function set_params()
     quant_ls = collect(range(0.25, stop=0.75, step=0.25))
-    temp_ls = collect(range(0.25, stop=4, step=0.25))
-    max_f_ls = collect(range(4, stop=10, step=1))
+    temp_ls = collect(range(1.0, stop=5.0, step=0.5))
+    max_f_ls = collect(range(7, stop=12, step=1))
 
     for t in eachindex(temp_ls)
         for m in eachindex(max_f_ls)
             for q in eachindex(quant_ls)
-                name = "ecog_pilot_max-f=$(max_f_ls[m])_temp=$(temp_ls[t])_quant=$(quant_ls[q])"
+                name = "max-f=$(max_f_ls[m])_temp=$(temp_ls[t])_quant=$(quant_ls[q])"
                 dataset_out = "/spaths/datasets/$(name)"
                 isdir(dataset_out) || mkdir(dataset_out)
 
@@ -157,6 +157,7 @@ function main()
     scenes_out = "$(dataset_out)/scenes"
     isdir(scenes_out) || mkdir(scenes_out)
 
+    navigation = true
 
     # Parameters
     room_dims = (16, 16)
@@ -182,20 +183,21 @@ function main()
                     path_len = Int64[])
     # generate rooms
     # temps = LinRange(0.1, t_max, groups)
-    temp = 0.5
-    max_f = 7 # limit of additional obstacles to add
+    temp = 4.0
+    max_f = 10 # limit of additional obstacles to add
     for i = 1:groups
         # sample a random path in an empty room (the template)
         # with a temperature parameter determining complextiy
         p = recurse_path_gm(template, temp)
+
         # solve for the placement of obstacles such that path
         # `p` is the shortest path in the room
         ri = fix_shortest_path(template, p)
+
         for j = 1:group_size
             # adds the obstacle to the room object `ri`
             #
             (r, adjusted_f) = build(ri, p; max_f = max_f)
-            obstacles = FunctionalScenes.get_tiles(r, obstacle_tile)
             id = (i - 1) * group_size + j
 
             obstacles = length(FunctionalScenes.get_tiles(r, obstacle_tile))
@@ -215,7 +217,12 @@ function main()
 
             # save scenes as json
             open("$(scenes_out)/$(id).json", "w") do f
+                # FIXME: save p to JSON
+                _d = JSON.lower(r)
+                _d["paths"] = p
+
                 _d = r |> json
+ 
                 write(f, _d)
             end
         end
