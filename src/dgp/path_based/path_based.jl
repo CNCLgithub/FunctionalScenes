@@ -19,8 +19,9 @@ function PathState(r::GridRoom; temp::Float64 = 1.0)
     ent = first(entrance(r))
     ext = first(exits(r))
     g = pathgraph(r)
-    gs = 1.0 ./ gdistances(g, ent)
-    PathState(g, gs, ext, temp, 0)
+    dm = noisy_distm(r, 0.1)
+    ds = 1.0 ./ dijkstra_shortest_paths(g, ext, dm).dists
+    PathState(g, ds, ent, temp, 0)
 end
 
 function PathState(new_head::Int64, st::PathState)
@@ -82,6 +83,22 @@ end
 
 const MoveDeque = Vector{Tuple{Int64, Int64, Int64}}
 
+function noisy_distm(r::GridRoom, w::Float64)
+    g = pathgraph(r)
+    d = data(r)
+    n = length(d)
+    m = Matrix{Float64}(undef, n, n)
+
+    @inbounds for i = 1:n, j = 1:n
+        # case which di is (free tile, free tile)
+            # m[i,j] should be 0.1
+        # case which di is (free_tile, obstacle) or any permutation
+            # m[i,j] should be 0.9
+        m[i,j] = (d[i] == d[j]) ? w : 1 - w
+    end
+    return m
+end
+
 function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
     # no path to fix
     isempty(p) && return r
@@ -92,12 +109,14 @@ function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
     # an empty room for reference
     ref_g = @>> r clear_room pathgraph
     # distances from entrance
-    gs = gdistances(g, ent)
+    dm = noisy_distm(r, 0.1)
+    ds = dijkstra_shortest_paths(g, ext, dm, allpaths=true, trackvertices=true)
+
     # matrices representing obstacles and paths
     omat = Matrix{Bool}(data(r) .== obstacle_tile)
     pmat = Matrix{Bool}(falses(steps(r)))
     pmat[p] .= true
-    #
+
     saturated = Vector{Bool}(falses(length(p)))
     s = MoveDeque()
     np = length(p)
@@ -109,7 +128,8 @@ function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
             continue
         end
         x = p[i]
-        y::Int64 = find_invalid_path(omat, g, x, gs, pmat)
+        y::Int64 = find_invalid_path(omat, g, x, ds.dists, pmat)
+
         if y == 0
             saturated[i] = true
             i += 1
@@ -133,6 +153,7 @@ function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
                     omat[o] = false
                     (j, v, o) = isempty(s) ? (i,x,y) : last(s)
                 end
+                
                 # add block move
                 omat[y] = true
                 for ny in collect(neighbors(g, y))
@@ -140,7 +161,8 @@ function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
                 end
                 push!(s, (i, x, y))
                 # synchronize distances
-                gdistances!(g, ent, gs)
+                dm = noisy_distm(r, 0.1)
+                ds = dijkstra_shortest_paths(g, ext, dm, allpaths=true, trackvertices=true)
             end
             # restart
             i = 1
