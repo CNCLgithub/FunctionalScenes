@@ -218,10 +218,7 @@ function main()
             # save scenes as json
             open("$(scenes_out)/$(id).json", "w") do f
                 # FIXME: save p to JSON
-                _d = JSON.lower(r)
-                _d["paths"] = p
-
-                _d = _d |> json
+                _d = (r, p) |> json 
  
                 write(f, _d)
             end

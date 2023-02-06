@@ -153,6 +153,18 @@ JSON.lower(r::GridRoom) = Dict(
     data   => convert.(Symbol, data(r))
 )
 
+function JSON.lower(rp::Tuple{GridRoom, Vector{Int}})
+    r, p = rp
+    Dict(
+    steps  => steps(r),
+    bounds => bounds(r),
+    entrance => entrance(r),
+    exits => exits(r),
+    data   => convert.(Symbol, data(r)),
+    path => p
+    )
+end
+
 # FIXME: several janky statements
 function from_json(::Type{GridRoom}, jd::Dict)
     s = Tuple(collect(Int64, jd["steps"]))
