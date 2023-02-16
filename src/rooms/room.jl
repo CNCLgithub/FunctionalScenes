@@ -146,24 +146,12 @@ function Base.show(io::IO, m::MIME"text/plain",
 end
 
 JSON.lower(r::GridRoom) = Dict(
-    steps  => steps(r),
-    bounds => bounds(r),
-    entrance => entrance(r),
-    exits => exits(r),
-    data   => convert.(Symbol, data(r))
+    :steps  => steps(r),
+    :bounds => bounds(r),
+    :entrance => entrance(r),
+    :exits => exits(r),
+    :data   => convert.(Symbol, data(r))
 )
-
-function JSON.lower(rp::Tuple{GridRoom, Vector{Int}})
-    r, p = rp
-    Dict(
-    steps  => steps(r),
-    bounds => bounds(r),
-    entrance => entrance(r),
-    exits => exits(r),
-    data   => convert.(Symbol, data(r)),
-    path => p
-    )
-end
 
 # FIXME: several janky statements
 function from_json(::Type{GridRoom}, jd::Dict)
