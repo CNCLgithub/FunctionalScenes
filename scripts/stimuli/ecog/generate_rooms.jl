@@ -49,17 +49,17 @@ function build(template::GridRoom, p;
 
     # generate furniture once and then apply to
     # each door condition
-    # adjusted_f = ceil(Int64, max_f - obstacles * quant)
+    # adjusted_f = abs.(ceil(Int64, max_f - obstacles * quant))
     # with_furn = furniture_gm(template, vmap, adjusted_f, max_size)
 
     # uncomment lines below if using `main()`
     adjusted_f = abs.(ceil(Int64, max_f - obstacles * 0.5))
-    with_furn = furniture_gm(template, vmap, adjusted_f, max_size)
+    with_furn = furniture_gm(template, vmap, max_f, max_size)
 
 
     # with_furn = template
     # viz_room(with_furn, p)
-    with_furn = expand(with_furn, factor)
+    # with_furn = expand(with_furn, factor)
     # perform path analysis
     # results = examine_furniture(with_furn)
     (with_furn, adjusted_f)
@@ -68,7 +68,7 @@ end
 # essentially the same function as main, just wrapped in 3 loops to set params
 function set_params()
     quant_ls = collect(range(0.25, stop=0.75, step=0.25))
-    temp_ls = collect(range(1.0, stop=5.0, step=0.5))
+    temp_ls = collect(range(0.5, stop=5.0, step=0.5))
     max_f_ls = collect(range(7, stop=12, step=1))
 
     for t in eachindex(temp_ls)
@@ -82,16 +82,17 @@ function set_params()
                 isdir(scenes_out) || mkdir(scenes_out)
 
                 # Parameters
-                room_dims = (16, 16)
-                entrance = [8, 9]
+                room_bounds = (32.0, 32.0)
+                room_steps = (16, 16)
+                entrance = [8]
                 door_rows = [8]
-                inds = LinearIndices(room_dims)
-                doors = inds[door_rows, room_dims[2]]
+                inds = LinearIndices(room_steps)
+                doors = inds[door_rows, room_steps[2]]
 
                 groups = 10
                 group_size = 10
                 n = groups * group_size
-                template = GridRoom(room_dims, room_dims, entrance, doors)
+                template = GridRoom(room_steps, room_bounds, entrance, doors)
 
                 # will store summary of generated rooms here
                 df = DataFrame(id = Int64[],
@@ -135,7 +136,10 @@ function set_params()
 
                         # save scenes as json
                         open("$(scenes_out)/$(id).json", "w") do f
-                            _d = r |> json
+                            _d = JSON.lower(r)
+                            _d[:path] = p
+                            _d = _d |> json
+            
                             write(f, _d)
                         end
                     end
@@ -160,11 +164,12 @@ function main()
     navigation = true
 
     # Parameters
-    room_dims = (16, 16)
-    entrance = [8, 9]
+    room_bounds = (32.0, 32.0)
+    room_steps = (16, 16)
+    entrance = [8]
     door_rows = [8]
-    inds = LinearIndices(room_dims)
-    doors = inds[door_rows, room_dims[2]]
+    inds = LinearIndices(room_steps)
+    doors = inds[door_rows, room_steps[2]]
     # unused for now - Mario 11/08/2022
     # t_max = 1.0
     # f_factor = 2
@@ -172,7 +177,7 @@ function main()
     groups = 10
     group_size = 10
     n = groups * group_size
-    template = GridRoom(room_dims, room_dims, entrance, doors)
+    template = GridRoom(room_steps, room_bounds, entrance, doors)
 
     # will store summary of generated rooms here
     df = DataFrame(id = Int64[],
@@ -183,8 +188,8 @@ function main()
                     path_len = Int64[])
     # generate rooms
     # temps = LinRange(0.1, t_max, groups)
-    temp = 4.0
-    max_f = 10 # limit of additional obstacles to add
+    temp = 2.0
+    max_f = 7 # limit of additional obstacles to add
     for i = 1:groups
         # sample a random path in an empty room (the template)
         # with a temperature parameter determining complextiy
@@ -218,8 +223,10 @@ function main()
             # save scenes as json
             open("$(scenes_out)/$(id).json", "w") do f
                 # FIXME: save p to JSON
-                _d = (r, p) |> json 
- 
+                _d = JSON.lower(r)
+                _d[:path] = p
+                _d = _d |> json
+
                 write(f, _d)
             end
         end
