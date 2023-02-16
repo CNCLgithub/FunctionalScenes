@@ -19,7 +19,7 @@ function Base.println(tiles::Matrix{Tile})
     for row in eachrow(tiles)
       println(row)
     end
-  end
+end
 
 function rem_front_wall(r::GridRoom)
     newdata = deepcopy(data(r))
@@ -57,12 +57,16 @@ function render_debug(ids, name::String)
 
         println("ROOM NUMBER: $(id)")
         room = from_json(GridRoom, base_s)
+        # @show base_s
+        
 
         # remove front wall here
         newroom = rem_front_wall(room)
+        # println(data(room))
 
-        room_img = debug_viz(newroom, safe_shortest_paths(newroom))
+        room_img = debug_viz(newroom, base_s["path"])
         save("$(out)/$(id)_print.png", room_img)
+        # error()
     end
 end
 
@@ -92,14 +96,14 @@ end
 # essentially the same function as `main()``, just wrapped in 3 loops to set params
 function set_params()
     quant_ls = collect(range(0.25, stop=0.75, step=0.25))
-    temp_ls = collect(range(0.25, stop=4, step=0.25))
-    max_f_ls = collect(range(4, stop=10, step=1))
+    temp_ls = collect(range(0.5, stop=5.0, step=0.5))
+    max_f_ls = collect(range(7, stop=12, step=1))
 
     for t in eachindex(temp_ls)
         for m in eachindex(max_f_ls)
             for q in eachindex(quant_ls)
                 args = Dict(
-                    "dataset" => "ecog_pilot_max-f=$(max_f_ls[m])_temp=$(temp_ls[t])_quant=$(quant_ls[q])",
+                    "dataset" => "max-f=$(max_f_ls[m])_temp=$(temp_ls[t])_quant=$(quant_ls[q])",
                     "scene" => 0,
                     "threads" => Sys.CPU_THREADS
                 )
@@ -114,10 +118,10 @@ function set_params()
                     ids = df.id
                 end
             
-                # render_debug(ids, name)
-                render_stims(ids, name,
-                             threads = args["threads"]
-                             )
+                render_debug(ids, name)
+                # render_stims(ids, name,
+                #              threads = args["threads"]
+                #              )
             end
         end
     end
@@ -126,7 +130,7 @@ end
 
 # essentially the same function as `main()``, just wrapped in 1 loop to get selected scenes based on params
 function select_scenes()
-    scenes_ls = ["ecog_pilot_max-f=5_temp=1.0_quant=0.25", "ecog_pilot_max-f=5_temp=1.5_quant=0.5", "ecog_pilot_max-f=5_temp=2.25_quant=0.75", "ecog_pilot_max-f=5_temp=3.0_quant=0.75", "ecog_pilot_max-f=6_temp=1.0_quant=0.5", "ecog_pilot_max-f=6_temp=3.5_quant=0.25", "ecog_pilot_max-f=7_temp=2.0_quant=0.25"]
+    scenes_ls = ["max-f=7_temp=0.5_quant=0.5"]
 
     for s in eachindex(scenes_ls)
         args = Dict(
@@ -145,10 +149,10 @@ function select_scenes()
             ids = df.id
         end
     
-        # render_debug(ids, name)
-        render_stims(ids, name,
-                        threads = args["threads"]
-                        )
+        render_debug(ids, name)
+        # render_stims(ids, name,
+        #                 threads = args["threads"]
+        #                 )
     end
     return nothing
 end
@@ -173,9 +177,9 @@ function main()
     end
 
     render_debug(ids, name)
-    render_stims(ids, name,
-                 threads = args["threads"]
-                 )
+    # render_stims(ids, name,
+    #              threads = args["threads"]
+    #              )
     return nothing
 end
 
@@ -199,7 +203,7 @@ function parse_commandline()
         "--threads"
         help = "Number of threads for cycles"
         arg_type = Int64
-        default = 4
+        default = 6
     end
     return parse_args(s)
 end
