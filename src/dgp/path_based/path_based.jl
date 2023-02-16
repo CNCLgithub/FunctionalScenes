@@ -3,6 +3,7 @@ export PathState, recurse_path_gm, fix_shortest_path
 using DataStructures: Stack
 
 struct PathState
+    dims::Tuple{Int64, Int64}
     # graph of the room so far
     g::PathGraph
     # geodisic distances
@@ -16,16 +17,18 @@ struct PathState
 end
 
 function PathState(r::GridRoom; temp::Float64 = 1.0)
+    dims = steps(r)
     ent = first(entrance(r))
     ext = first(exits(r))
     g = pathgraph(r)
     dm = noisy_distm(r, 0.1)
     ds = 1.0 ./ dijkstra_shortest_paths(g, ext, dm).dists
-    PathState(g, ds, ent, temp, 0)
+
+    PathState(dims, g, ds, ent, temp, 0)
 end
 
 function PathState(new_head::Int64, st::PathState)
-    PathState(st.g, st.gs, new_head, st.temp, st.step + 1)
+    PathState(st.dims, st.g, st.gs, new_head, st.temp, st.step + 1)
 end
 
 function head_weights(st::PathState, ns)
@@ -34,25 +37,35 @@ function head_weights(st::PathState, ns)
     ws = softmax(ds; t = temp / step)
 end
 
-function find_step(path::Pair{Int64, Int64}, k::Int64)::Pair
-    path
+function is_adjacent(t1::Int64, t2::Int64, col_dim::Int64)::Bool
+    dist = abs(t2 - t1)
+    dist == 1 || dist == col_dim
 end
 
-function find_step(path::Pair, k::Int64)::Pair
-    # found tile           | keep searching
-    path.first == k ? path : find_step(path.second, k)
+function rem_redundant_path(path::Pair, k::Int64, col_dim::Int64)::Pair
+    cnt = 0
+    is_redundant = false
+    p = path
+
+    while true
+        # remove adjacent subsections
+        is_redundant = (cnt > 0 && is_adjacent(p.first, k, col_dim))
+        (is_redundant || p.second == 0) && break
+
+        p = p.second
+        cnt += 1
+    end
+
+    (is_redundant ? rem_redundant_path(p, k, col_dim) : path)
 end
 
 function merge_grow_path(st::PathState, children)::Pair
-    @unpack head = st
+    @unpack head, dims = st
     # no children, then we are at the end of the path
     isempty(children) && return head => 0
     # otherwise will have 1 child
-    path::Pair = first(children)
-    # does the head tile close a loop in path?
-    step::Pair = find_step(path, head)
-    # remove the loop | add to path
-    step.first == head ? step : (head => path)
+    path_so_far::Pair = first(children)
+    head => rem_redundant_path(path_so_far, head, dims[2])
 end
 
 function parse_recurse_path(x::Pair)
@@ -73,7 +86,8 @@ function find_invalid_path(omat, g, x, gs, pmat)
         gs[n] == 0 && continue     # end of path
         # block if shorter
         # if gs[x] >= gs[n]
-        if gs[x] > gs[n]
+
+        if gs[x] >= gs[n]
             y = n
             break
         end
