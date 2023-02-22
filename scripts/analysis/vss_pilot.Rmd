@@ -36,17 +36,6 @@ library(readr)
 library(boot)
 library(svglite)
 
-
-
-# devtools::install_github("topfunky/gghighcontrast")
-# library(gghighcontrast)
-
-# th <- theme_classic() +
-#   theme(axis.text = element_text(size=26)) +
-#   theme(axis.title = element_text(size=30)) 
-# theme_set(th)
-
-# update_geom_defaults("point", list(size = 10))
 ```
 
 
@@ -327,12 +316,13 @@ between_trials <- model_raw %>%
   left_join(passed_hits)
 
 between_trials %>%
-  # filter(prop_att > 0) %>%
-  ggplot(aes(x = prop_att, y = f)) + 
+  filter(raw_att > 0.0) %>%
+  ggplot(aes(x = raw_att, y = f)) + 
   geom_point()
 
 between_trials %>%
-  with(lm(f ~ prop_att)) %>%
+  filter(raw_att > 0.0) %>%
+  with(lm(f ~ raw_att)) %>%
   summary()
 
 model <- model_raw %>%

@@ -28,3 +28,4 @@ user.conf
 scripts/analysis/*.tex
 scripts/analysis/*.pdf
 .Rproj.user
+.vscode

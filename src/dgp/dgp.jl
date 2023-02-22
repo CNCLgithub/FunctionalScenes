@@ -82,8 +82,11 @@ function valid_spaces(r::GridRoom)
     end
 
     # want to prevent "stitching" new pieces together
-    fvs = Set{Int64}(findall(vec_d .== obstacle_tile))
-    purge_around!(valid_map, r, fvs)
+    # fvs = Set{Int64}(findall(vec_d .== obstacle_tile))
+    fvs = findall(vec_d .== obstacle_tile)
+    ds = gdistances(g, fvs)
+    valid_map[ds .<= 1] .= false
+    # purge_around!(valid_map, r, fvs)
 
     PersistentVector(valid_map)
 end
@@ -140,8 +143,10 @@ end
 
 function purge_around!(vm::Vector{Bool}, r::GridRoom, f::Furniture)
     # want to prevent "stitching" new pieces together
+    # viz_room(r)
     for m in move_map
-        vm[move(r, f, m)] .= false
+        k = move(r, f, m)
+        vm[k] .= false
     end
     return nothing
 end
@@ -205,3 +210,4 @@ end
 
 # @gen functions
 include("gen.jl")
+include("path_based/path_based.jl")

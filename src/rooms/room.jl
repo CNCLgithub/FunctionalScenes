@@ -1,5 +1,5 @@
 export GridRoom, pathgraph, data, entrance, exits, bounds, steps, expand,
-    from_json, viz_room
+    from_json, viz_room, print_room
 
 #################################################################################
 # Type aliases
@@ -47,6 +47,19 @@ function GridRoom(steps, bounds)
     g = PathGraph(grid(steps))
     d = fill(floor_tile, steps)
     GridRoom(steps, bounds, Int64[], Int64[], g, d)
+end
+
+# using this GridRoom in render_rooms to change to wall_tiles
+# instead of changing struct to mutable
+function GridRoom(room::GridRoom, newdata::Matrix{Tile})
+    return GridRoom(
+        room.steps,
+        room.bounds,
+        room.entrance,
+        room.exits,
+        room.graph,
+        newdata,
+    )
 end
 
 """
@@ -133,11 +146,11 @@ function Base.show(io::IO, m::MIME"text/plain",
 end
 
 JSON.lower(r::GridRoom) = Dict(
-    steps  => steps(r),
-    bounds => bounds(r),
-    entrance => entrance(r),
-    exits => exits(r),
-    data   => convert.(Symbol, data(r))
+    :steps  => steps(r),
+    :bounds => bounds(r),
+    :entrance => entrance(r),
+    :exits => exits(r),
+    :data   => convert.(Symbol, data(r))
 )
 
 # FIXME: several janky statements
@@ -159,14 +172,28 @@ end
 
 # Debug visualization
 
-function viz_room(r::GridRoom, ocg::Matrix{Float64})
+function print_room(r::GridRoom, ocg::Matrix{Float64})
     d = data(r)
     c = deepcopy(ocg)
     c[d .== obstacle_tile] .= -1.
     c[d .== wall_tile] .= -2.
-    println(spy(c,
-                title = "Obstacles + path"))
+    spy(c,
+        title = "Obstacles + path",
+        # canvas = BrailleCanvas,
+        canvas = BlockCanvas,
+        font = "JuliaMono",
+        # height = 30,
+        background = UnicodePlots.ansi_color((0, 0, 0)),
+        width = 60)
+end
+function print_room(r::GridRoom, p::Vector{Int64})
+    m = zeros(steps(r))
+    m[p] .= 1
+    print_room(r, m)
+end
 
+function viz_room(r::GridRoom, ocg::Matrix{Float64})
+    println(print_room(r, ocg))
 end
 function viz_room(r::GridRoom, ocg::Matrix{Bool})
     viz_room(r, Float64.(ocg))
@@ -174,6 +201,9 @@ end
 function viz_room(r::GridRoom)
     c = zeros(steps(r))
     viz_room(r, c)
+end
+function viz_room(r::GridRoom, p::Vector{Int64})
+    println(print_room(r, p))
 end
 
 

@@ -32,9 +32,7 @@ function viz_grid(grid::Matrix{Float64}, title::String)
     return nothing
 end
 
-function save_gt_image(trace::Gen.Trace, path::String)
-    state = get_retval(trace)
-    params = first(get_args(trace))
+function save_gt_image(params, path::String)
     g = params.graphics
     translated = translate(params.gt, Int64[], cubes = true)
     batch = @pycall functional_scenes.render_scene_batch([translated], g)::PyObject

@@ -1,56 +1,98 @@
+using Plots
+using Images
+using Statistics
 using CSV
 using JLD2
 using FileIO
 using DataFrames
-using FunctionalScenes
+# using FunctionalScenes
+using LinearAlgebra
 
-using Plots
-using Images
 
 dataset = "vss_pilot_11f_32x32_restricted"
 
-function viz_chain(path::String)
-    att_d = "$(dirname(path))/attention"
+function aggregate_chains(path::String, chains::Int64)
+    att_d = "$(path)/attention"
     isdir(att_d) || mkdir(att_d)
-    gs_d = "$(dirname(path))/global_state"
+    pg_d = "$(path)/path"
+    isdir(att_d) || mkdir(att_d)
+    gs_d = "$(path)/global_state"
     isdir(gs_d) || mkdir(gs_d)
-    img_d = "$(dirname(path))/img_mu"
+    img_d = "$(path)/img_mu"
     isdir(img_d) || mkdir(img_d)
-    last_idx = load(path, "current_idx")
-    @show last_idx
-    # current_chain = load(path, "current_chain")
-    # FunctionalScenes.viz_gt(current_chain.state)
-    local data
-    for i = 1:100
-        data = load(path, "$i")
-        # att_hm = Gadfly.spy(data[:attention][:sensitivities])
-        # att_hm |> PNG("$(att_d)/$(i).png", 4inch, 4inch)
-        att = reverse(data[:attention][:sensitivities],
-                      dims = 1)
-        att_hm = Plots.heatmap(att)
-        Plots.savefig(att_hm, "$(att_d)/$(i).png")
-        gs_hm = Plots.heatmap(reverse(data[:global_state],
-                                      dims = 1))
-        Plots.savefig(gs_hm, "$(gs_d)/$(i).png")
-        # gs_hm = Gadfly.spy(data[:global_state])
-        # gs_hm |> PNG("$(gs_d)/$(i).png", 4inch, 4inch)
-        FileIO.save("$(img_d)/$(i).png",
-                    permutedims(data[:img_mu], (2, 3, 1)))
-    end
-end
 
+    avg_sens = zeros(32, 32)
+    avg_pg = zeros(32, 32)
+    steps = 50
+    for i = 1:steps
+        sens = zeros(32, 32)
+        gs = zeros(32, 32)
+        pg = zeros(32, 32)
+        img_mu = zeros(256, 256, 3)
+        for c = 1:chains
+            c_path = "$(path)/$(c).jld2"
+            isfile(c_path) || return nothing
+            local data
+            data = load(c_path, "$i")
+            # att_hm = Gadfly.spy(data[:attention][:sensitivities])
+            # att_hm |> PNG("$(att_d)/$(i).png", 4inch, 4inch)
+            sens += data[:attention][:sensitivities]
+            st = data[:qt]
+            gs += st.gs
+            pg += data[:path]
+            img_mu += permutedims(st.img_mu, (2, 3, 1))
+        end
+
+        rmul!(sens, 1.0 / chains)
+        rmul!(gs, 1.0 / chains)
+        rmul!(pg, 1.0 / chains)
+        rmul!(img_mu, 1.0 / chains)
+        avg_sens += sens
+        avg_pg += pg
+
+        path_hm = Plots.heatmap(reverse(pg, dims = 1),
+                               c = cgrad([:black, :white]))
+                               # c = :thermal)
+        Plots.savefig(path_hm, "$(pg_d)/$(i).svg")
+
+        att_hm = Plots.heatmap(reverse(sens, dims = 1),
+                               c = :gist_heat)
+                               # c = :thermal)
+                               # c = cgrad([:black, :orange]))
+        Plots.savefig(att_hm, "$(att_d)/$(i).svg")
+        gs_hm = Plots.heatmap(reverse(gs, dims = 1),
+                                c = cgrad(["#b3acb0ff", "#393a8bff"]))
+        Plots.savefig(gs_hm, "$(gs_d)/$(i).svg")
+        # if i == steps
+        #     gs_hm = Plots.heatmap(reverse(gs, dims = 1),
+        #                           c = cgrad(["#b3acb0ff", "#393a8bff"]))
+        #     Plots.savefig(gs_hm, "$(gs_d)/$(i).svg")
+        # end
+        FileIO.save("$(img_d)/$(i).png", img_mu)
+    end
+
+    rmul!(avg_sens, 1.0 / steps)
+    rmul!(avg_pg, 1.0 / steps)
+    path_hm = Plots.heatmap(reverse(avg_pg, dims = 1),
+                            c = cgrad([:black, :white]))
+    Plots.savefig(path_hm, "$(pg_d).svg")
+    att_hm = Plots.heatmap(reverse(avg_sens, dims = 1),
+                           c = cgrad([:black, :orange]))
+    Plots.savefig(att_hm, "$(att_d).svg")
+end
 function main()
     exp_path = "/spaths/experiments/$(dataset)"
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
+    df = df[df.id .== 10, :]
     for r in eachrow(df)
         base_path = "$(exp_path)/$(r.id)_$(r.door)"
-        chain_path = "$(base_path)/1.jld2"
-        @show chain_path
-        isfile(chain_path) || continue
-        viz_chain(chain_path)
-        chain_path = "$(base_path)_$(r.furniture)_$(r.move)/1.jld2"
-        isfile(chain_path) || continue
-        viz_chain(chain_path)
+        isdir(base_path) || continue
+        @show base_path
+        aggregate_chains(base_path, 2)
+        # shift_path = "$(base_path)_furniture_$(r.move)/1.jld2"
+        # isdir(shift_path) || continue
+        # @show shift_path
+        # aggregate_chains(shift_path, 2)
     end
     return nothing
 end
