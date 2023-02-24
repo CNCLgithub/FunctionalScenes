@@ -48,7 +48,7 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
     wget "$cont_pull_url" -O "${cont_dest}"
 
 [[ "${@}" =~ "cont_build" ]] && echo "building ${BUILD} -> ${cont_dest}" && \
-    SINGULARITY_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
+    APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
     "$cont_dest" "$BUILD"
 
 #################################################################################
@@ -59,14 +59,11 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
     echo "building python env at ${SENV[pyenv]}" && \
     $SING exec "${cont_dest}" bash -c "virtualenv ${SENV[pyenv]} && \
     source ${SENV[pyenv]}/bin/activate && \
-    python -m pip install --upgrade pip && \
-    python -m pip install --no-cache-dir -r requirements.txt" && \
-    # install pytorch3d. current requires special treatment
-    # ./env.d/run.sh curl -LO https://github.com/NVIDIA/cub/archive/1.10.0.tar.gz && \
-    ./env.d/run.sh tar xzf 1.10.0.tar.gz -C "${SENV[pyenv]}" && \
-    # ./env.d/run.sh python -m pip install --no-index  -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu113_pyt1100/download.html pytorch3d==0.6.1
-    ./env.d/run.sh python -m pip install -v git+https://github.com/facebookresearch/pytorch3d.git@main
-    # python -m pip install --no-cache-dir -r requirements.txt"
+    python -m pip install --upgrade pip" && \
+    # ./env.d/run.sh python -m pip install --no-cache-dir -r /project/requirements.txt && \
+    # install pytorch3d requires special treatment
+    ./env.d/run.sh env.d/install_pytorch3d.sh
+
 
 #################################################################################
 # Julia setup

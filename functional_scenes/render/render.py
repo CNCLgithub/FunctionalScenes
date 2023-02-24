@@ -44,6 +44,13 @@ def render_scene_pil(scene, graphics:AbstractGraphics):
                          mode = 'RGB')
     return r
 
+def render_mesh_pil(mesh, graphics:AbstractGraphics):
+    r = graphics.render(mesh)
+    r = r[0, ..., :3].cpu().numpy()
+    r =  Image.fromarray((r * 255).astype(np.uint8),
+                         mode = 'RGB')
+    return r
+
 
 def render_scene_batch(scenes, graphics:AbstractGraphics):
     beg_ts = time.time()

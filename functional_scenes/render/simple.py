@@ -59,7 +59,8 @@ class SimpleGraphics(AbstractGraphics):
         eye = cam_params['position']
         R, T = look_at_view_transform(device=self.device,
                                       # dist = 19,
-                                      at = ((0,0,1),),
+                                      at = ((0,0,-13),),
+                                      up= ((0,0,1),),
                                       eye = [eye])
                                       # elev = -80,
                                       # azim = 0)

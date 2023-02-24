@@ -31,6 +31,8 @@ if torch.cuda.is_available():
 else:
     device = torch.device("cpu")
 
+print(device)
+
 mesh = load_objs_as_meshes(['/spaths/renders/cow.obj'], device=device)
 
 

@@ -116,8 +116,8 @@ def scene_to_mesh(scene, device):
             wall_mesh,
             obs_mesh,
             # floor_mesh,
-            create_cuboid(scene['ceiling']).to(device),
-            create_cuboid(scene['floor']).to(device)
+            # create_cuboid(scene['ceiling']).to(device),
+            # create_cuboid(scene['floor']).to(device)
         ])
     else:
         floor = create_cuboid(scene['floor']).to(device)
