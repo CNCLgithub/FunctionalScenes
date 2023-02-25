@@ -104,24 +104,49 @@ function add_from_state_flip(params::QuadTreeModel,
     add(template, Set{Int64}(findall(possible)))
 end
 
-function consolidate_qt_states(params::QuadTreeModel, qt::QTState)
-    @unpack dims, instances = params
+"""
+    consolidate_qt_states(qt, dims)
+
+Projects the quad tree to a nxn matrix
+"""
+function consolidate_qt_states(qt::QTState, dims::Tuple{Int64, Int64})
     gs = Matrix{Float64}(undef, dims[1], dims[2])
     consolidate_qt_states!(gs, qt)
     return gs
 end
 
+function consolidate_qt_states(params::QuadTreeModel, qt::QTState)
+    consolidate_qt_states(qt, params.dims)
+end
 
-function consolidate_qt_states!(gs::Matrix{Float64}, 
+function consolidate_qt_states!(gs::Matrix{Float64},
                                 st::QTState)
-    foreach(s -> consolidate_qt_states!(gs, s), st.children)
-    # only update for terminal states
-    !isempty(st.children) && return nothing
-    idx = node_to_idx(st.node, size(gs, 1))
-    # potentially broadcast coarse states
-    gs[idx] .= weight(st)
+    d = size(gs, 1)
+    heads::Vector{QTState} = [st]
+    while !isempty(heads)
+        head = pop!(heads)
+        if isempty(head.children)
+            idx = node_to_idx(head.node, d)
+            # potentially broadcast coarse states
+            gs[idx] .= weight(head)
+        else
+            append!(heads, head.children)
+        end
+    end
     return nothing
 end
+
+# function consolidate_qt_states!(gs::Matrix{Float64},
+#                                 st::QTState)
+#     head = st
+#     foreach(s -> consolidate_qt_states!(gs, s), st.children)
+#     # only update for terminal states
+#     !isempty(st.children) && return nothing
+#     idx = node_to_idx(st.node, size(gs, 1))
+#     # potentially broadcast coarse states
+#     gs[idx] .= weight(st)
+#     return nothing
+# end
 
 function instances_from_gen(params::QuadTreeModel, instances)
     rs = Vector{GridRoom}(undef, params.instances)
@@ -138,6 +163,7 @@ function image_from_instances(instances, params)
         instances = [instances[1]]
     end
     instances = map(r -> translate(r, Int64[], cubes=true), instances)
+    # TODO compute mean and std in python first
     batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
     Array{Float64, 4}(batch.cpu().numpy())
 end

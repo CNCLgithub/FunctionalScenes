@@ -2,6 +2,19 @@ using Base.Iterators: product
 
 export QTNode, QTState
 
+"""
+
+A production node in the quad tree.
+Defines a spatially oriented rectangle
+
+# Properties
+
+- center: The XY center of the node
+- dims: The xy extents of the node
+- level: The number of splits with `level==1` denoting no splits
+- max_level: The maximum number of splits allowed
+- tree_idx: The Gen-trace index of the node in the production trace
+"""
 struct QTNode
     center::SVector{2, Float64}
     dims::SVector{2, Float64}
@@ -9,14 +22,26 @@ struct QTNode
     max_level::Int64
     tree_idx::Int64
 end
+
+"""
+    area(n)
+
+The area of the node.
+"""
 area(n::QTNode) = prod(n.dims)
 
+# helper constants
 const _slope =  SVector{2, Float64}([1., -1.])
 const _intercept =  SVector{2, Float64}([0.5, 0.5])
 
 """
+    pos_to_idx(pos, n)
 
 Maps R^2 position of QTNode to a linear index in nxn
+
+# Arguments
+- pos: XY position
+- n  : The
 """
 function pos_to_idx(pos::SVector{2, Float64}, n::Int64)
     # cartesian coordinates

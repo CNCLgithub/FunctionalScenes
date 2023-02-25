@@ -11,7 +11,6 @@ end
 @gen function qt_aggregation(n::QTNode,
                                       children::Vector{QTState})
     local mu
-    local instances
     if isempty(children)
         mu = @trace(uniform(0., 1.), :mu)
     else
