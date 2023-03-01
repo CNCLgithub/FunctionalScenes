@@ -195,22 +195,34 @@ leaves(st::QTAggNode) = st.leaves
 node(st::QTAggNode) = st.node
 Base.length(st::QTAggNode) = st.k
 
+function contains(st::QTAggNode, p::SVector{2, Float64})
+    contains(st.node, p)
+end
+
+"""
+    leaf_vec(s)
+
+Returns all of the leaf `QTAggNode`s from root `s`.
+"""
 function leaf_vec(s::QTAggNode)::Vector{QTAggNode}
     v = Vector{QTAggNode}(undef, s.leaves)
-    add_leaves!(v, 1, s)
+    add_leaves!(v, s)
     return v
 end
 
-#TODO: implement using iteration?
-function add_leaves!(v::Vector{QTAggNode}, i::Int64, s::QTAggNode)
-    if isempty(s.children)
-        v[i] = s
-        return i + 1
+function add_leaves!(v::Vector{QTAggNode}, s::QTAggNode)
+    heads::Vector{QTAggNode} = [s]
+    i::Int64 = 1
+    while !isempty(heads)
+        head = pop!(heads)
+        if isempty(head.children)
+            v[i] = head
+            i += 1
+        else
+            append!(heads, head.children)
+        end
     end
-    for c in s.children
-        i = add_leaves!(v, i, c)
-    end
-    return i
+    return nothing
 end
 
 """
@@ -316,34 +328,4 @@ function inh_adj_matrix!(am::Matrix{Bool},
 end
 function inheritance_graph(st::QTAggNode)
     SimpleDiGraph(inh_adj_matrix(st))
-end
-
-function nav_graph(st::QTAggNode)
-    adj = Matrix{Bool}(falses(st.leaves, st.leaves))
-    ds = fill(Inf, st.leaves, st.leaves)
-    lv = leaf_vec(st)
-    for i = 1:(st.leaves-1), j = (i+1):st.leaves
-        x = lv[i]
-        y = lv[j]
-        d = dist(x.node, y.node)
-        # spatial distance of x <-> y
-        dw = 0.5 * (x.node.dims[1] + y.node.dims[1])
-        # average obstacle cost of x <-> y
-        bw = 0.5 * (weight(x) + weight(y))
-        w = dw * bw
-        # println(i => j => d)
-        # println(x.node.center => y.node.center => d)
-        if contact(x.node, y.node, d)
-            adj[i, j] = true
-            adj[j, i] = true
-            ds[i, j] = w
-            ds[j, i] = w
-        end
-    end
-    (adj, ds, lv)
-end
-
-
-function contains(st::QTAggNode, p::SVector{2, Float64})
-    contains(st.node, p)
 end

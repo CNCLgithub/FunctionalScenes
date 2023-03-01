@@ -38,7 +38,7 @@ Parameters for an instance of the `QuadTreeModel`.
     split_prob::Float64 = 0.5
 
     # coarsest node
-    start_node::QTNode = QTNode(center, bounds, 1, max_depth, 1)
+    start_node::QTProdNode = QTProdNode(center, bounds, 1, max_depth, 1)
 
     #############################################################################
     # Multigranular empirical estimation
@@ -77,7 +77,7 @@ end
 struct QTPath
     g::SimpleGraph
     dm::Matrix{Float64}
-    vs::Vector{Int64}
+    edges::Vector{AbstractEdge}
 end
 
 
@@ -87,16 +87,16 @@ struct QuadTreeState
     instances::Vector{GridRoom}
     img_mu::Array{Float64, 3}
     path::QTPath
-    lv::Vector{QTAggNodes}
+    lv::Vector{QTAggNode}
 end
 
 function QuadTreeState(qt, gs, instances, img_mu,  pg)
    QuadTreeState(qt, gs, instances, img_mu, pg, leaf_vec(qt))
 end
 
-function QTPath(st::QTState)
+function QTPath(st::QTAggNode)
     ws = Matrix{Float64}(undef, 1, 1)
-    ws[1] = weight(st) * st.node.dims[1]
+    ws[1] = weight(st) * area(st.node)
     QTPath(SimpleGraph(ones(1,1)), ws, Int64[1, 1])
 end
 
@@ -113,20 +113,20 @@ end
 
 Projects the quad tree to a nxn matrix
 """
-function project_qt(qt::QTState, dims::Tuple{Int64, Int64})
+function project_qt(qt::QTAggNode, dims::Tuple{Int64, Int64})
     gs = Matrix{Float64}(undef, dims[1], dims[2])
     project_qt!(gs, qt)
     return gs
 end
 
-function project_qt(params::QuadTreeModel, qt::QTState)
+function project_qt(params::QuadTreeModel, qt::QTAggNode)
     project_qt(qt, params.dims)
 end
 
 function project_qt!(gs::Matrix{Float64},
-                                st::QTState)
+                     st::QTAggNode)
     d = size(gs, 1)
-    heads::Vector{QTState} = [st]
+    heads::Vector{QTAggNode} = [st]
     while !isempty(heads)
         head = pop!(heads)
         if isempty(head.children)
@@ -140,17 +140,10 @@ function project_qt!(gs::Matrix{Float64},
     return nothing
 end
 
-# function consolidate_qt_states!(gs::Matrix{Float64},
-#                                 st::QTState)
-#     head = st
-#     foreach(s -> consolidate_qt_states!(gs, s), st.children)
-#     # only update for terminal states
-#     !isempty(st.children) && return nothing
-#     idx = node_to_idx(st.node, size(gs, 1))
-#     # potentially broadcast coarse states
-#     gs[idx] .= weight(st)
-#     return nothing
-# end
+
+#################################################################################
+# Graphics
+#################################################################################
 
 function instances_from_gen(params::QuadTreeModel, instances)
     rs = Vector{GridRoom}(undef, params.instances)
@@ -193,29 +186,71 @@ function graphics_from_instances(instances, params)
     (mu[1, :, :, :], sigma[1, :, :, :])
 end
 
-function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
-    st.leaves < 4 && return (QTPath(st), QTState[st])
+
+#################################################################################
+# Planning
+#################################################################################
+
+function a_star_heuristic(dest::QTAggNode, d::Real)
+    src -> dist(src.node, dest.node) * d
+end
+
+function nav_graph(st::QTAggNode)
+    adm = fill(false, (st.leaves, st.leaves))
+    dsm = fill(Inf, (st.leaves, st.leaves))
+    lv = leaf_vec(st)
+    # TODO: add @inbounds
+    for i = 1:(st.leaves-1), j = (i+1):st.leaves
+        x = lv[i]
+        y = lv[j]
+        d = dist(x.node, y.node)
+        # only care when nodes are touching
+        contact(x.node, y.node, d) || continue
+        #  work to traverse each node
+        work = area(x.node) * weight(x) + area(y.node) * weight(y)
+        adm[i, j] = adm[j, i] = true
+        dsm[i, j] = dsm[j, i] = work
+    end
+    (adj, dsm, lv)
+end
+
+function qt_a_star(st::QTAggNode, d::Int64, ent::Int64, ext::Int64)
+    #REVIEW: Shouldn't this either be 1 or >4?
+    st.leaves < 4 && return (QTPath(st), QTAggNode[st])
     # adjacency, distance matrix, and leaves
-    adj, ds, lv = nav_graph(st)
-    # display(sparse(adj))
-    # display(ds)
+    ad, dm, lv = nav_graph(st)
     # scale dist matrix by room size
-    rmul!(ds, d)
-    g = SimpleGraph(adj)
-    # map entrance and exit to qt
+    rmul!(dm, d)
+    g = SimpleGraph(ad)
+    # map entrance and exit in room to qt
     ent_p = idx_to_node_space(ent, d)
     a = findfirst(s -> contains(s, ent_p), lv)
     ext_p = idx_to_node_space(ext, d)
     b = findfirst(s -> contains(s, ext_p), lv)
     # compute path and path grid
-    ps = a_star(g, a, b, ds)
-    path = src.(ps)
+    path = a_star(g, a, b,
+                distmx = dm,
+                heurisitc = a_star_heuristic(b, d))
     (QTPath(g, ds, path), lv)
 end
 
-# TODO: Doc me!
-function ridx_to_leaf(st::QuadTreeState, ridx::Int64, d::Int64)
-    point = idx_to_node_space(ridx, d)
+#################################################################################
+# Inference utils
+#################################################################################
+
+"""
+    ridx_to_leaf(st, idx, c)
+
+Returns
+
+# Arguments
+
+- `st::QuadTreeState`
+- `ridx::Int64`: Linear index in room space
+- `c::Int64`: Column size of room
+"""
+function room_to_leaf(st::QuadTreeState, ridx::Int64, c::Int64)
+    point = idx_to_node_space(ridx, c)
     l = findfirst(s -> contains(s, point), st.lv)
     st.lv[l]
 end

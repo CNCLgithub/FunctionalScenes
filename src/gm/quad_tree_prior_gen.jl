@@ -1,15 +1,15 @@
 export quad_tree_prior
 
-@gen (static) function qt_production(n::QTNode)
+@gen (static) function qt_production(n::QTProdNode)
     w = produce_weight(n)
     s = @trace(bernoulli(w), :produce)
-    children::Vector{QTNode} = s ? produce_qt(n) : QTNode[]
+    children::Vector{QTProdNode} = s ? produce_qt(n) : QTProdNode[]
     result = Production(n, children)
     return result
 end
 
-@gen function qt_aggregation(n::QTNode,
-                             children::Vector{QTState})
+@gen function qt_aggregation(n::QTProdNode,
+                             children::Vector{QTAggNode})
     local mu
     if isempty(children)
         mu = @trace(uniform(0., 1.), :mu)
