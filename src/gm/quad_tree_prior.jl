@@ -1,6 +1,11 @@
 using Base.Iterators: product
 
-export QTNode, QTState
+export QTProdNode, QTAggNode
+
+
+#################################################################################
+# Production
+#################################################################################
 
 """
 
@@ -15,7 +20,7 @@ Defines a spatially oriented rectangle
 - max_level: The maximum number of splits allowed
 - tree_idx: The Gen-trace index of the node in the production trace
 """
-struct QTNode
+struct QTProdNode
     center::SVector{2, Float64}
     dims::SVector{2, Float64}
     level::Int64
@@ -28,7 +33,7 @@ end
 
 The area of the node.
 """
-area(n::QTNode) = prod(n.dims)
+area(n::QTProdNode) = prod(n.dims)
 
 # helper constants
 const _slope =  SVector{2, Float64}([1., -1.])
@@ -37,7 +42,7 @@ const _intercept =  SVector{2, Float64}([0.5, 0.5])
 """
     pos_to_idx(pos, n)
 
-Maps R^2 position of QTNode to a linear index in nxn
+Maps R^2 position of QTProdNode to a linear index in nxn
 
 # Arguments
 - pos: XY position
@@ -52,9 +57,9 @@ end
 
 """
 
-Maps R^2 position of QTNode to a linear index in nxn
+Maps R^2 position of QTProdNode to a linear index in nxn
 """
-function node_to_idx(n::QTNode, d::Int64)
+function node_to_idx(n::QTProdNode, d::Int64)
     @unpack center, level, max_level, dims = n
     if level == max_level
         # single index
@@ -78,7 +83,7 @@ function node_to_idx(n::QTNode, d::Int64)
     return idx
 end
 
-function contains(n::QTNode, p::SVector{2, Float64})
+function contains(n::QTProdNode, p::SVector{2, Float64})
     @unpack center, dims = n
     lower = center - 0.5 * dims
     upper = center + 0.5 * dims
@@ -88,6 +93,10 @@ end
 """
 
 Maps a linear index in nxn to a R^2 plane [-0.5, 0.5]
+
+# Arguments
+- i: linear index
+- d: number of columns
 """
 function idx_to_node_space(i::Int64, d::Int64)
     c = [i / d, ((i - 1) % d) + 1.0]
@@ -97,15 +106,21 @@ function idx_to_node_space(i::Int64, d::Int64)
     SVector{2, Float64}(c)
 end
 
-function dist(x::QTNode, y::QTNode)
+function dist(x::QTProdNode, y::QTProdNode)
     norm(x.center - y.center) - (0.5*x.dims[1]) - (0.5*y.dims[1])
 end
 
-function contact(a::QTNode, b::QTNode)
+"""
+    contact(a, b)
+
+True if a wall of each node are touching.
+> Note: Both nodes can be of different area (granularity)
+"""
+function contact(a::QTProdNode, b::QTProdNode)
     d = dist(a,b)
     contact(a, b, d)
 end
-function contact(a::QTNode, b::QTNode, d::Float64)
+function contact(a::QTProdNode, b::QTProdNode, d::Float64)
     aa = area(a)
     ab = area(b)
     # if same size, then contact is simply distance
@@ -117,28 +132,77 @@ function contact(a::QTNode, b::QTNode, d::Float64)
     d < thresh
 end
 
-struct QTState
+# REVIEW: Some way to parameterize weights?
+function produce_weight(n::QTProdNode)::Float64
+    @unpack level, max_level = n
+    # maximum depth, do not split
+    # otherwise uniform
+    level == max_level && return 0.0
+    return 0.5
+end
+
+const sqrt_v = SVector{2, Float64}(fill(sqrt(2), 2))
+const q1 = SVector{2, Float64}([-1.0,  1.0])
+const q2 = SVector{2, Float64}([-1.0, -1.0])
+const q3 = SVector{2, Float64}([ 1.0,  1.0])
+const q4 = SVector{2, Float64}([ 1.0, -1.0])
+
+"""
+Splits the node into 4 children, centered in 4 quadrants
+with respect to the center of the parent.
+"""
+function produce_qt(n::QTProdNode)::Vector{QTProdNode}
+    @unpack center, dims, level, max_level = n
+    # calculate new centers
+    dc = 0.25 .* dims # .* sqrt_v
+    # offset by 1/2 the diagonal
+    c11 = center + (q1 .* dc) # top left
+    c21 = center + (q2 .* dc) # bottom left
+    c12 = center + (q3 .* dc) # top right
+    c22 = center + (q4 .* dc) # bottom right
+    # half xy dimensions (1/4 area)
+    new_dims = 0.5 * dims
+    children = Vector{QTProdNode}(undef, 4)
+    children[1] = QTProdNode(c11, new_dims, level + 1, max_level,
+                         Gen.get_child(n.tree_idx, 1, 4))
+    children[2] = QTProdNode(c12, new_dims, level + 1, max_level,
+                         Gen.get_child(n.tree_idx, 2, 4))
+    children[3] = QTProdNode(c21, new_dims, level + 1, max_level,
+                         Gen.get_child(n.tree_idx, 3, 4))
+    children[4] = QTProdNode(c22, new_dims, level + 1, max_level,
+                         Gen.get_child(n.tree_idx, 4, 4))
+    # REVIEW: Way to used static vector?
+    # SVector{4, QTProdNode}(children)
+    children
+end
+
+#################################################################################
+# Aggregation
+#################################################################################
+
+struct QTAggNode
     mu::Float64
     u::Float64
     k::Int64
     leaves::Int64
-    node::QTNode
-    children::Vector{QTState}
+    node::QTProdNode
+    children::Vector{QTAggNode}
 end
 
-weight(st::QTState) = st.mu
-dof(st::QTState) = st.u
-leaves(st::QTState) = st.leaves
-node(st::QTState) = st.node
-Base.length(st::QTState) = st.k
+weight(st::QTAggNode) = st.mu
+dof(st::QTAggNode) = st.u
+leaves(st::QTAggNode) = st.leaves
+node(st::QTAggNode) = st.node
+Base.length(st::QTAggNode) = st.k
 
-function leaf_vec(s::QTState)::Vector{QTState}
-    v = Vector{QTState}(undef, s.leaves)
+function leaf_vec(s::QTAggNode)::Vector{QTAggNode}
+    v = Vector{QTAggNode}(undef, s.leaves)
     add_leaves!(v, 1, s)
     return v
 end
 
-function add_leaves!(v::Vector{QTState}, i::Int64, s::QTState)
+#TODO: implement using iteration?
+function add_leaves!(v::Vector{QTAggNode}, i::Int64, s::QTAggNode)
     if isempty(s.children)
         v[i] = s
         return i + 1
@@ -149,6 +213,36 @@ function add_leaves!(v::Vector{QTState}, i::Int64, s::QTState)
     return i
 end
 
+"""
+
+Aggregates quad tree production nodes into a tree, keeping track of
+DOF.
+"""
+function aggregate_qt(n::QTProdNode, y::Float64,
+                      children::Vector{QTAggNode})::QTAggNode
+    if isempty(children)
+        u  = 0.0
+        k = 1
+        l = 1
+    else
+        # equal area => mean of variance
+        u = sqrt(mean(dof.(children).^2))
+        k = sum(length.(children)) + 1
+        l = sum(leaves.(children))
+    end
+    QTAggNode(y, u, k, l, n, children)
+end
+
+#################################################################################
+# Misc.
+#################################################################################
+
+"""
+    get_depth(n::Int64)
+
+Returns the depth of a node in a quad tree,
+using Gen's `Recurse` indexing system.
+"""
 function get_depth(n::Int64)
     n == 1 && return 1
     p = Gen.get_parent(n, 4)
@@ -161,87 +255,36 @@ function get_depth(n::Int64)
 end
 
 
-function traverse_qt(head::QTState, dst::Int64)
-    (isempty(head.children) || dst == 1) && return head
-    d = get_depth(dst) - 1
+"""
+    traverse_qt(root, dest)
+
+Returns the quad tree node at index `dest`.
+"""
+function traverse_qt(root::QTAggNode, dest::Int64)
+    # No children or root is destination
+    (isempty(root.children) || dest == 1) && return root
+    d = get_depth(dest) - 1
     path = Vector{Int64}(undef, d)
-    idx = dst
+    idx = dest
+    # REVIEW: More direct mapping of dest -> Node?
+    # build path to root from dest
     @inbounds for i = 1:d
         path[d - i + 1] = Gen.get_child_num(idx, 4)
         idx = Gen.get_parent(idx, 4)
     end
+    # traverse qt using `path`
     for i = 1:d
         # in the context of split-merge,
         # for the backward of a merge, t_prime will not
         # have a child at the last step
-        isempty(head.children) && break
-        head = head.children[path[i]]
+        isempty(root.children) && break
+        root = root.children[path[i]]
     end
-    head
+    root
 end
 
-function produce_weight(n::QTNode)::Float64
-    @unpack level, max_level = n
-    # maximum depth, do not split
-    # otherwise uniform
-    level == max_level && return 0.0
-    return 0.5
-    # level == 1 && return 0.9
-    # return 0.3
-end
 
-const sqrt_v = SVector{2, Float64}(fill(sqrt(2), 2))
-const q1 = SVector{2, Float64}([-1.0,  1.0])
-const q2 = SVector{2, Float64}([-1.0, -1.0])
-const q3 = SVector{2, Float64}([ 1.0,  1.0])
-const q4 = SVector{2, Float64}([ 1.0, -1.0])
-
-# split
-"""
-Splits the node into 4 children, centered in 4 quadrants
-with respect to the center of the parent.
-"""
-function produce_qt(n::QTNode)::Vector{QTNode}
-    @unpack center, dims, level, max_level = n
-    # calculate new centers
-    dc = 0.25 .* dims # .* sqrt_v
-    # offset by 1/2 the diagonal
-    c11 = center + (q1 .* dc) # top left
-    c21 = center + (q2 .* dc) # bottom left
-    c12 = center + (q3 .* dc) # top right
-    c22 = center + (q4 .* dc) # bottom right
-    # half xy dimensions (1/4 area)
-    new_dims = 0.5 * dims
-    children = Vector{QTNode}(undef, 4)
-    children[1] = QTNode(c11, new_dims, level + 1, max_level,
-                         Gen.get_child(n.tree_idx, 1, 4))
-    children[2] = QTNode(c12, new_dims, level + 1, max_level,
-                         Gen.get_child(n.tree_idx, 2, 4))
-    children[3] = QTNode(c21, new_dims, level + 1, max_level,
-                         Gen.get_child(n.tree_idx, 3, 4))
-    children[4] = QTNode(c22, new_dims, level + 1, max_level,
-                         Gen.get_child(n.tree_idx, 4, 4))
-    # SVector{4, QTNode}(children)
-    children
-end
-
-# merge
-function aggregate_qt(n::QTNode, y::Float64,
-                      children::Vector{QTState})::QTState
-    if isempty(children)
-        u  = 0.0
-        k = 1
-        l = 1
-    else
-        # equal area => mean of variance
-        u = sqrt(mean(dof.(children).^2))
-        k = sum(length.(children)) + 1
-        l = sum(leaves.(children))
-    end
-    QTState(y, u, k, l, n, children)
-end
-
-function inh_adj_matrix(st::QTState)
+function inh_adj_matrix(st::QTAggNode)
     am = Matrix{Bool}(falses(st.k + 1, st.k + 1))
     if st.k == 1
         am[1,2] = true
@@ -251,7 +294,7 @@ function inh_adj_matrix(st::QTState)
 end
 
 function inh_adj_matrix!(am::Matrix{Bool},
-                     st::QTState,
+                     st::QTAggNode,
                      node::Int64,
                      node_index::Int64)
     c_index = node_index + 1
@@ -271,11 +314,11 @@ function inh_adj_matrix!(am::Matrix{Bool},
     println("ret c_index: $(c_index)")
     return c_index
 end
-function inheritance_graph(st::QTState)
+function inheritance_graph(st::QTAggNode)
     SimpleDiGraph(inh_adj_matrix(st))
 end
 
-function nav_graph(st::QTState)
+function nav_graph(st::QTAggNode)
     adj = Matrix{Bool}(falses(st.leaves, st.leaves))
     ds = fill(Inf, st.leaves, st.leaves)
     lv = leaf_vec(st)
@@ -301,6 +344,6 @@ function nav_graph(st::QTState)
 end
 
 
-function contains(st::QTState, p::SVector{2, Float64})
+function contains(st::QTAggNode, p::SVector{2, Float64})
     contains(st.node, p)
 end

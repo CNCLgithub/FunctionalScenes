@@ -4,6 +4,9 @@ export QuadTreeModel, qt_a_star
 # Model specification
 #################################################################################
 
+"""
+Parameters for an instance of the `QuadTreeModel`.
+"""
 @with_kw struct QuadTreeModel
 
     #############################################################################
@@ -61,6 +64,7 @@ Maximum depth of quad tree
 """
 function _max_depth(r::GridRoom)
     @unpack bounds, steps = r
+    # FIXME: allow for arbitrary room steps
     @assert all(ispow2.(steps))
     convert(Int64, minimum(log2.(steps)) + 1)
 end
@@ -78,12 +82,12 @@ end
 
 
 struct QuadTreeState
-    qt::QTState
+    qt::QTAggNode
     gs::Matrix{Float64}
     instances::Vector{GridRoom}
     img_mu::Array{Float64, 3}
     path::QTPath
-    lv::Vector{QTState}
+    lv::Vector{QTAggNodes}
 end
 
 function QuadTreeState(qt, gs, instances, img_mu,  pg)
@@ -105,21 +109,21 @@ function add_from_state_flip(params::QuadTreeModel,
 end
 
 """
-    consolidate_qt_states(qt, dims)
+    project_qt(qt, dims)
 
 Projects the quad tree to a nxn matrix
 """
-function consolidate_qt_states(qt::QTState, dims::Tuple{Int64, Int64})
+function project_qt(qt::QTState, dims::Tuple{Int64, Int64})
     gs = Matrix{Float64}(undef, dims[1], dims[2])
-    consolidate_qt_states!(gs, qt)
+    project_qt!(gs, qt)
     return gs
 end
 
-function consolidate_qt_states(params::QuadTreeModel, qt::QTState)
-    consolidate_qt_states(qt, params.dims)
+function project_qt(params::QuadTreeModel, qt::QTState)
+    project_qt(qt, params.dims)
 end
 
-function consolidate_qt_states!(gs::Matrix{Float64},
+function project_qt!(gs::Matrix{Float64},
                                 st::QTState)
     d = size(gs, 1)
     heads::Vector{QTState} = [st]
@@ -209,6 +213,7 @@ function qt_a_star(st::QTState, d::Int64, ent::Int64, ext::Int64)
     (QTPath(g, ds, path), lv)
 end
 
+# TODO: Doc me!
 function ridx_to_leaf(st::QuadTreeState, ridx::Int64, d::Int64)
     point = idx_to_node_space(ridx, d)
     l = findfirst(s -> contains(s, point), st.lv)

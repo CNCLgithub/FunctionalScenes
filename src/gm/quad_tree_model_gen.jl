@@ -21,11 +21,12 @@ end
 
 @gen function qt_model(params::QuadTreeModel)
     # initialize trackers
-    qt = {:trackers} ~ quad_tree(params.start_node, 1)
+    qt = {:trackers} ~ quad_tree_prior(params.start_node, 1)
 
     # a global room matrix
-    global_state = consolidate_qt_states(params, qt)
+    global_state = project_qt(params, qt)
 
+    # REVIEW: Maybe this doesn't need to be tracked?
     # empirical estimation of multigranular predictions
     obstacles = {:instances} ~ Gen.Map(obst_gen)(fill(global_state,
                                                       params.instances))
