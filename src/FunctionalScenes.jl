@@ -25,10 +25,12 @@ using FunctionalCollections
 
 using PyCall
 const torch = PyNULL()
-const functional_scenes = PyNULL()
+const pytorch3d = PyNULL()
+const fs_py = PyNULL()
 function __init__()
     copy!(torch, pyimport("torch"))
-    copy!(functional_scenes, pyimport("functional_scenes"))
+    copy!(pytorch3d, pyimport("pytorch3d"))
+    copy!(fs_py, pyimport("functional_scenes"))
 end
 
 #################################################################################

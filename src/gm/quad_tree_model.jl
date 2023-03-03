@@ -52,9 +52,12 @@ Parameters for an instance of the `QuadTreeModel`.
     #############################################################################
     #
     img_size::Tuple{Int64, Int64} = (256, 256)
-    device = _load_device()
+    device::PyObject = _load_device()
     # configure pytorch3d render
-    graphics = _init_graphics(template, img_size, device)
+    camera::PyObject = PyObject(Dict(:position => [0., -20.0, -10.0]))
+    graphics::PyObject = _init_graphics(img_size, device, camera)
+    # preload partial scene mesh
+    scene_mesh::PyObject = _init_scene_mesh(gt, graphics, device)
     # minimum variance in prediction
     base_sigma::Float64 = 0.1
 end
@@ -145,45 +148,50 @@ end
 # Graphics
 #################################################################################
 
+"""
+    instances_from_gen(params, instances)
+
+Converts random samples of geometry from `obst_gen` into `GridRoom`.
+"""
 function instances_from_gen(params::QuadTreeModel, instances)
-    rs = Vector{GridRoom}(undef, params.instances)
-    @inbounds for i = 1:params.instances
+    n = length(instances)
+    rs = Vector{GridRoom}(undef, n)
+    @inbounds for i = 1:n
         rs[i] = add_from_state_flip(params, instances[i])
     end
     return rs
 end
 
+const A3 = Array{Float64, 3}
 
-function image_from_instances(instances, params)
-    g = params.graphics
-    if length(instances) > 1
-        instances = [instances[1]]
+function graphics_from_instances(inst::AbstractArray{Room},
+                                 p::QuadTreeModel)
+    @unpack graphics, scene_mesh, dims, device = p
+    n = length(inst)
+    meshes = Vector{PyObject}(undef, n)
+    vdim = PyObject(max(dims) * 0.5)
+    @inbounds for i = 1:n
+        voxels = voxelize(inst[i], obstacle_tile)
+        obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device;
+                                             color="blue")::PyObject
+        meshes[i] = @pycall pytorch3d.join_meshes_as_scene(scene_mesh,
+                                                           obs_mesh)::PyObject
     end
-    instances = map(r -> translate(r, Int64[], cubes=true), instances)
-    # TODO compute mean and std in python first
-    batch = @pycall functional_scenes.render_scene_batch(instances, g)::PyObject
-    Array{Float64, 4}(batch.cpu().numpy())
+    mu,sd = @pycall fs_py.batch_render_stats(i, g)::Tuple{A3, A3}
+    (mu, sd .+ p.base_sigma)
 end
 
 
-
-function graphics_from_instances(instances, params)
-    g = params.graphics
-    if length(instances) > 1
-        instances = [instances[1]]
-    end
-    # println("printing instances")
-    # foreach(viz_gt, instances)
-
-    batch = image_from_instances(instances, params)
-    mu = mean(batch, dims = 1)
-    if length(instances) > 1
-        sigma = std(batch, mean = mu, dims = 1)
-        sigma .+= params.base_sigma
-    else
-        sigma = fill(params.base_sigma, size(mu))
-    end
-    (mu[1, :, :, :], sigma[1, :, :, :])
+function graphics_from_instances(i::Room,
+                                 p::QuadTreeModel)
+    @unpack graphics, scene_mesh, dims, device = p
+    voxels = voxelize(i, obstacle_tile)
+    vdim = max(dims) * 0.5
+    obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device; color="blue")::PyObject
+    mesh = @pycall pytorch3d.join_meshes_as_scene(scene_mesh, obs_mesh)::PyObject
+    mu = @pycall fs_py.render_scene_single(mesh, graphics)::A3
+    sigma = fill(params.base_sigma, size(mu))
+    (mu, sigma)
 end
 
 
@@ -264,8 +272,18 @@ function all_downstream_selection(p::QuadTreeModel)
     return s
 end
 
-function create_obs(params::QuadTreeModel, r::GridRoom)
-    mu, _ = graphics_from_instances([r], params)
+function _init_scene_mesh(r::GridRoom, device::PyObject, graphics::PyObject)
+    voxels = voxelize(r, floor_tile)
+    vdim = max(size(voxels)) * 0.5
+    floor_mesh = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
+    voxels = voxelize(r, wall_tile)
+    wall_mesh = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
+    mesh = @pycall pytorch3d.join_meshes_as_scene([floor_mesh,
+                                                   wall_mesh])::PyObject
+end
+
+function create_obs(p::QuadTreeModel)
+    mu, _ = graphics_from_instances(gt, p)
     constraints = Gen.choicemap()
     constraints[:viz] = mu
     constraints

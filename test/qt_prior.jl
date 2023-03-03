@@ -18,9 +18,9 @@ function mytest()
     trace, ls = Gen.generate(qt_aggregation, (start_node, QTAggNode[]))
     # Test recurse model
     # trace, ls = Gen.generate(fixed_qt_rec, (start_node, 2))
-    trace, ls = Gen.generate(quad_tree_prior, (start_node, 1))
+    @time (trace, ls) = Gen.generate(quad_tree_prior, (start_node, 1))
 
-    display(get_choices(trace))
+    # display(get_choices(trace))
 
 
     # # with constraints
