@@ -7,8 +7,7 @@ import torch
 import numpy as np
 # import matplotlib.pyplot as plt
 import functional_scenes
-from functional_scenes.render import (render_scene,
-                                      SimpleGraphics)
+from functional_scenes.render import SimpleGraphics
 from functional_scenes.render.utils import from_voxels
 
 from pytorch3d.structures import join_meshes_as_scene
@@ -68,7 +67,8 @@ obs_mesh = from_voxels(obs_voxels, vdim, device, color='blue')
 end_ts = time.time()
 print(end_ts - beg_ts)
 
-scene_mesh = join_meshes_as_scene([floor_mesh, wall_mesh, obs_mesh])
+mesh1 = join_meshes_as_scene([floor_mesh, wall_mesh])
+scene_mesh = join_meshes_as_scene([obs_mesh, mesh1])
 
 beg_ts = time.time()
 img = functional_scenes.render.render_mesh_pil(scene_mesh, graphics)

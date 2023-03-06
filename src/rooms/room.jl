@@ -120,6 +120,48 @@ function expand(r::GridRoom, factor::Int64)::GridRoom
     GridRoom(s, bounds(r) .* factor, sents, sexits, sg, sd)
 end
 
+function voxelize(r::GridRoom, tile::Tile)
+    #REVIEW: Generalize to non-square rooms
+    d = maximum(steps(r))
+    voxels = fill(false, (d,d,d))
+    voxelize!(voxels, r, tile)
+    return voxels
+end
+
+function voxelize!(voxels::Array{Bool, 3},
+                   r::GridRoom,
+                   tile::Floor)
+    #REVIEW: constant?
+    #REVIEW: parameterize wall height? (x-dim)
+    h = 6
+    voxels[1, :, :] .= true
+    voxels[h + 1, :, :] .= true
+    return nothing
+end
+
+function voxelize!(voxels::Array{Bool, 3},
+                   r::GridRoom,
+                   tile::Wall)
+    #REVIEW: parameterize wall height? (x-dim)
+    h = 6
+    w = data(r) .== wall_tile
+    for z = 1:h
+        voxels[z, :, :] = w
+    end
+    return nothing
+end
+
+function voxelize!(voxels::Array{Bool, 3},
+                   r::GridRoom,
+                   tile::Obstacle)
+    #REVIEW: parameterize height? (x-dim)
+    h = 3
+    w = data(r) .== obstacle_tile
+    for z = 1:h
+        voxels[z, :, :] = w
+    end
+    return nothing
+end
 
 const _char_map = Dict{Symbol, String}(
     :entrance => "◉",

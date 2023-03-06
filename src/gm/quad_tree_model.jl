@@ -54,10 +54,10 @@ Parameters for an instance of the `QuadTreeModel`.
     img_size::Tuple{Int64, Int64} = (256, 256)
     device::PyObject = _load_device()
     # configure pytorch3d render
-    camera::PyObject = PyObject(Dict(:position => [0., -20.0, -10.0]))
+    camera::PyObject = py"{'position': [-16.5, 0.0, -10.75]}"o
     graphics::PyObject = _init_graphics(img_size, device, camera)
     # preload partial scene mesh
-    scene_mesh::PyObject = _init_scene_mesh(gt, graphics, device)
+    scene_mesh::PyObject = _init_scene_mesh(gt, device, graphics)
     # minimum variance in prediction
     base_sigma::Float64 = 0.1
 end
@@ -184,13 +184,14 @@ end
 
 function graphics_from_instances(i::Room,
                                  p::QuadTreeModel)
-    @unpack graphics, scene_mesh, dims, device = p
+    @unpack graphics, scene_mesh, dims, device, base_sigma = p
     voxels = voxelize(i, obstacle_tile)
-    vdim = max(dims) * 0.5
+    vdim = maximum(dims) * 0.5
     obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device; color="blue")::PyObject
-    mesh = @pycall pytorch3d.join_meshes_as_scene(scene_mesh, obs_mesh)::PyObject
-    mu = @pycall fs_py.render_scene_single(mesh, graphics)::A3
-    sigma = fill(params.base_sigma, size(mu))
+    pyargs = py"[$scene_mesh, $obs_mesh]"o
+    mesh = @pycall pytorch3d.structures.join_meshes_as_scene(pyargs)::PyObject
+    mu = @pycall fs_py.render_mesh_single(mesh, graphics)::A3
+    sigma = fill(base_sigma, size(mu))
     (mu, sigma)
 end
 
@@ -274,12 +275,12 @@ end
 
 function _init_scene_mesh(r::GridRoom, device::PyObject, graphics::PyObject)
     voxels = voxelize(r, floor_tile)
-    vdim = max(size(voxels)) * 0.5
+    vdim = maximum(size(voxels)) * 0.5
     floor_mesh = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
     voxels = voxelize(r, wall_tile)
     wall_mesh = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
-    mesh = @pycall pytorch3d.join_meshes_as_scene([floor_mesh,
-                                                   wall_mesh])::PyObject
+    mesh = @pycall pytorch3d.structures.join_meshes_as_scene([floor_mesh,
+                                                              wall_mesh])::PyObject
 end
 
 function create_obs(p::QuadTreeModel)

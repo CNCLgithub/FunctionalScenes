@@ -41,7 +41,7 @@ function read_json(path)
 end
 
 function _init_graphics(img_size, device, camera)
-    graphics = functional_scenes.SimpleGraphics(img_size, device)
+    graphics = fs_py.SimpleGraphics(img_size, device)
     graphics.set_camera(camera)
     return graphics
 end
