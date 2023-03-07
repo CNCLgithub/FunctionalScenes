@@ -164,20 +164,22 @@ end
 
 const A3 = Array{Float64, 3}
 
-function graphics_from_instances(inst::AbstractArray{Room},
-                                 p::QuadTreeModel)
+function graphics_from_instances(inst::AbstractArray{T},
+                                 p::QuadTreeModel) where {T<:Room}
     @unpack graphics, scene_mesh, dims, device = p
     n = length(inst)
     meshes = Vector{PyObject}(undef, n)
-    vdim = PyObject(max(dims) * 0.5)
+    vdim = maximum(dims) * 0.5
     @inbounds for i = 1:n
         voxels = voxelize(inst[i], obstacle_tile)
         obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device;
                                              color="blue")::PyObject
-        meshes[i] = @pycall pytorch3d.join_meshes_as_scene(scene_mesh,
-                                                           obs_mesh)::PyObject
+        # TODO: shorten...
+        meshes[i] = @pycall pytorch3d.structures.join_meshes_as_scene([scene_mesh,
+                                                  obs_mesh])::PyObject
     end
-    mu,sd = @pycall fs_py.batch_render_stats(i, g)::Tuple{A3, A3}
+    # mu,sd = @pycall fs_py.batch_render_and_stats(meshes, graphics)::Tuple{A3, A3}
+    mu,sd = @pycall fs_py.batch_render_and_stats(meshes, graphics)::Tuple{PyArray, PyArray}
     (mu, sd .+ p.base_sigma)
 end
 
@@ -200,8 +202,9 @@ end
 # Planning
 #################################################################################
 
-function a_star_heuristic(dest::QTAggNode, d::Real)
-    src -> dist(src.node, dest.node) * d
+function a_star_heuristic(nodes::Vector{QTAggNode}, dest::Int64)
+    _dest = nodes[dest]
+    src -> dist(nodes[src].node, _dest.node)
 end
 
 function nav_graph(st::QTAggNode)
@@ -216,13 +219,29 @@ function nav_graph(st::QTAggNode)
         # only care when nodes are touching
         contact(x.node, y.node, d) || continue
         #  work to traverse each node
-        work = area(x.node) * weight(x) + area(y.node) * weight(y)
+        p = area(x.node) / (area(x.node) + area(y.node))
+        work = d * (p * weight(x) + (1-p)*weight(y))
         adm[i, j] = adm[j, i] = true
         dsm[i, j] = dsm[j, i] = work
     end
-    (adj, dsm, lv)
+    (adm, dsm, lv)
 end
 
+"""
+    qt_a_star(st, d, ent, ext)
+
+Applies `a_star` to the quad tree.
+
+# Arguments
+- `st::QTAggNode`: The root node of the QT
+- `d::Int64`: The row dimensions of the room
+- `ent::Int64`: The entrance tile
+- `ext::Int64`: The exit tile
+
+# Returns
+A tuple, first element is `QTPath` and the second is a vector
+ of the leave nodes in QT.
+"""
 function qt_a_star(st::QTAggNode, d::Int64, ent::Int64, ext::Int64)
     #REVIEW: Shouldn't this either be 1 or >4?
     st.leaves < 4 && return (QTPath(st), QTAggNode[st])
@@ -236,11 +255,10 @@ function qt_a_star(st::QTAggNode, d::Int64, ent::Int64, ext::Int64)
     a = findfirst(s -> contains(s, ent_p), lv)
     ext_p = idx_to_node_space(ext, d)
     b = findfirst(s -> contains(s, ext_p), lv)
+    heuristic = a_star_heuristic(lv, b)
     # compute path and path grid
-    path = a_star(g, a, b,
-                distmx = dm,
-                heurisitc = a_star_heuristic(b, d))
-    (QTPath(g, ds, path), lv)
+    path = a_star(g, a, b, dm, heuristic)
+    (QTPath(g, dm, path), lv)
 end
 
 #################################################################################
@@ -284,6 +302,7 @@ function _init_scene_mesh(r::GridRoom, device::PyObject, graphics::PyObject)
 end
 
 function create_obs(p::QuadTreeModel)
+    @unpack gt = p
     mu, _ = graphics_from_instances(gt, p)
     constraints = Gen.choicemap()
     constraints[:viz] = mu

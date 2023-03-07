@@ -28,8 +28,10 @@ end
 
     # REVIEW: Maybe this doesn't need to be tracked?
     # empirical estimation of multigranular predictions
-    obstacles = {:instances} ~ Gen.Map(obst_gen)(fill(global_state,
-                                                      params.instances))
+    # obstacles = {:instances} ~ Gen.Map(obst_gen)(fill(global_state,
+    #                                                   params.instances))
+    obstacles = Gen.Map(obst_gen)(fill(global_state,
+                                       params.instances))
     instances = instances_from_gen(params, obstacles)
 
     # mean and variance of observation
@@ -37,9 +39,9 @@ end
     pred = @trace(broadcasted_normal(viz[1], viz[2]), :viz)
 
     # shortest path given qt uncertainty
-    qtpath::QTPath, lv::Vector{QTState} = qt_a_star(qt, params.dims[1],
-                                                    params.entrance,
-                                                    params.exit)
+    qtpath::QTPath, lv::Vector{QTAggNode} = qt_a_star(qt, params.dims[1],
+                                                      params.entrance,
+                                                      params.exit)
 
     result::QuadTreeState = QuadTreeState(qt, global_state, instances,
                                           viz[1], qtpath, lv)

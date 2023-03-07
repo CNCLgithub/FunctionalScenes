@@ -35,6 +35,7 @@ def render_mesh_pil(mesh, graphics:AbstractGraphics):
 def render_mesh_batch(meshes, graphics:AbstractGraphics):
     # beg_ts = time.time()
     # device = graphics.device
+    n = len(meshes)
     mesh = join_meshes_as_batch(meshes)# REVIEW: add `.to(device)` ?
     # end_ts = time.time()
     # print('render_scene_batch mesh {}'.format(end_ts - beg_ts))
@@ -49,7 +50,7 @@ def render_mesh_single(mesh, graphics:AbstractGraphics):
     return result[0, ..., :3].permute(2, 0, 1).cpu().numpy()
 
 def batch_render_and_stats(scenes, graphics:AbstractGraphics):
-    imgs = render_scene_batch(scenes, graphics)
+    imgs = render_mesh_batch(scenes, graphics)
     mu = imgs.mean(axis = 0).cpu().numpy()
     sd = imgs.std(axis = 0).cpu().numpy()
     return (mu, sd)
