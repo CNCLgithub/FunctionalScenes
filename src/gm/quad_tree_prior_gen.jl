@@ -12,6 +12,7 @@ end
                              children::Vector{QTAggNode})
     local mu
     if isempty(children)
+        # TODO: replace with proper prior for bernoulli
         mu = @trace(uniform(0., 1.), :mu)
     else
         mu = mean(weight.(children))

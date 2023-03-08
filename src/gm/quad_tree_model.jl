@@ -112,33 +112,31 @@ function add_from_state_flip(params::QuadTreeModel,
 end
 
 """
-    project_qt(qt, dims)
+    project_qt(lv, dims)
 
 Projects the quad tree to a nxn matrix
+
+# Arguments
+- `lv::Vector{QTAggNode}`: The leaves of a quad tree
+- `dims`: Dimensions of the target grid
 """
-function project_qt(qt::QTAggNode, dims::Tuple{Int64, Int64})
+function project_qt(lv::Vector{QTAggNode}, dims::Tuple{Int64, Int64})
     gs = Matrix{Float64}(undef, dims[1], dims[2])
-    project_qt!(gs, qt)
+    project_qt!(gs, lv)
     return gs
 end
 
-function project_qt(params::QuadTreeModel, qt::QTAggNode)
-    project_qt(qt, params.dims)
+function project_qt(params::QuadTreeModel, lv::Vector{QTAggNode})
+    project_qt(lv, params.dims)
 end
 
 function project_qt!(gs::Matrix{Float64},
-                     st::QTAggNode)
+                     lv::Vector{QTAggNode})
     d = size(gs, 1)
-    heads::Vector{QTAggNode} = [st]
-    while !isempty(heads)
-        head = pop!(heads)
-        if isempty(head.children)
-            idx = node_to_idx(head.node, d)
-            # potentially broadcast coarse states
-            gs[idx] .= weight(head)
-        else
-            append!(heads, head.children)
-        end
+    for x in lv
+        idx = node_to_idx(x.node, d)
+        # potentially broadcast coarse states
+        gs[idx] .= weight(x)
     end
     return nothing
 end
@@ -207,17 +205,16 @@ function a_star_heuristic(nodes::Vector{QTAggNode}, dest::Int64)
     src -> dist(nodes[src].node, _dest.node)
 end
 
-function nav_graph(st::QTAggNode)
-    adm = fill(false, (st.leaves, st.leaves))
-    dsm = fill(Inf, (st.leaves, st.leaves))
-    lv = leaf_vec(st)
-    # TODO: add @inbounds
-    for i = 1:(st.leaves-1), j = (i+1):st.leaves
+function nav_graph(lv::Vector{QTAggNode})
+    n = length(lv)
+    adm = fill(false, (n, n))
+    dsm = fill(Inf, (n, n))
+    @inbounds for i = 1:(n-1), j = (i+1):n
         x = lv[i]
         y = lv[j]
-        d = dist(x.node, y.node)
         # only care when nodes are touching
-        contact(x.node, y.node, d) || continue
+        contact(x.node, y.node) || continue
+        d = dist(x.node, y.node)
         #  work to traverse each node
         p = area(x.node) / (area(x.node) + area(y.node))
         work = d * (p * weight(x) + (1-p)*weight(y))
@@ -242,11 +239,11 @@ Applies `a_star` to the quad tree.
 A tuple, first element is `QTPath` and the second is a vector
  of the leave nodes in QT.
 """
-function qt_a_star(st::QTAggNode, d::Int64, ent::Int64, ext::Int64)
+function qt_a_star(lv::Vector{QTAggNode}, d::Int64, ent::Int64, ext::Int64)
     #REVIEW: Shouldn't this either be 1 or >4?
-    st.leaves < 4 && return (QTPath(st), QTAggNode[st])
+    length(lv) == 1 && return QTPath(first(lv))
     # adjacency, distance matrix, and leaves
-    ad, dm, lv = nav_graph(st)
+    ad, dm = nav_graph(lv)
     # scale dist matrix by room size
     rmul!(dm, d)
     g = SimpleGraph(ad)
@@ -258,7 +255,7 @@ function qt_a_star(st::QTAggNode, d::Int64, ent::Int64, ext::Int64)
     heuristic = a_star_heuristic(lv, b)
     # compute path and path grid
     path = a_star(g, a, b, dm, heuristic)
-    (QTPath(g, dm, path), lv)
+    QTPath(g, dm, path)
 end
 
 #################################################################################

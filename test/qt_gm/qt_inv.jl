@@ -1,23 +1,65 @@
 using Gen
 using JSON
 using FunctionalScenes
-import Gen: get_child
+import Gen: get_child, get_parent
+
+
+function balanced_split_merge(t::Gen.Trace, tidx::Int64)::Bool
+    head::QTAggNode = get_retval(t)
+    # balanced if root node is terminal : Split <-> Merge
+    tidx == 1 && return isempty(head.children)
+    st = traverse_qt(head, tidx)
+    # it's possible to not reach the node
+    # in that case, not balanced?
+    # REVIEW
+    parent_idx = get_parent(tidx, 4)
+    # st.node.tree_idx === tidx ||
+    #     parent_idx === tidx \\
+    #     return false
+    @unpack level, max_level = st.node
+    # cannot split or merge if max depth
+    level == max_level && return false
+    # balanced if node is terminal : Split <-> Merge
+    # or if children are all terminal : Merge <-> Split
+    isempty(st.children) || any(x -> !isempty(x.children), st.children)
+end
+
+"""
+    split_weight(st::QTAggNode)
+
+The probability of splitting node.
+"""
+function split_weight(st::QTAggNode)::Float64
+    @unpack node, children = st
+    @unpack level, max_level = node
+    # cannot split further than max level
+    level == max_level && return 0
+    # no children -> split
+    isempty(children) && return 1
+    # if children but no gran children -> merge
+    Float64(any(x -> !isempty(x.children), children))
+end
+
 
 @gen function qt_split_merge_proposal(t::Gen.Trace, i::Int64)
     head::QTAggNode = get_retval(t)
     st::QTAggNode = FunctionalScenes.traverse_qt(head, i)
-    w = FunctionalScenes.split_weight(st)
-    @debug "proposal on node $(st.node.tree_idx)"
-    @debug "split prob $(w)"
-    # refine or coarsen?
-    split = {:split} ~ bernoulli(w)
-    if split
+    # `st` could be parent if t' is a result of merge
+    # since the original `i` would have been merged with its
+    # sibling in t
+    ref_idx = st.node.tree_idx
+    after_merge = ref_idx == get_parent(i, 4)
+    println("target: $(i), actual; $(ref_idx)")
+    @assert ref_idx == i || ref_idx == get_parent(i, 4)
+    # assuming that `i` is referencing a "balanced" node
+    # splitting
+    if isempty(st.children)
         # refer to tree_idx since st could
         # be from parent in "merge" backward (split)
-        mu = t[(st.node.tree_idx, Val(:aggregation)) => :mu]
+        mu = t[(ref_idx, Val(:aggregation)) => :mu]
         {:split_kernel} ~ split_kernel(mu)
     end
-    split ? split_move : merge_move
+    ref_idx
 end
 
 function qt_sm_inv_manual(t, u, uret, uarg)
@@ -28,6 +70,7 @@ function qt_sm_inv_manual(t, u, uret, uarg)
     bwd = choicemap()
     bwd[:split] = !u[:split]
     if u[:split]
+        # split node
         constraints[(node, Val(:production)) => :produce] = true
         println("splitting node $(node)")
         dof  = 4.0 * t[(node, Val(:aggregation)) => :mu]
@@ -43,17 +86,19 @@ function qt_sm_inv_manual(t, u, uret, uarg)
         constraints[(cid, Val(:aggregation)) => :mu] = dof
         constraints[(cid, Val(:production)) => :produce] = false
     else
+        # Merge all siblings of `node`
+        parent = get_parent(node, 4)
         mu = 0
         for i = 1:4
-            cid = Gen.get_child(node, i, 4)
+            cid = Gen.get_child(parent, i, 4)
             c_mu = t[(cid, Val(:aggregation)) => :mu]
             mu += c_mu
             if i < 4
                 bwd[:split_kernel => :steps => i => :mu] = c_mu
             end
         end
-        constraints[(node, Val(:aggregation)) => :mu] = mu * 0.25
-        constraints[(node, Val(:production)) => :produce] = false
+        constraints[(parent, Val(:aggregation)) => :mu] = mu * 0.25
+        constraints[(parent, Val(:production)) => :produce] = false
     end
 
     # obtain new trace and discard, which contains the previous subtree

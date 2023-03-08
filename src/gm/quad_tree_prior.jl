@@ -107,7 +107,7 @@ function idx_to_node_space(i::Int64, d::Int64)
 end
 
 function dist(x::QTProdNode, y::QTProdNode)
-    norm(x.center - y.center) - (0.5*x.dims[1]) - (0.5*y.dims[1])
+    norm(x.center - y.center)
 end
 
 """
@@ -117,7 +117,7 @@ True if a wall of each node are touching.
 > Note: Both nodes can be of different area (granularity)
 """
 function contact(a::QTProdNode, b::QTProdNode)
-    d = dist(a,b)
+    d = dist(a,b) - (0.5*a.dims[1]) - (0.5*b.dims[1])
     contact(a, b, d)
 end
 function contact(a::QTProdNode, b::QTProdNode, d::Float64)
@@ -244,6 +244,20 @@ function aggregate_qt(n::QTProdNode, y::Float64,
     end
     QTAggNode(y, u, k, l, n, children)
 end
+
+# struct QuadTree
+#     g::SimpleDiGraph{Int64, Float64}
+#     d::Vector{QTAggNode}
+# end
+
+# function QuadTree(root::QTAggNode)
+#     @unpack n = root
+#     d = Vector{QTAggNode}(undef, n)
+#     adj = fill(false, (n, n))
+#     @inbounds for i = 1:n
+#         pass
+#     end
+# end
 
 #################################################################################
 # Misc.
