@@ -60,7 +60,7 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
     $SING exec "${cont_dest}" bash -c "virtualenv ${SENV[pyenv]} && \
     source ${SENV[pyenv]}/bin/activate && \
     python -m pip install --upgrade pip" && \
-    # ./env.d/run.sh python -m pip install --no-cache-dir -r /project/requirements.txt && \
+    ./env.d/run.sh python -m pip install --no-cache-dir -r /project/requirements.txt && \
     # install pytorch3d requires special treatment
     ./env.d/run.sh env.d/install_pytorch3d.sh
 
