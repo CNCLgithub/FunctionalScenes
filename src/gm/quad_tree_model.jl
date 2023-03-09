@@ -288,14 +288,23 @@ function all_downstream_selection(p::QuadTreeModel)
     return s
 end
 
-function _init_scene_mesh(r::GridRoom, device::PyObject, graphics::PyObject)
+function _init_scene_mesh(r::GridRoom, device::PyObject, graphics::PyObject;
+                          obstacles::Bool = false)
+    meshes = PyObject[]
     voxels = voxelize(r, floor_tile)
     vdim = maximum(size(voxels)) * 0.5
     floor_mesh = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
+    push!(meshes, floor_mesh)
     voxels = voxelize(r, wall_tile)
     wall_mesh = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
-    mesh = @pycall pytorch3d.structures.join_meshes_as_scene([floor_mesh,
-                                                              wall_mesh])::PyObject
+    push!(meshes, wall_mesh)
+    if obstacles
+        obs_voxels = voxelize(r, obstacle_tile)
+        obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device;
+                                            color="blue")::PyObject
+        push!(meshes, obs_mesh)
+    end
+    mesh = @pycall pytorch3d.structures.join_meshes_as_scene(meshes)::PyObject
 end
 
 function create_obs(p::QuadTreeModel)
