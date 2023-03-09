@@ -1,6 +1,7 @@
 using JSON
 using Images
 using Lazy: @>>
+using PyCall
 using FunctionalScenes
 using FunctionalCollections: PersistentVector
 using FunctionalScenes: _init_graphics, _load_device, occupancy_position,
@@ -9,6 +10,8 @@ using FunctionalScenes: _init_graphics, _load_device, occupancy_position,
 IMG_RES = (256, 256)
 device = _load_device()
 # device = FunctionalScenes.torch.device("cpu")
+camera::PyObject = py"{'position': [-16.5, 0.0, -10.75]}"o
+graphics = _init_graphics(IMG_RES, device, camera)
 
 function build(r::GridRoom;
                max_f::Int64 = 11,
@@ -39,9 +42,8 @@ function build(r::GridRoom;
 end
 
 function render(r::GridRoom)
-    graphics = _init_graphics(r, IMG_RES, device)
-    d = translate(r, Int64[]; cubes = true)
-    img = functional_scenes.render_scene_pil(d, graphics)
+    mesh = _init_scene_mesh(r, device, graphics; obstacles = true)
+    img = fs_py.render_mesh_pil(m, graphics)
 end
 
 function save_trial(dpath::String, i::Int64, r::GridRoom,
@@ -90,7 +92,7 @@ function main()
     isdir(out) || mkdir(out)
 
     for i = 1:n
-        t = templates[Int64(rand() > 0.5) + 1]
+        t = templates[i % 2 + 1]
         r = build(t, factor = 2)
         r_img = render(r)
         r_og = occupancy_position(r)
