@@ -1,11 +1,13 @@
 using JSON
 using Images
 using Lazy: @>>
-using PyCall
 using FunctionalScenes
 using FunctionalCollections: PersistentVector
-using FunctionalScenes: _init_graphics, _load_device, occupancy_position,
-    functional_scenes
+using FunctionalScenes: _init_graphics,
+    _load_device,
+    _init_scene_mesh,
+    occupancy_position,
+    fs_py
 
 IMG_RES = (256, 256)
 device = _load_device()
@@ -43,7 +45,7 @@ end
 
 function render(r::GridRoom)
     mesh = _init_scene_mesh(r, device, graphics; obstacles = true)
-    img = fs_py.render_mesh_pil(m, graphics)
+    img = fs_py.render_mesh_pil(mesh, graphics)
 end
 
 function save_trial(dpath::String, i::Int64, r::GridRoom,
@@ -68,8 +70,10 @@ end
 
 function main()
     # Parameters
-    name = "vss_pilot_ddp_test_11f_32x32"
-    n = 100
+    # name = "ccn_2023_ddp_train_11f_32x32"
+    # n = 10000
+    name = "ccn_2023_ddp_test_11f_32x32"
+    n = 25
     room_dims = (16, 16)
     entrance = [8, 9]
     door_rows = [5, 12]

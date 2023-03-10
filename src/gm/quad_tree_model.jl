@@ -290,19 +290,18 @@ end
 
 function _init_scene_mesh(r::GridRoom, device::PyObject, graphics::PyObject;
                           obstacles::Bool = false)
-    meshes = PyObject[]
+    n = obstacles ? 3 : 2
+    meshes = Vector{PyObject}(undef, n)
     voxels = voxelize(r, floor_tile)
     vdim = maximum(size(voxels)) * 0.5
-    floor_mesh = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
-    push!(meshes, floor_mesh)
+    meshes[1] = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
     voxels = voxelize(r, wall_tile)
-    wall_mesh = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
-    push!(meshes, wall_mesh)
+    meshes[2] = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
     if obstacles
-        obs_voxels = voxelize(r, obstacle_tile)
+        voxels = voxelize(r, obstacle_tile)
         obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device;
                                             color="blue")::PyObject
-        push!(meshes, obs_mesh)
+        meshes[3] = obs_mesh
     end
     mesh = @pycall pytorch3d.structures.join_meshes_as_scene(meshes)::PyObject
 end

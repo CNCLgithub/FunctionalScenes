@@ -144,7 +144,7 @@ function voxelize!(voxels::Array{Bool, 3},
                    tile::Wall)
     #REVIEW: parameterize wall height? (x-dim)
     h = 6
-    w = data(r) .== wall_tile
+    w = reverse(data(r) .== wall_tile, dims = 1)
     for z = 1:h
         voxels[z, :, :] = w
     end
@@ -156,7 +156,9 @@ function voxelize!(voxels::Array{Bool, 3},
                    tile::Obstacle)
     #REVIEW: parameterize height? (x-dim)
     h = 3
-    w = data(r) .== obstacle_tile
+    # need to reverse because of `pytorch.cubify`
+    # REVIEW: perhaps correct for row flip in `functional_scenes`?
+    w = reverse(data(r) .== obstacle_tile, dims = 1)
     for z = 1:h
         voxels[z, :, :] = w
     end

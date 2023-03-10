@@ -5,7 +5,7 @@ model_params:
   in_channels: 3
   latent_dim: 128
  
-vae_chkpt: "/spaths/checkpoints/og_vae_BetaVAE/version_21/checkpoints/last.ckpt"
+vae_chkpt: "/spaths/checkpoints/og_vae_BetaVAE/version_1/checkpoints/last.ckpt"
 
 
 vae_params:
@@ -16,8 +16,8 @@ vae_params:
   beta: 1.0
 
 path_params:
-  train_path: "/spaths/datasets/vss_pilot_ddp_11f_32x32"
-  test_path: "/spaths/datasets/vss_pilot_ddp_test_11f_32x32"
+  train_path: "/spaths/datasets/ccn_2023_ddp_train_11f_32x32"
+  test_path: "/spaths/datasets/ccn_2023_ddp_test_11f_32x32"
 
 loader_params:
   batch_size: 36

@@ -163,29 +163,28 @@ class BetaVAE(BaseVAE):
         eps = torch.randn_like(std)
         return eps * std + mu
 
-    def forward(self, input: Tensor, **kwargs) -> Tensor:
-        mu, log_var = self.encode(input)
+    def forward(self, x: Tensor, **kwargs) -> Tensor:
+        mu, log_var = self.encode(x)
         z = self.reparameterize(mu, log_var)
-        return  [self.decode(z), input, mu, log_var]
+        return  [self.decode(z), x, mu, log_var]
 
     def loss_function(self,
-                      *args,
+                      recons: Tensor,
+                      x: Tensor,
+                      mu: Tensor,
+                      log_var: Tensor,
                       **kwargs) -> dict:
         self.num_iter += 1
-        recons = args[0]
-        input = args[1]
-        mu = args[2]
-        log_var = args[3]
         kld_weight = kwargs['M_N']  # Account for the minibatch samples from the dataset
 
-        recons_loss =F.mse_loss(recons, input)
+        recons_loss =F.mse_loss(recons, x)
 
         kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
 
         if self.loss_type == 'H': # https://openreview.net/forum?id=Sy2fzU9gl
             loss = recons_loss + self.beta * kld_weight * kld_loss
         elif self.loss_type == 'B': # https://arxiv.org/pdf/1804.03599.pdf
-            self.C_max = self.C_max.to(input.device)
+            self.C_max = self.C_max.to(x.device)
             C = torch.clamp(self.C_max/self.C_stop_iter * self.num_iter, 0, self.C_max.data[0])
             loss = recons_loss + self.gamma * kld_weight* (kld_loss - C).abs()
         else:
