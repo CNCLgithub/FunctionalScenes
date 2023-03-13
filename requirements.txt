@@ -14,7 +14,7 @@ torchvision
 fvcore
 iopath
 ffcv
-pytorch-lightning
+lightning
 -e deps/slurmpy
 -e .
 

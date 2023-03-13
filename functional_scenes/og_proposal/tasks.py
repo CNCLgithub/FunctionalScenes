@@ -1,184 +1,168 @@
 import os
+import torch
 from torch import optim
-import pytorch_lightning as pl
-import torchvision.utils as vutils
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
+import lightning.pytorch as pl
+import torchvision.utils as vutils
+from torchvision.transforms.functional import (resize,
+                                               rotate)
 
 from . pytypes import *
-from . model import BaseVAE, Decoder
+from . model import VAE, Decoder
 
-class OGVAE(pl.LightningModule):
+class SceneEmbedding(pl.LightningModule):
     """Task of embedding image space into z-space"""
 
     def __init__(self,
-                 vae_model: BaseVAE,
-                 params: dict) -> None:
-        super(OGVAE, self).__init__()
+                 model: VAE,
+                 beta: float = 1.0,
+                 kld_weight: float = 1.0,
+                 lr: float = 0.001,
+                 weight_decay: float = 0.0,
+                 sched_gamma: float = 0.9,
+                 ) -> None:
+        super(SceneEmbedding, self).__init__()
+        self.model = model
+        self.save_hyperparameters(ignore='model')
 
-        self.model = vae_model
-        self.params = params
-        self.curr_device = None
-        self.hold_graph = False
-        try:
-            self.hold_graph = self.params['retain_first_backpass']
-        except:
-            pass
+    def forward(self, x: Tensor) -> Tensor:
+        return self.model(x)
 
-    def forward(self, input: Tensor, **kwargs) -> Tensor:
-        return self.model(input, **kwargs)
+    def loss_function(self,
+                      recons: Tensor,
+                      x: Tensor,
+                      mu: Tensor,
+                      log_var: Tensor) -> dict:
+        recons_loss = F.mse_loss(recons, x)
+        kld_loss = torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1)
+        kld_loss = torch.mean(-0.5 * kld_loss, dim = 0)
+        # H-loss, see https://openreview.net/forum?id=Sy2fzU9gl
+        loss = recons_loss + self.hparams.beta * \
+            self.hparams.kld_weight * kld_loss
+        return {'loss': loss, 'rec_loss':recons_loss, 'kld_loss':kld_loss}
 
-    def training_step(self, batch, batch_idx, optimizer_idx = 0):
-        real_img = batch[0]
-        results = self.forward(real_img)
-        train_loss = self.model.loss_function(*results,
-                                              M_N = self.params['kld_weight'], #al_img.shape[0]/ self.num_train_imgs,
-                                              optimizer_idx=optimizer_idx,
-                                              batch_idx = batch_idx)
+    def training_step(self, batch, batch_idx):
+        x = batch[0]
+        mu, log_var, y = self.forward(x)
+        l = self.loss_function(y, x, mu, log_var)
+        self.log_dict(l)
+        return l['loss']
 
-        self.log_dict({key: val.item() for key, val in train_loss.items()}, sync_dist=True)
-
-        return train_loss['loss']
-
-    def validation_step(self, batch, batch_idx, optimizer_idx = 0):
-        real_img = batch[0]
-        results = self.forward(real_img)
-        val_loss = self.model.loss_function(*results,
-                                            M_N = 1.0, #real_img.shape[0]/ self.num_val_imgs,
-                                            optimizer_idx = optimizer_idx,
-                                            batch_idx = batch_idx)
-
-        recons = results[0]
-        vutils.save_image(recons.data,
+    def validation_step(self, batch, batch_idx):
+        x = batch[0]
+        mu, log_var, y = self.forward(x)
+        l = self.loss_function(y, x, mu, log_var)
+        vutils.save_image(y.data,
                           os.path.join(self.logger.log_dir ,
                                        "reconstructions",
-                                       f"recons_{self.logger.name}_Epoch_{self.current_epoch}.png"),
+                                       f"recons_{self.logger.name}_epoch_{self.current_epoch}.png"),
                           normalize=True,
                           nrow=12)
-        self.log_dict({f"val_{key}": val.item() for key, val in val_loss.items()}, sync_dist=True)
-        self.sample_images(real_img.device)
+        self.log_dict({f"val_{key}": val.item()
+                       for key, val in l.items()})
+        self.sample_images()
 
 
-    def sample_images(self, device):
+    def sample_images(self):
         samples = self.model.sample(25,
-                                    device)
+                                    self.device)
 
         vutils.save_image(samples.cpu().data,
                         os.path.join(self.logger.log_dir ,
                                         "samples",
-                                        f"{self.logger.name}_Epoch_{self.current_epoch}.png"),
+                                        f"{self.logger.name}_epoch_{self.current_epoch}.png"),
                         normalize=True,
                         nrow=12)
 
     def configure_optimizers(self):
 
-        optims = []
-        scheds = []
-
         optimizer = optim.Adam(self.model.parameters(),
-                               lr=self.params['LR'],
-                               weight_decay=self.params['weight_decay'])
-        optims.append(optimizer)
-        if self.params['scheduler_gamma'] is not None:
-            scheduler = optim.lr_scheduler.ExponentialLR(optims[0],
-                                                         gamma = self.params['scheduler_gamma'])
-            scheds.append(scheduler)
-
-        return optims, scheds
+                               lr=self.hparams.lr,
+                               weight_decay=self.hparams.weight_decay)
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer,
+                                                     gamma = self.hparams.sched_gamma)
+        return [optimizer], [scheduler]
 
 class OGDecoder(pl.LightningModule):
     """Task of decoding z-space to grid space"""
 
     def __init__(self,
-                 vae: OGVAE,
+                 encoder: SceneEmbedding,
                  decoder: Decoder,
-                 params: dict) -> None:
+                 lr: float = 0.001,
+                 weight_decay: float = 0.0,
+                 sched_gamma: float = 0.9,
+                 ) -> None:
         super(OGDecoder, self).__init__()
-        vae.eval()
-        vae.freeze()
-        self.vae = vae
+        # REVIEW: is this the proper way to freeze the encoder?
+        encoder.eval()
+        encoder.freeze()
+        self.encoder = encoder
         self.decoder = decoder
-        self.params = params
-        self.curr_device = None
-        self.hold_graph = False
-        try:
-            self.hold_graph = self.params['retain_first_backpass']
-        except:
-            pass
+        self.save_hyperparameters(ignore=['encoder', 'decoder'])
 
-    def forward(self, input: Tensor, **kwargs) -> Tensor:
-        mu, log_var = self.vae.model.encode(input)
-        return self.decoder(mu)
+    def forward(self, x: Tensor) -> Tensor:
+        mu, log_var = self.encoder.model.encode(x)
+        z = self.encoder.model.reparameterize(mu, log_var)
+        return self.decoder(z)
+
+    def loss_function(self, x: Tensor, y: Tensor):
+        loss = F.mse_loss(x, y)
+        return loss
 
     def training_step(self, batch, batch_idx, optimizer_idx = 0):
-        real_img, real_og = batch
-        pred_og = self.forward(real_img)
-        train_loss = self.decoder.loss_function(pred_og,
-                                                real_og,
-                                                optimizer_idx=optimizer_idx,
-                                                batch_idx = batch_idx)
-
-        self.log_dict({key: val.item() for key, val in train_loss.items()},
-                      sync_dist=True)
-
-        return train_loss['loss']
+        x, og = batch
+        pred_og = self.forward(x)
+        train_loss = self.loss_function(pred_og, og)
+        return train_loss
 
     def validation_step(self, batch, batch_idx, optimizer_idx = 0):
-        real_img, real_og = batch
-        pred_og = self.forward(real_img)
-        # print(f"prediction shape {pred_og.shape}")
-        # print(f"ground truth shape {real_og.shape}")
-        # print(f"prediction max {pred_og.max()}")
-        # print(f"ground truth max {real_og.max()}")
-        val_loss = self.decoder.loss_function(pred_og,
-                                              real_og,
-                                              optimizer_idx=optimizer_idx,
-                                              batch_idx = batch_idx)
-       	results = pred_og.unsqueeze(1) 
-        vutils.save_image(results.data,
+        x, og = batch
+        pred_og = self.forward(x)
+        val_loss = self.loss_function(pred_og, og)
+        og_pred_img = rotate(resize(pred_og.unsqueeze(1), 256), 90).data
+        vutils.save_image(og_pred_img,
                           os.path.join(self.logger.log_dir ,
                                        "reconstructions",
                                        f"recons_{self.logger.name}_Epoch_{self.current_epoch}.png"),
                           normalize=False,
-                          nrow=6)
-        vutils.save_image(real_og.unsqueeze(1).data,
+                          nrow=2)
+        og_gt_img = rotate(resize(og.unsqueeze(1), 256), 90).data
+        vutils.save_image(og_gt_img,
                           os.path.join(self.logger.log_dir ,
                                        "reconstructions",
                                        f"gt_{self.logger.name}_Epoch_{self.current_epoch}.png"),
                           normalize=False,
-                          nrow=6)
-        vutils.save_image(real_img.data,
+                          nrow=2)
+        vutils.save_image(x.data,
                           os.path.join(self.logger.log_dir ,
                                        "reconstructions",
                                        f"input_{self.logger.name}_Epoch_{self.current_epoch}.png"),
                           normalize=True,
-                          nrow=6)
-        self.log_dict({f"val_{key}": val.item() for key, val in val_loss.items()}, sync_dist=True)
-        self.sample_ogs(real_img.device)
+                          nrow=2)
+        self.log('val_loss', val_loss)
+        self.sample_ogs()
 
-    def sample_ogs(self, device):
+    def test_step(self, batch, batch_idx):
+        self.validation_step(batch, batch_idx)
+
+    def sample_ogs(self):
         samples = self.decoder.sample(25,
-                                    device).unsqueeze(1)
-        sdata = samples.cpu().data
+                                      self.device).unsqueeze(1)
+        sdata = resize(samples, 256).cpu().data
         vutils.save_image(sdata ,
                         os.path.join(self.logger.log_dir ,
                                         "samples",
                                         f"{self.logger.name}_Epoch_{self.current_epoch}.png"),
                         normalize=False,
-                        nrow=5)
+                        nrow=2)
 
 
     def configure_optimizers(self):
-
-        optims = []
-        scheds = []
-
         optimizer = optim.Adam(self.decoder.parameters(),
-                               lr=self.params['LR'],
-                               weight_decay=self.params['weight_decay'])
-        optims.append(optimizer)
-        if self.params['scheduler_gamma'] is not None:
-            scheduler = optim.lr_scheduler.ExponentialLR(optims[0],
-                                                         gamma = self.params['scheduler_gamma'])
-            scheds.append(scheduler)
-
-        return optims, scheds
+                               lr=self.hparams.lr,
+                               weight_decay=self.hparams.weight_decay)
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer,
+                                                     gamma = self.hparams.sched_gamma)
+        return [optimizer], [scheduler]

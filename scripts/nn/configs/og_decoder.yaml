@@ -1,19 +1,15 @@
 mode: 'og_decoder'
 
 model_params:
-  name: 'Decoder'
   in_channels: 3
   latent_dim: 128
  
-vae_chkpt: "/spaths/checkpoints/og_vae_BetaVAE/version_1/checkpoints/last.ckpt"
+vae_chkpt: "/spaths/checkpoints/scene_vae/version_0/checkpoints/last.ckpt"
 
 
 vae_params:
-  name: 'BetaVAE'
   in_channels: 3
   latent_dim: 128
-  loss_type: 'H'
-  beta: 1.0
 
 path_params:
   train_path: "/spaths/datasets/ccn_2023_ddp_train_11f_32x32"
@@ -24,11 +20,11 @@ loader_params:
   num_workers: 4
 
 exp_params:
-  LR: 0.01
+  lr: 0.001
   weight_decay: 0.0
-  scheduler_gamma: 0.8
-  kld_weight: 0.0001
-  manual_seed: 1265
+  sched_gamma: 0.9
+
+manual_seed: 1265
 
 trainer_params:
   max_epochs: 10
