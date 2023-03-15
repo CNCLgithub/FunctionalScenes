@@ -61,11 +61,20 @@ end
 function Gen_Compose.initialize_chain(proc::AttentionMH,
                                       query::StaticQuery)
     # draw random sample from prior
+    # trace,_ = Gen.generate(query.forward_function,
+    #                        query.args,
+    #                        query.observations)
+    # initialize with data-driven proposal
+    # trace,_ = proc.ddp(trace, proc.ddp_args)
+
+    # Intialize using DDP
+    cm = query.observations
+    tracker_cm = generate_qt_from_ddp(proc.ddp_args...)
+    set_submap!(cm, :trackers,
+                get_submap(tracker_cm, :trackers))
     trace,_ = Gen.generate(query.forward_function,
                            query.args,
-                           query.observations)
-    # initialize with data-driven proposal
-    trace,_ = proc.ddp(trace, proc.ddp_args)
+                           cm)
     # initialize auxillary state
     dims = first(get_args(trace)).dims
     n = prod(dims)
@@ -185,6 +194,8 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     println("\t avg distance: $(e_dist)")
     println("\t rw acceptance ratio: $(accept_ct/rw_cycles)")
 
+    display_selected_node(sidx, size(st.gs))
+
     # SM moves
     # split randomly
     # or deterministically if node is root
@@ -232,8 +243,17 @@ function viz_chain(chain::StaticMHChain)
     trace_st = get_retval(state)
     println("Attention")
     display_mat(auxillary.sensitivities)
+    # display_mat(reshape(auxillary.weights,
+    #                     size(auxillary.sensitivities)))
     println("Inferred state")
     display_mat(trace_st.gs)
     println("Predicted Image")
     display_img(trace_st.img_mu)
+end
+
+function display_selected_node(sidx, dims)
+    bs = zeros(dims)
+    bs[sidx] .= 1
+    println("Selected node")
+    display_mat(bs)
 end

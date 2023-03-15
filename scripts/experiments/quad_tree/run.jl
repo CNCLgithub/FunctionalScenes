@@ -138,10 +138,11 @@ function main(c)
 
     # Load estimator - Adaptive MCMC
     model_params = first(query.args)
-    ddp_params = DataDrivenState(;config_path = args["ddp"])
+    ddp_params = DataDrivenState(;config_path = args["ddp"],
+                                 var = 0.13)
     gt_img = img_from_instance(room, model_params)
     proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
-                                 ddp_args = (ddp_params, gt_img))
+                                 ddp_args = (ddp_params, gt_img, model_params))
 
     try
         isdir("/spaths/experiments/$(dataset)") || mkpath("/spaths/experiments/$(dataset)")
@@ -169,6 +170,9 @@ function main(c)
             println("starting chain $c")
             results = run_inference(query, proc, out )
         end
+        save_img_array(get_retval(results.state).img_mu,
+                       "$(out_path)/img_mu.png")
+
     end
     return nothing
 end

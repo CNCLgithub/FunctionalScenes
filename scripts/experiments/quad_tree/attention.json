@@ -1,7 +1,7 @@
 {
-    "samples" : 10,
-    "smoothness" : 100.0,
-    "init_cycles" : 10,
-    "rw_cycles" : 10,
-    "sm_cycles" : 15
+    "samples" : 20,
+    "smoothness" : 1.0,
+    "init_cycles" : 5,
+    "rw_cycles" : 5,
+    "sm_cycles" : 10
 }

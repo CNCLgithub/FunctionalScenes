@@ -55,7 +55,7 @@ Parameters for an instance of the `QuadTreeModel`.
     img_size::Tuple{Int64, Int64} = (256, 256)
     device::PyObject = _load_device()
     # configure pytorch3d render
-    camera::PyObject = py"{'position': [-16.5, 0.0, -10.75]}"o
+    camera::PyObject = py"{'position': [-15.5, 0.0, -10.75]}"o
     graphics::PyObject = _init_graphics(img_size, device, camera)
     # preload partial scene mesh
     scene_mesh::PyObject = _init_scene_mesh(gt, device, graphics)
@@ -178,13 +178,12 @@ function stats_from_instances(inst::AbstractArray{<:Room},
     #     meshes[i] = @pycall pytorch3d.structures.join_meshes_as_scene([scene_mesh,
     #                                               obs_mesh])::PyObject
     # end
-    mu,sd = @pycall fs_py.batch_render_and_stats(meshes, graphics)::Tuple{PyArray, PyArray}
-    # mu::Array{Float64, 3} = _mu
-    # sd::Array{Float64, 3} = _sd
+    _mu,_sd = @pycall fs_py.batch_render_and_stats(meshes, graphics)::Tuple{PyArray, PyArray}
+    mu::Array{Float64, 3} = _mu
+    sd::Array{Float64, 3} = _sd
     sd .+= p.base_sigma
     # @show p.base_sigma
-    # @show maximum(sd)
-    (mu, sd .+ p.base_sigma)
+    (mu, sd)
 end
 
 

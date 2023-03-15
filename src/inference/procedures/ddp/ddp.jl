@@ -1,4 +1,3 @@
-
 export DataDrivenState, dd_state_proposal
 
 @with_kw struct DataDrivenState
@@ -38,4 +37,31 @@ function ddp_init_kernel(trace::Gen.Trace, prop_args::Tuple)
     # end
     # @debug "w1 $w1  + w2 $w2 = $(w1 + w2)"
     # (new_trace, w1 + w2)
+end
+
+function generate_qt_from_ddp(ddp_params::DataDrivenState, img, model_params)
+    @unpack nn, device, var = ddp_params
+    state = @pycall fs_py.dd_state(nn, img, device)::Matrix{Float64}
+    head = model_params.start_node
+    d = model_params.dims[2]
+    # Iterate through QT
+    cm = choicemap()
+    queue = [model_params.start_node]
+    while !isempty(queue)
+        head = pop!(queue)
+        idx = node_to_idx(head, d)
+        mu = mean(state[idx])
+        sd = std(state[idx], mean = mu)
+        # @show (head.tree_idx => sd)
+        split = sd > ddp_params.var && head.level < head.max_level
+        cm[:trackers => (head.tree_idx, Val(:production)) => :produce] = split
+        if split
+            # add children to queue
+            append!(queue, produce_qt(head))
+        else
+            # terminal node, add aggregation choice
+            cm[:trackers => (head.tree_idx, Val(:aggregation)) => :mu] = mu
+        end
+    end
+    return cm
 end
