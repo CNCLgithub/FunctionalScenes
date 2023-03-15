@@ -1,5 +1,11 @@
 using JSON
 using UnicodePlots
+using FileIO: save
+using Colors
+using Images: colorview
+using ImageInTerminal
+
+export save_img_array
 
 
 # index arrays using sets. Order doesn't matter
@@ -7,9 +13,37 @@ function Base.to_index(i::Set{T}) where {T}
     Base.to_index(collect(T, i))
 end
 
+
+#################################################################################
+# Visuals
+#################################################################################
+
+function display_mat(m::Matrix{Float64};
+                     c1=colorant"black",
+                     c2=colorant"white")
+    img = weighted_color_mean.(m, c2, c1)
+    img = rotr90(img, 3)
+    display(img)
+    return nothing
+end
+
+function display_img(m::Array{Float64, 3})
+    img = colorview(RGB, m)
+    # img = rotr90(img, 3)
+    display(img)
+    return nothing
+end
+
+
 #################################################################################
 # IO
 #################################################################################
+
+function save_img_array(array::Array{Float64, 3}, path::String)
+    img = colorview(RGB, array)
+    save(path, img)
+end
+
 
 function _load_device()
     if torch.cuda.is_available()

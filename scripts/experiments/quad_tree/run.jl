@@ -9,9 +9,9 @@ using FunctionalScenes: shift_furniture
 
 using Random
 
-dataset = "vss_pilot_11f_32x32_restricted"
+dataset = "ccn_2023_exp"
 
-function parse_commandline()
+function parse_commandline(c)
     s = ArgParseSettings()
 
     @add_arg_table! s begin
@@ -88,7 +88,7 @@ function parse_commandline()
         default = "$(@__DIR__)/naive.json"
     end
 
-    return parse_args(s)
+    return parse_args(c, s)
 end
 
 function load_base_scene(path::String)
@@ -112,8 +112,8 @@ end
 
 
 
-function main()
-    args = parse_commandline()
+function main(c)
+    args = parse_commandline(c)
     att_mode = args["%COMMAND%"]
 
     base_path = "/spaths/datasets/$(dataset)/scenes"
@@ -133,13 +133,15 @@ function main()
         out_path = "$(out_path)_$(furniture)_$(move)"
     end
 
-    query = query_from_params(room,
-                              args["gm"])
+    # Load query (identifies the estimand)
+    query = query_from_params(room, args["gm"])
 
+    # Load estimator - Adaptive MCMC
     model_params = first(query.args)
-    proc = FunctionalScenes.proc_from_params(room, model_params,
-                                             args[att_mode]["params"],
-                                             args["ddp"])
+    ddp_params = DataDrivenState(;config_path = args["ddp"])
+    gt_img = img_from_instance(room, model_params)
+    proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
+                                 ddp_args = (ddp_params, gt_img))
 
     try
         isdir("/spaths/experiments/$(dataset)") || mkpath("/spaths/experiments/$(dataset)")
@@ -147,7 +149,10 @@ function main()
     catch e
         println("could not make dir $(out_path)")
     end
-    save_gt_image(model_params, "$(out_path)/pytorch.png")
+
+    # save the gt image for reference
+    save_img_array(gt_img[1, :, : ,:], "$(out_path)/pytorch.png")
+
     for c = 1:args["chain"]
         Random.seed!(c)
         out = joinpath(out_path, "$(c).jld2")
@@ -171,13 +176,13 @@ end
 
 
 function outer()
-    args = Dict("scene" => 7)
+    args = Dict("scene" => 1)
     # args = parse_outer()
     i = args["scene"]
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
-    # cmd = ["--restart", "$(i)","1", "1", "A"]
-    # main(cmd);
-    cmd = ["--restart", "$(i)", "2", "1", "A"]
+    # scene | door | chain | attention
+    cmd = ["--restart", "$(i)","1", "1", "A"]
+    # cmd = ["--restart", "$(i)", "2", "1", "A"]
     main(cmd);
     # for r in eachrow(df[df.id  .== i, :])
     #     cmd = [
@@ -207,4 +212,5 @@ function parse_outer()
     return parse_args(s)
 end
 
-main();
+# main();
+outer();

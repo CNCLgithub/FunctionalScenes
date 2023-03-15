@@ -47,7 +47,7 @@ def render_mesh_batch(meshes, graphics:AbstractGraphics):
 
 def render_mesh_single(mesh, graphics:AbstractGraphics):
     result = graphics.render(mesh)
-    return result[0, ..., :3].permute(2, 0, 1).cpu().numpy()
+    return result[0:1, ..., :3].permute(0, 3, 1, 2).cpu().numpy()
 
 def batch_render_and_stats(scenes, graphics:AbstractGraphics):
     imgs = render_mesh_batch(scenes, graphics)

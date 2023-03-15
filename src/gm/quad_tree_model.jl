@@ -1,4 +1,5 @@
 export QuadTreeModel, qt_a_star
+export img_from_instance
 
 #################################################################################
 # Model specification
@@ -45,7 +46,7 @@ Parameters for an instance of the `QuadTreeModel`.
     #############################################################################
     #
     # number of draws from stochastic scene state
-    instances::Int64 = 10
+    instances::Int64 = 20
 
     #############################################################################
     # Graphics
@@ -59,7 +60,7 @@ Parameters for an instance of the `QuadTreeModel`.
     # preload partial scene mesh
     scene_mesh::PyObject = _init_scene_mesh(gt, device, graphics)
     # minimum variance in prediction
-    base_sigma::Float64 = 0.1
+    base_sigma::Float64 = 1.0
 end
 
 """
@@ -98,9 +99,11 @@ function QuadTreeState(qt, gs, instances, img_mu,  pg)
 end
 
 function QTPath(st::QTAggNode)
-    ws = Matrix{Float64}(undef, 1, 1)
-    ws[1] = weight(st) * area(st.node)
-    QTPath(SimpleGraph(ones(1,1)), ws, Int64[1, 1])
+    g = SimpleGraph(1)
+    dm = Matrix{Float64}(undef, 1, 1)
+    dm[1] = weight(st) * area(st.node)
+    edges = [Graphs.SimpleEdge(1,1)]
+    QTPath(g, dm, edges)
 end
 
 function add_from_state_flip(params::QuadTreeModel,
@@ -124,10 +127,6 @@ function project_qt(lv::Vector{QTAggNode}, dims::Tuple{Int64, Int64})
     gs = Matrix{Float64}(undef, dims[1], dims[2])
     project_qt!(gs, lv)
     return gs
-end
-
-function project_qt(params::QuadTreeModel, lv::Vector{QTAggNode})
-    project_qt(lv, params.dims)
 end
 
 function project_qt!(gs::Matrix{Float64},
@@ -160,39 +159,45 @@ function instances_from_gen(params::QuadTreeModel, instances)
     return rs
 end
 
-const A3 = Array{Float64, 3}
-
-function graphics_from_instances(inst::AbstractArray{T},
-                                 p::QuadTreeModel) where {T<:Room}
+function stats_from_instances(inst::AbstractArray{<:Room},
+                              p::QuadTreeModel)
     @unpack graphics, scene_mesh, dims, device = p
     n = length(inst)
     meshes = Vector{PyObject}(undef, n)
     vdim = maximum(dims) * 0.5
     @inbounds for i = 1:n
-        voxels = voxelize(inst[i], obstacle_tile)
-        obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device;
-                                             color="blue")::PyObject
-        # TODO: shorten...
-        meshes[i] = @pycall pytorch3d.structures.join_meshes_as_scene([scene_mesh,
-                                                  obs_mesh])::PyObject
+        meshes[i] = _init_scene_mesh(inst[i], device, graphics;
+                                     obstacles=true)
     end
-    # mu,sd = @pycall fs_py.batch_render_and_stats(meshes, graphics)::Tuple{A3, A3}
+    # REVIEW: unwanted mutatation of scene mesh?
+    # @inbounds for i = 1:n
+    #     voxels = voxelize(inst[i], obstacle_tile)
+    #     obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device;
+    #                                          color="blue")::PyObject
+    #     # TODO: shorten...
+    #     meshes[i] = @pycall pytorch3d.structures.join_meshes_as_scene([scene_mesh,
+    #                                               obs_mesh])::PyObject
+    # end
     mu,sd = @pycall fs_py.batch_render_and_stats(meshes, graphics)::Tuple{PyArray, PyArray}
+    # mu::Array{Float64, 3} = _mu
+    # sd::Array{Float64, 3} = _sd
+    sd .+= p.base_sigma
+    # @show p.base_sigma
+    # @show maximum(sd)
     (mu, sd .+ p.base_sigma)
 end
 
 
-function graphics_from_instances(i::Room,
-                                 p::QuadTreeModel)
+function img_from_instance(i::Room,
+                           p::QuadTreeModel)
     @unpack graphics, scene_mesh, dims, device, base_sigma = p
     voxels = voxelize(i, obstacle_tile)
     vdim = maximum(dims) * 0.5
     obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device; color="blue")::PyObject
     pyargs = py"[$scene_mesh, $obs_mesh]"o
     mesh = @pycall pytorch3d.structures.join_meshes_as_scene(pyargs)::PyObject
-    mu = @pycall fs_py.render_mesh_single(mesh, graphics)::A3
-    sigma = fill(base_sigma, size(mu))
-    (mu, sigma)
+    # 1 x C x H x W
+    img = @pycall fs_py.render_mesh_single(mesh, graphics)::Array{Float64, 4}
 end
 
 
@@ -308,8 +313,8 @@ end
 
 function create_obs(p::QuadTreeModel)
     @unpack gt = p
-    mu, _ = graphics_from_instances(gt, p)
+    img = img_from_instance(gt, p)
     constraints = Gen.choicemap()
-    constraints[:viz] = mu
+    constraints[:viz] = img[1, :, :, :]
     constraints
 end

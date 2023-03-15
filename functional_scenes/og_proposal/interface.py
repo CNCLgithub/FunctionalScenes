@@ -1,15 +1,8 @@
 import os
 import yaml
-import numpy as np
-from PIL import Image
-
 import torch
-from torchvision import transforms
-from torch.autograd import Variable
-from torchvision.datasets import ImageFolder
+import numpy as np
 
-# place interal imports at the end
-# from . dataset import CustomImageFolder
 from . model import VAE, Decoder
 from . tasks import SceneEmbedding, OGDecoder
 
@@ -38,6 +31,7 @@ def init_dd_state(config_path:str, device):
    task.freeze()
    return task
 
+@torch.no_grad()
 def dd_state(nn, x, device):
    """ dd_state
 

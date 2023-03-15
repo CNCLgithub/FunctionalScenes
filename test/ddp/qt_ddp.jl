@@ -1,6 +1,6 @@
+using Gen
 using FunctionalScenes
-using FunctionalScenes: img_from_instances,
-    create_obs
+using FunctionalScenes: graphics_from_instances
 using Images:colorview, RGB
 
 
@@ -17,9 +17,8 @@ function mytest()
 
     params = QuadTreeModel(;gt = r)
 
-    # mu : 1 x C x H x W
-    @time mu = img_from_instance(r, params)
-    img = colorview(RGB, mu[1])
+    @time (mu, _) = graphics_from_instances(r, params)
+    img = colorview(RGB, mu)
     display(img)
 
     return nothing

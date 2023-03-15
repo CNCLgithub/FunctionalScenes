@@ -8,7 +8,6 @@ function Gen.regenerate(trace::Gen.RecurseTrace{S,T,U,V,W,X,Y},
 end
 
 
-
 function apply_random_walk(trace::Gen.Trace, proposal, proposal_args)
     model_args = get_args(trace)
     argdiffs = map((_) -> NoChange(), model_args)
@@ -23,21 +22,9 @@ function apply_random_walk(trace::Gen.Trace, proposal, proposal_args)
 end
 
 
-function ddp_init_kernel(trace::Gen.Trace, prop_args, selected)
-    trace_translator = SymmetricTraceTranslator(dd_state_proposal, prop_args, dd_state_transform)
-    (new_trace, w1) = trace_translator(trace)
-    st = get_retval(new_trace)
-    w2 = 0
-    for i = 1:length(st.lv)
-        node = st.lv[i].node.tree_idx
-        s = downstream_selection(new_trace, node)
-        (new_trace, _w) = regenerate(new_trace, s)
-        w2 += _w
-    end
-    @debug "w1 $w1  + w2 $w2 = $(w1 + w2)"
-    (new_trace, w1 + w2)
-end
-
+"""
+Defines possible moves over QT
+"""
 abstract type MoveDirection end
 struct Merge <: MoveDirection end
 struct Split <: MoveDirection end
@@ -48,8 +35,8 @@ const no_change  = NoChange()
 
 function downstream_selection(t::Gen.Trace, node::Int64)
     params = first(get_args(t))
-    head::QTState = t[:trackers]
-    st::QTState = traverse_qt(head, node)
+    head::QTAggNode = t[:trackers]
+    st::QTAggNode = traverse_qt(head, node)
     # associated rooms samples
     idxs = node_to_idx(st.node, params.dims[1])
     v = Vector{Pair}(undef, length(idxs) * params.instances)
@@ -73,3 +60,6 @@ function all_downstream_selection(t::Gen.Trace)::Gen.Selection
     p = first(get_args(t))
     all_downstream_selection(p)
 end
+
+include("random_walk.jl")
+include("split_merge.jl")

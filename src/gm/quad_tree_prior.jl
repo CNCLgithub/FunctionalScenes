@@ -138,7 +138,7 @@ function produce_weight(n::QTProdNode)::Float64
     # maximum depth, do not split
     # otherwise uniform
     level == max_level && return 0.0
-    return 0.5
+    return 0.3
 end
 
 const sqrt_v = SVector{2, Float64}(fill(sqrt(2), 2))
@@ -310,36 +310,36 @@ function traverse_qt(root::QTAggNode, dest::Int64)
 end
 
 
-function inh_adj_matrix(st::QTAggNode)
-    am = Matrix{Bool}(falses(st.k + 1, st.k + 1))
-    if st.k == 1
-        am[1,2] = true
-    end
-    inh_adj_matrix!(am, st, 1, 1)
-    return am
-end
+# function inh_adj_matrix(st::QTAggNode)
+#     am = Matrix{Bool}(falses(st.k + 1, st.k + 1))
+#     if st.k == 1
+#         am[1,2] = true
+#     end
+#     inh_adj_matrix!(am, st, 1, 1)
+#     return am
+# end
 
-function inh_adj_matrix!(am::Matrix{Bool},
-                     st::QTAggNode,
-                     node::Int64,
-                     node_index::Int64)
-    c_index = node_index + 1
-    isempty(st.children) && return c_index
-    @show node => node_index
-    # TODO: inbounds
-    for i = 1:4
-        # child in gen space
-        c = get_child(node, i, 4)
-        # child in graph space
-        # add edge to adj matrix
-        @show node => node_index =>  c_index
-        am[node_index, c_index] = true
-        # recurse through children
-        c_index = adj_matrix!(am, st.children[i], c, c_index)
-    end
-    println("ret c_index: $(c_index)")
-    return c_index
-end
-function inheritance_graph(st::QTAggNode)
-    SimpleDiGraph(inh_adj_matrix(st))
-end
+# function inh_adj_matrix!(am::Matrix{Bool},
+#                      st::QTAggNode,
+#                      node::Int64,
+#                      node_index::Int64)
+#     c_index = node_index + 1
+#     isempty(st.children) && return c_index
+#     @show node => node_index
+#     # TODO: inbounds
+#     for i = 1:4
+#         # child in gen space
+#         c = get_child(node, i, 4)
+#         # child in graph space
+#         # add edge to adj matrix
+#         @show node => node_index =>  c_index
+#         am[node_index, c_index] = true
+#         # recurse through children
+#         c_index = adj_matrix!(am, st.children[i], c, c_index)
+#     end
+#     println("ret c_index: $(c_index)")
+#     return c_index
+# end
+# function inheritance_graph(st::QTAggNode)
+#     SimpleDiGraph(inh_adj_matrix(st))
+# end

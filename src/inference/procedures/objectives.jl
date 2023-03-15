@@ -1,4 +1,5 @@
-export quad_tree_path
+export quad_tree_path,
+    qt_path_cost
 
 """
 Given a trace, returns the objective over paths

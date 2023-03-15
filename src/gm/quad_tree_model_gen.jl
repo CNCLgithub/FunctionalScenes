@@ -26,7 +26,7 @@ end
     leaves::Vector{QTAggNode} = leaf_vec(qt)
 
     # a global room matrix
-    global_state = project_qt(params, qt)
+    global_state = project_qt(leaves, params.dims)
 
     # REVIEW: Maybe this doesn't need to be tracked?
     # empirical estimation of multigranular predictions
@@ -37,7 +37,7 @@ end
     instances = instances_from_gen(params, obstacles)
 
     # mean and variance of observation
-    viz = graphics_from_instances(instances, params)
+    viz = stats_from_instances(instances, params)
     pred = @trace(broadcasted_normal(viz[1], viz[2]), :viz)
 
     # shortest path given qt uncertainty
@@ -46,6 +46,6 @@ end
                                params.exit)
 
     result::QuadTreeState = QuadTreeState(qt, global_state, instances,
-                                          viz[1], qtpath, lv)
+                                          viz[1], qtpath, leaves)
     return result
 end

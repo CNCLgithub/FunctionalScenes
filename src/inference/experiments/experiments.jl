@@ -57,7 +57,7 @@ function query_from_params(room::GridRoom, path::String; kwargs...)
     gm_params = load(QuadTreeModel, path; gt = room,
                      kwargs...)
 
-    obs = create_obs(gm_params, room)
+    obs = create_obs(gm_params)
     # add_init_constraints!(obs, gm_params, room)
 
     viz_room(room)
@@ -85,21 +85,3 @@ end
 #                                  ddp_args = ddp_args,
 #                                  kwargs...)
 # end
-
-
-function proc_from_params(gt::GridRoom,
-                          model_params::QuadTreeModel,
-                          proc_path::String,
-                          nn_config::String,
-                          kwargs...)
-
-    # init ddp
-    img = image_from_instances([gt], model_params)
-    ddp_params = DataDrivenState(;config_path = nn_config)
-    all_selection = all_downstream_selection(model_params)
-    ddp_args = ((ddp_params, img), all_selection)
-
-    proc = FunctionalScenes.load(AttentionMH, proc_path;
-                                 ddp_args = ddp_args,
-                                 kwargs...)
-end
