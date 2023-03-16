@@ -3,4 +3,5 @@ from . render import (render_mesh_pil,
                       render_mesh_single,
                       render_mesh_batch)
 from . simple import SimpleGraphics
-from . utils import from_voxels
+from . utils import (from_voxels,
+                     create_cube)

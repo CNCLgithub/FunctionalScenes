@@ -1,7 +1,7 @@
 import time
 import numpy as np
 from PIL import Image
-from . utils import create_cuboid, create_cuboids, scene_to_mesh
+from . utils import  scene_to_mesh
 from abc import ABC, abstractmethod
 from pytorch3d.structures import join_meshes_as_batch
 

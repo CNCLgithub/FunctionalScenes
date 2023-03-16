@@ -88,14 +88,13 @@ end
 struct QuadTreeState
     qt::QTAggNode
     gs::Matrix{Float64}
-    instances::Vector{GridRoom}
     img_mu::Array{Float64, 3}
     path::QTPath
     lv::Vector{QTAggNode}
 end
 
-function QuadTreeState(qt, gs, instances, img_mu,  pg)
-   QuadTreeState(qt, gs, instances, img_mu, pg, leaf_vec(qt))
+function QuadTreeState(qt, gs, img_mu,  pg)
+   QuadTreeState(qt, gs, img_mu, pg, leaf_vec(qt))
 end
 
 function QTPath(st::QTAggNode)
@@ -159,6 +158,46 @@ function instances_from_gen(params::QuadTreeModel, instances)
     return rs
 end
 
+function node_to_mesh(n::QTAggNode, d::Int64, device::PyObject)
+    color = Vector{Float32}(undef, 4)
+    color[1:2] .= 0.0
+    color[3] = 1.0
+    color[4] = n.mu
+
+    # scale from [-0.5, 0.5] to [-d/2, d/2]
+    # REVIEW: proper scaling, alternative: *0.5
+    @unpack center, dims = (n.node)
+    pos = Vector{Float32}(undef, 3)
+    pos[1:2] = center
+    pos[3] = -0.5
+    pos .*= d
+    sdim = Vector{Float32}(undef, 3)
+    sdim[1:2] = dims .* d
+    sdim[3] = 1.5 # 3 * 0.5
+    m = @pycall fs_py.create_cube(pos, sdim, color, device)::PyObject
+end
+
+function stats_from_qt(lv::Vector{QTAggNode},
+                       p::QuadTreeModel)
+    @unpack graphics, scene_mesh, dims, device = p
+    n = length(lv)
+    meshes = Vector{PyObject}(undef, n+1)
+    vdim = maximum(dims) * 0.5
+    # background_meshes = _init_scene_mesh(inst[i], device, graphics)
+    background_mesh = scene_mesh
+    @inbounds for i = 1:n
+        meshes[i] = node_to_mesh(lv[i], dims[1], device)
+    end
+    # add scene mesh
+    meshes[n + 1] = scene_mesh
+    mesh = @pycall pytorch3d.structures.join_meshes_as_scene(meshes)::PyObject
+    # 1 x C x H x W
+    img = @pycall fs_py.render_mesh_single(mesh, graphics)::Array{Float64, 4}
+    mu = img[0, :, :, :]
+    sd = fill(p.base_sigma, size(mu))
+    # @show p.base_sigma
+    (mu, sd)
+end
 function stats_from_instances(inst::AbstractArray{<:Room},
                               p::QuadTreeModel)
     @unpack graphics, scene_mesh, dims, device = p
