@@ -5,12 +5,9 @@ sqlalchemy
 numba
 opencv-python-headless
 ninja
-# --extra-index-url https://download.pytorch.org/whl/cu113
-# -f https://download.pytorch.org/whl/torch_stable.html
 torch
 torchvision
-# fvcore==0.1.5.post20220305
-# iopath==0.1.9
+mitsuba
 fvcore
 iopath
 ffcv

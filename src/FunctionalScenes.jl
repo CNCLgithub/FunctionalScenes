@@ -25,11 +25,13 @@ using FunctionalCollections
 
 using PyCall
 const torch = PyNULL()
-const pytorch3d = PyNULL()
+const mi = PyNULL()
 const fs_py = PyNULL()
+const numpy = PyNULL()
 function __init__()
+    copy!(numpy, pyimport("numpy"))
     copy!(torch, pyimport("torch"))
-    copy!(pytorch3d, pyimport("pytorch3d"))
+    copy!(mi, pyimport("mitsuba"))
     copy!(fs_py, pyimport("functional_scenes"))
 end
 

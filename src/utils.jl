@@ -74,10 +74,14 @@ function read_json(path)
     return sym_data
 end
 
-function _init_graphics(img_size, device, camera)
-    graphics = fs_py.SimpleGraphics(img_size, device)
-    graphics.set_camera(camera)
-    return graphics
+function _init_graphics()
+    variants = @pycall mi.variants()::PyObject
+    if "cuda_ad_rgb" in variants
+        @pycall mi.set_variant("cuda_ad_rgb")::PyObject
+    else
+        @pycall mi.set_variant("scalar_rgb")::PyObject
+    end
+    return nothing
 end
 
 #################################################################################

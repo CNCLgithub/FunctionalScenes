@@ -1,5 +1,4 @@
-export QuadTreeModel, qt_a_star
-export img_from_instance
+export QuadTreeModel
 
 #################################################################################
 # Model specification
@@ -52,13 +51,11 @@ Parameters for an instance of the `QuadTreeModel`.
     # Graphics
     #############################################################################
     #
-    img_size::Tuple{Int64, Int64} = (256, 256)
+    img_size::Tuple{Int64, Int64} = (120, 180)
     device::PyObject = _load_device()
-    # configure pytorch3d render
-    camera::PyObject = py"{'position': [-15.5, 0.0, -10.75]}"o
-    graphics::PyObject = _init_graphics(img_size, device, camera)
+    spp::Int64 = 24
     # preload partial scene mesh
-    scene_mesh::PyObject = _init_scene_mesh(gt, device, graphics)
+    scene_d::PyDict = _init_mitsuba_scene(gt, img_size)
     # minimum variance in prediction
     base_sigma::Float64 = 1.0
 end
@@ -144,100 +141,63 @@ end
 # Graphics
 #################################################################################
 
-"""
-    instances_from_gen(params, instances)
-
-Converts random samples of geometry from `obst_gen` into `GridRoom`.
-"""
-function instances_from_gen(params::QuadTreeModel, instances)
-    n = length(instances)
-    rs = Vector{GridRoom}(undef, n)
-    @inbounds for i = 1:n
-        rs[i] = add_from_state_flip(params, instances[i])
-    end
-    return rs
-end
-
-function node_to_mesh(n::QTAggNode, d::Int64, device::PyObject)
-    color = Vector{Float32}(undef, 4)
-    color[1:2] .= 0.0
-    color[3] = 1.0
-    color[4] = n.mu
-
-    # scale from [-0.5, 0.5] to [-d/2, d/2]
-    # REVIEW: proper scaling, alternative: *0.5
+function node_to_mitsuba(n::QTAggNode, room_dims)
     @unpack center, dims = (n.node)
     pos = Vector{Float32}(undef, 3)
-    pos[1:2] = center
-    pos[3] = -0.5
-    pos .*= d
+    pos[1:2] = center .* room_dims
+    pos[3] = 0.75
     sdim = Vector{Float32}(undef, 3)
-    sdim[1:2] = dims .* d
-    sdim[3] = 1.5 # 3 * 0.5
-    m = @pycall fs_py.create_cube(pos, sdim, color, device)::PyObject
+    sdim[1:2] = dims .* room_dims
+    sdim[3] = 1.5
+    m = @pycall fs_py.create_cube(pos, sdim, n.mu)::PyObject
 end
 
 function stats_from_qt(lv::Vector{QTAggNode},
                        p::QuadTreeModel)
-    @unpack graphics, scene_mesh, dims, device = p
+    @unpack gt, img_size, spp, base_sigma = p
     n = length(lv)
-    meshes = Vector{PyObject}(undef, n+1)
-    vdim = maximum(dims) * 0.5
-    # background_meshes = _init_scene_mesh(inst[i], device, graphics)
-    background_mesh = scene_mesh
-    @inbounds for i = 1:n
-        meshes[i] = node_to_mesh(lv[i], dims[1], device)
+    scene_d = _init_mitsuba_scene(gt, img_size)
+    for i = 1:n
+        scene_d["cube_$(i)"] = node_to_mitsuba(lv[i], gt.steps)
     end
-    # add scene mesh
-    meshes[n + 1] = scene_mesh
-    mesh = @pycall pytorch3d.structures.join_meshes_as_scene(meshes)::PyObject
-    # 1 x C x H x W
-    img = @pycall fs_py.render_mesh_single(mesh, graphics)::Array{Float64, 4}
-    mu = img[0, :, :, :]
+    result = @pycall mi.render(mi.load_dict(scene_d), spp=spp)::PyObject
+    # H x W x C
+    mu = @pycall numpy.array(result)::Array{Float32, 3}
     sd = fill(p.base_sigma, size(mu))
-    # @show p.base_sigma
     (mu, sd)
 end
-function stats_from_instances(inst::AbstractArray{<:Room},
-                              p::QuadTreeModel)
-    @unpack graphics, scene_mesh, dims, device = p
-    n = length(inst)
-    meshes = Vector{PyObject}(undef, n)
-    vdim = maximum(dims) * 0.5
-    @inbounds for i = 1:n
-        meshes[i] = _init_scene_mesh(inst[i], device, graphics;
-                                     obstacles=true)
+
+
+function tile_to_mitsuba(room::GridRoom, tile::Int64)
+    r,c  = steps(room)
+    center = idx_to_node_space(tile, r)
+    pos = Vector{Float32}(undef, 3)
+    pos[1:2] = center .* bounds(room)
+    pos[3] = 0.75
+    sdim = Vector{Float32}(undef, 3)
+    delta = (bounds(room) ./ (r,c))
+    sdim[1:2] = [delta[1], delta[2]]
+    sdim[3] = 1.5
+    m = @pycall fs_py.create_cube(pos, sdim, 1.0)::PyObject
+end
+
+function render_mitsuba(r::GridRoom, p::QuadTreeModel)
+    @unpack img_size, spp, base_sigma = p
+    (row,col) = steps(r)
+    delta = bounds(r) ./ (row, col)
+    obstacle_tiles = findall(vec(data(r)) .== obstacle_tile)
+    no = length(obstacle_tiles)
+    scene_d = _init_mitsuba_scene(r, img_size)
+    for i = 1:no
+        obs_idx = @inbounds obstacle_tiles[i]
+        obs_pos = idx_to_node_space(obs_idx, row)
+        scene_d["cube_$(i)"] = tile_to_mitsuba(r, obs_idx)
     end
-    # REVIEW: unwanted mutatation of scene mesh?
-    # @inbounds for i = 1:n
-    #     voxels = voxelize(inst[i], obstacle_tile)
-    #     obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device;
-    #                                          color="blue")::PyObject
-    #     # TODO: shorten...
-    #     meshes[i] = @pycall pytorch3d.structures.join_meshes_as_scene([scene_mesh,
-    #                                               obs_mesh])::PyObject
-    # end
-    _mu,_sd = @pycall fs_py.batch_render_and_stats(meshes, graphics)::Tuple{PyArray, PyArray}
-    mu::Array{Float64, 3} = _mu
-    sd::Array{Float64, 3} = _sd
-    sd .+= p.base_sigma
-    # @show p.base_sigma
-    (mu, sd)
+    result = @pycall mi.render(mi.load_dict(scene_d), spp=spp)::PyObject
+    # mi.util.write_bitmap("/spaths/tests/render_mitsuba.png", result)
+    # H x W x C
+    mu = @pycall numpy.array(result)::Array{Float32, 3}
 end
-
-
-function img_from_instance(i::Room,
-                           p::QuadTreeModel)
-    @unpack graphics, scene_mesh, dims, device, base_sigma = p
-    voxels = voxelize(i, obstacle_tile)
-    vdim = maximum(dims) * 0.5
-    obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device; color="blue")::PyObject
-    pyargs = py"[$scene_mesh, $obs_mesh]"o
-    mesh = @pycall pytorch3d.structures.join_meshes_as_scene(pyargs)::PyObject
-    # 1 x C x H x W
-    img = @pycall fs_py.render_mesh_single(mesh, graphics)::Array{Float64, 4}
-end
-
 
 #################################################################################
 # Planning
@@ -318,6 +278,7 @@ Returns
 """
 function room_to_leaf(st::QuadTreeState, ridx::Int64, c::Int64)
     point = idx_to_node_space(ridx, c)
+    # TODO: traverse through the QT should be faster
     l = findfirst(s -> contains(s, point), st.lv)
     st.lv[l]
 end
@@ -331,28 +292,35 @@ function all_downstream_selection(p::QuadTreeModel)
     return s
 end
 
-function _init_scene_mesh(r::GridRoom, device::PyObject, graphics::PyObject;
-                          obstacles::Bool = false)
-    n = obstacles ? 3 : 2
-    meshes = Vector{PyObject}(undef, n)
-    voxels = voxelize(r, floor_tile)
-    vdim = maximum(size(voxels)) * 0.5
-    meshes[1] = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
-    voxels = voxelize(r, wall_tile)
-    meshes[2] = @pycall fs_py.from_voxels(voxels, vdim, device)::PyObject
-    if obstacles
-        voxels = voxelize(r, obstacle_tile)
-        obs_mesh = @pycall fs_py.from_voxels(voxels, vdim, device;
-                                            color="blue")::PyObject
-        meshes[3] = obs_mesh
+function _init_mitsuba_scene(room::GridRoom, res)
+    variants = @pycall mi.variants()::PyObject
+    if "cuda_ad_rgb" in variants
+        @pycall mi.set_variant("cuda_ad_rgb")::PyObject
+    else
+        @pycall mi.set_variant("scalar_rgb")::PyObject
     end
-    mesh = @pycall pytorch3d.structures.join_meshes_as_scene(meshes)::PyObject
+    (r,c) = steps(room)
+    delta = bounds(room) ./ (r,c)
+    dim = [c, r, 10]
+    # map exit tiles to y-shifts for `door` argument
+    exit_tiles = exits(room)
+    ne = length(exit_tiles)
+    exit_ys = Matrix{Float64}(undef, 2, ne)
+    @inbounds for i = 1:ne
+        exit_pos_y = idx_to_node_space(exit_tiles[i], r)[2]
+        exit_pos_y *= r
+        exit_ys[1, i] = exit_pos_y + delta[2]
+        exit_ys[2, i] = exit_pos_y
+    end
+    door_left = maximum(exit_ys)
+    door_right = minimum(exit_ys)
+    door = [door_left, -door_right]
+    scene_d = @pycall fs_py.initialize_scene(dim, door, res)::PyDict
 end
 
 function create_obs(p::QuadTreeModel)
     @unpack gt = p
-    img = img_from_instance(gt, p)
     constraints = Gen.choicemap()
-    constraints[:viz] = img[1, :, :, :]
+    constraints[:viz] = render_mitsuba(gt, p)
     constraints
 end

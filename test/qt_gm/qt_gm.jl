@@ -29,7 +29,7 @@ function mytest()
     @profilehtml (trace, ll) = generate(qt_model, (params,), cm)
     # display(get_submap(get_choices(trace), :trackers))
     st = get_retval(trace)
-    img = colorview(RGB, st.img_mu)
+    img = colorview(RGB, permutedims(st.img_mu, (3, 1, 2)))
     @show ll
     display(img)
     return nothing
