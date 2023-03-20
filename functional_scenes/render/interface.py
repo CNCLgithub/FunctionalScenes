@@ -68,7 +68,7 @@ def initialize_scene(dimensions,
             # REVIEW: necessary?
             # 'focus_distance': 1000,
             "to_world": mi.ScalarTransform4f.look_at(origin=camera_pos,
-                                                     target=[0, 0, 3.5],
+                                                     target=[0, 0, 2.5],
                                                      up=[0, 0, 1]),
             "film": {
                 "type": "hdrfilm",
@@ -182,7 +182,8 @@ def spec_alpha_bsdf(rgb, alpha:float) -> dict:
 
 
 def create_cube(pos, dims, alpha) -> dict:
-    t = mi.ScalarTransform4f.translate(pos).scale(dims)
+    t = mi.ScalarTransform4f.translate(pos).\
+        scale(dims)
     d = {'type': 'cube',
          'to_world': t,
          'bsdf': spec_alpha_bsdf([0.2, 0.25, 0.7],

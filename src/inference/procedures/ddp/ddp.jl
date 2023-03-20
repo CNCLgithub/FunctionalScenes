@@ -13,7 +13,9 @@ end
 
 
 function _init_dd_state(config_path::String, device::PyObject)
-    @pycall fs_py.init_dd_state(config_path, device)::PyObject
+    nn = @pycall fs_py.init_dd_state(config_path, device)::PyObject
+    nn.to(device)
+    return nn
 end
 
 
@@ -41,7 +43,12 @@ end
 
 function generate_qt_from_ddp(ddp_params::DataDrivenState, img, model_params)
     @unpack nn, device, var = ddp_params
-    state = @pycall fs_py.dd_state(nn, img, device)::Matrix{Float64}
+
+    pimg = permutedims(img, (3,1,2))
+    x = @pycall torch.tensor(pimg, device = device)::PyObject
+    x = @pycall x.unsqueeze(0)::PyObject
+    x = @pycall nn.forward(x)::PyObject
+    state = @pycall x.detach().cpu().numpy()::Matrix{Float64}
     head = model_params.start_node
     d = model_params.dims[2]
     # Iterate through QT

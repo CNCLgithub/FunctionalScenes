@@ -39,8 +39,9 @@ end
 # IO
 #################################################################################
 
-function save_img_array(array::Array{Float64, 3}, path::String)
-    img = colorview(RGB, array)
+function save_img_array(array::Array, path::String)
+    _array = permutedims(array, (3,1,2))
+    img = colorview(RGB, _array)
     save(path, img)
 end
 

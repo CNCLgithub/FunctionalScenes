@@ -3,17 +3,15 @@ using Images
 using Lazy: @>>
 using FunctionalScenes
 using FunctionalCollections: PersistentVector
-using FunctionalScenes: _init_graphics,
-    _load_device,
-    _init_scene_mesh,
-    occupancy_position,
-    fs_py
 
-IMG_RES = (256, 256)
-device = _load_device()
-# device = FunctionalScenes.torch.device("cpu")
-camera::PyObject = py"{'position': [-16.5, 0.0, -10.75]}"o
-graphics = _init_graphics(IMG_RES, device, camera)
+IMG_RES = (120, 180)
+SPP = 16
+
+function occupancy_position(r::GridRoom)::Matrix{Float64}
+    grid = zeros(steps(r))
+    grid[FunctionalScenes.data(r) .== obstacle_tile] .= 1.0
+    grid
+end
 
 function build(r::GridRoom;
                max_f::Int64 = 11,
@@ -44,8 +42,7 @@ function build(r::GridRoom;
 end
 
 function render(r::GridRoom)
-    mesh = _init_scene_mesh(r, device, graphics; obstacles = true)
-    img = fs_py.render_mesh_pil(mesh, graphics)
+    @time img = render_mitsuba(r, IMG_RES, SPP)
 end
 
 function save_trial(dpath::String, i::Int64, r::GridRoom,
@@ -62,7 +59,8 @@ function save_trial(dpath::String, i::Int64, r::GridRoom,
         r2j = r2 |> json
         write(f, r2j)
     end
-    img.save("$(out)/pytorch.png")
+    img = map(clamp01nan, img)
+    save_img_array(img, "$(out)/render.png")
     # occupancy grid saved as grayscale image
     save("$(out)/og.png", og)
     return nothing
@@ -70,10 +68,10 @@ end
 
 function main()
     # Parameters
-    # name = "ccn_2023_ddp_train_11f_32x32"
-    # n = 10000
-    name = "ccn_2023_ddp_test_11f_32x32"
-    n = 25
+    name = "ccn_2023_ddp_train_11f_32x32"
+    n = 1000
+    # name = "ccn_2023_ddp_test_11f_32x32"
+    # n = 25
     room_dims = (16, 16)
     entrance = [8, 9]
     door_rows = [5, 12]

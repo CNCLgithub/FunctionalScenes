@@ -140,7 +140,7 @@ function main(c)
     model_params = first(query.args)
     ddp_params = DataDrivenState(;config_path = args["ddp"],
                                  var = 0.13)
-    gt_img = img_from_instance(room, model_params)
+    gt_img = render_mitsuba(room, model_params)
     proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
                                  ddp_args = (ddp_params, gt_img, model_params))
 
@@ -152,7 +152,7 @@ function main(c)
     end
 
     # save the gt image for reference
-    save_img_array(gt_img[1, :, : ,:], "$(out_path)/pytorch.png")
+    save_img_array(gt_img, "$(out_path)/gt.png")
 
     for c = 1:args["chain"]
         Random.seed!(c)

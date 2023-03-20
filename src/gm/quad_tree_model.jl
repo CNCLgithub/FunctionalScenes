@@ -1,4 +1,5 @@
-export QuadTreeModel
+export QuadTreeModel,
+    render_mitsuba
 
 #################################################################################
 # Model specification
@@ -148,7 +149,7 @@ function node_to_mitsuba(n::QTAggNode, room_dims)
     pos[3] = 0.75
     sdim = Vector{Float32}(undef, 3)
     sdim[1:2] = dims .* room_dims
-    sdim[3] = 1.5
+    sdim[3] = 1.
     m = @pycall fs_py.create_cube(pos, sdim, n.mu)::PyObject
 end
 
@@ -161,8 +162,9 @@ function stats_from_qt(lv::Vector{QTAggNode},
         scene_d["cube_$(i)"] = node_to_mitsuba(lv[i], gt.steps)
     end
     result = @pycall mi.render(mi.load_dict(scene_d), spp=spp)::PyObject
-    # H x W x C
-    mu = @pycall numpy.array(result)::Array{Float32, 3}
+    # need to set gamma correction for proper numpy export
+    result = @pycall mi.Bitmap(result).convert(srgb_gamma=true)::PyObject
+    mu = @pycall numpy.array(result)::PyArray
     sd = fill(p.base_sigma, size(mu))
     (mu, sd)
 end
@@ -177,12 +179,11 @@ function tile_to_mitsuba(room::GridRoom, tile::Int64)
     sdim = Vector{Float32}(undef, 3)
     delta = (bounds(room) ./ (r,c))
     sdim[1:2] = [delta[1], delta[2]]
-    sdim[3] = 1.5
+    sdim[3] = 1
     m = @pycall fs_py.create_cube(pos, sdim, 1.0)::PyObject
 end
 
-function render_mitsuba(r::GridRoom, p::QuadTreeModel)
-    @unpack img_size, spp, base_sigma = p
+function render_mitsuba(r::GridRoom, img_size, spp)
     (row,col) = steps(r)
     delta = bounds(r) ./ (row, col)
     obstacle_tiles = findall(vec(data(r)) .== obstacle_tile)
@@ -194,6 +195,7 @@ function render_mitsuba(r::GridRoom, p::QuadTreeModel)
         scene_d["cube_$(i)"] = tile_to_mitsuba(r, obs_idx)
     end
     result = @pycall mi.render(mi.load_dict(scene_d), spp=spp)::PyObject
+    result = @pycall mi.Bitmap(result).convert(srgb_gamma=true)::PyObject
     # mi.util.write_bitmap("/spaths/tests/render_mitsuba.png", result)
     # H x W x C
     mu = @pycall numpy.array(result)::Array{Float32, 3}
@@ -301,7 +303,7 @@ function _init_mitsuba_scene(room::GridRoom, res)
     end
     (r,c) = steps(room)
     delta = bounds(room) ./ (r,c)
-    dim = [c, r, 10]
+    dim = [c, r, 5]
     # map exit tiles to y-shifts for `door` argument
     exit_tiles = exits(room)
     ne = length(exit_tiles)
@@ -321,6 +323,6 @@ end
 function create_obs(p::QuadTreeModel)
     @unpack gt = p
     constraints = Gen.choicemap()
-    constraints[:viz] = render_mitsuba(gt, p)
+    constraints[:viz] = render_mitsuba(gt, p.img_size, p.spp)
     constraints
 end

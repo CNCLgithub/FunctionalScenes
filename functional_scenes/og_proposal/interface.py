@@ -45,7 +45,10 @@ def dd_state(nn, x, device):
        A 1xMxN matrix containting probability of occupancy for each
        cell in the room
    """
-   x = torch.Tensor(x).float()
+   x = torch.tensor(x, device = device)
+   if x.dim == 3:
+      # single image -> batchxCxHxW
+      x = x.unsqueeze(0)
    x = nn.forward(x)
    x = x.cpu().detach().numpy()
    return x
