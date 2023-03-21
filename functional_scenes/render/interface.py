@@ -50,8 +50,10 @@ def initialize_scene(dimensions,
     d = {
         "type": "scene",
         "integrator": {
-            "type": "volpath",
-            'max_depth': 4
+            'type': 'prbvolpath',
+            'max_depth': 8,
+            # "type": "volpath",
+            # 'max_depth': 4
         },
         # REVIEW: alternatives
         # 'sampler': {'type': 'independent',

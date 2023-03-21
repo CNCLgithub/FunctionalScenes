@@ -41,10 +41,6 @@ function build(r::GridRoom;
     with_furn = expand(with_furn, factor)
 end
 
-function render(r::GridRoom)
-    @time img = render_mitsuba(r, IMG_RES, SPP)
-end
-
 function save_trial(dpath::String, i::Int64, r::GridRoom,
                     img, og)
     out = "$(dpath)/$(i)"
@@ -59,8 +55,8 @@ function save_trial(dpath::String, i::Int64, r::GridRoom,
         r2j = r2 |> json
         write(f, r2j)
     end
-    img = map(clamp01nan, img)
-    save_img_array(img, "$(out)/render.png")
+    cimg = map(clamp01nan, img)
+    save_img_array(cimg, "$(out)/render.png")
     # occupancy grid saved as grayscale image
     save("$(out)/og.png", og)
     return nothing
@@ -69,7 +65,7 @@ end
 function main()
     # Parameters
     name = "ccn_2023_ddp_train_11f_32x32"
-    n = 1000
+    n = 3
     # name = "ccn_2023_ddp_test_11f_32x32"
     # n = 25
     room_dims = (16, 16)
@@ -96,7 +92,7 @@ function main()
     for i = 1:n
         t = templates[i % 2 + 1]
         r = build(t, factor = 2)
-        r_img = render(r)
+        @time r_img = render_mitsuba(r, IMG_RES, SPP)
         r_og = occupancy_position(r)
         save_trial(out, i, r, r_img, r_og)
     end

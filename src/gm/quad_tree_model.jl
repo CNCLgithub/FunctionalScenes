@@ -165,6 +165,8 @@ function stats_from_qt(lv::Vector{QTAggNode},
     # need to set gamma correction for proper numpy export
     result = @pycall mi.Bitmap(result).convert(srgb_gamma=true)::PyObject
     mu = @pycall numpy.array(result)::PyArray
+    dr.flush_kernel_cache()
+    dr.flush_malloc_cache()
     sd = fill(p.base_sigma, size(mu))
     (mu, sd)
 end
@@ -195,10 +197,13 @@ function render_mitsuba(r::GridRoom, img_size, spp)
         scene_d["cube_$(i)"] = tile_to_mitsuba(r, obs_idx)
     end
     result = @pycall mi.render(mi.load_dict(scene_d), spp=spp)::PyObject
-    result = @pycall mi.Bitmap(result).convert(srgb_gamma=true)::PyObject
+    bitmap = @pycall mi.Bitmap(result).convert(srgb_gamma=true)::PyObject
     # mi.util.write_bitmap("/spaths/tests/render_mitsuba.png", result)
     # H x W x C
-    mu = @pycall numpy.array(result)::Array{Float32, 3}
+    mu = @pycall numpy.array(bitmap)::Array{Float32, 3}
+    @pycall dr.flush_kernel_cache()::PyObject
+    @pycall dr.flush_malloc_cache()::PyObject
+    return mu
 end
 
 #################################################################################
@@ -295,12 +300,8 @@ function all_downstream_selection(p::QuadTreeModel)
 end
 
 function _init_mitsuba_scene(room::GridRoom, res)
-    variants = @pycall mi.variants()::PyObject
-    if "cuda_ad_rgb" in variants
-        @pycall mi.set_variant("cuda_ad_rgb")::PyObject
-    else
-        @pycall mi.set_variant("scalar_rgb")::PyObject
-    end
+    # variant should already be configured in project `__init__`
+    # see src/FunctionalScenes.jl
     (r,c) = steps(room)
     delta = bounds(room) ./ (r,c)
     dim = [c, r, 5]

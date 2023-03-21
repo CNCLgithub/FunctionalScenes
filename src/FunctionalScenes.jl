@@ -26,13 +26,20 @@ using FunctionalCollections
 using PyCall
 const torch = PyNULL()
 const mi = PyNULL()
+const dr = PyNULL()
 const fs_py = PyNULL()
 const numpy = PyNULL()
 function __init__()
     copy!(numpy, pyimport("numpy"))
     copy!(torch, pyimport("torch"))
+    copy!(dr, pyimport("drjit"))
     copy!(mi, pyimport("mitsuba"))
     copy!(fs_py, pyimport("functional_scenes"))
+
+    # mitsuba variant
+    variants = @pycall mi.variants()::PyObject
+    variant = "cuda_ad_rgb" in variants ? "cuda_ad_rgb" : "scalar_rgb"
+    mi.set_variant(variant)
 end
 
 #################################################################################
