@@ -22,7 +22,7 @@ def load_og(src:str):
     return og
 
 class OGVAEDataset(Dataset):
-    def __init__(self, src: str, render_type: str = 'pytorch'):
+    def __init__(self, src: str, render_type: str = 'render'):
         with open(src + '_manifest.json', 'r') as f:
             manifest = json.load(f)
         self.src = src

@@ -3,6 +3,8 @@ from torch import nn
 import torch.nn.functional as F
 from . pytypes import *
 
+from torchvision.transforms import Resize
+
 class VAE(nn.Module):
 
     num_iter = 0 # Global static variable to keep track of iterations
@@ -19,6 +21,10 @@ class VAE(nn.Module):
         modules = []
         hidden_dims = [32, 32, 64, 128, 256, 256]
 
+        # expecting 128x128 input
+        modules.append(
+            Resize(size = (256, 256))
+        )
         # Build Encoder
         for h_dim in hidden_dims:
             modules.append(
@@ -73,7 +79,9 @@ class VAE(nn.Module):
             nn.Conv2d(hidden_dims[-1], out_channels= 3,
                       kernel_size= 3, padding= 1),
             # PrintLayer(),
-            nn.ReLU())
+            nn.ReLU(),
+            Resize(size = (128, 128)))
+
 
     def encode(self, input: Tensor) -> List[Tensor]:
         """
@@ -228,3 +236,8 @@ class Decoder(nn.Module):
         z = z.to(current_device)
         samples = self.decode(z)
         return samples
+
+class PrintLayer(nn.Module):
+    def forward(self, x:Tensor):
+        print(x.shape)
+        return x

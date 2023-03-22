@@ -52,11 +52,14 @@ Parameters for an instance of the `QuadTreeModel`.
     # Graphics
     #############################################################################
     #
-    img_size::Tuple{Int64, Int64} = (120, 180)
+    img_size::Tuple{Int64, Int64} = (128, 128)
     device::PyObject = _load_device()
+    # samples per pixel
     spp::Int64 = 24
     # preload partial scene mesh
-    scene_d::PyDict = _init_mitsuba_scene(gt, img_size)
+    scene::PyObject = _init_mitsuba_scene(gt, img_size)
+    sparams::PyObject = @pycall mi.traverse(scene)::PyObject
+    skey::String = "grid.interior_medium.sigma_t.data"
     # minimum variance in prediction
     base_sigma::Float64 = 1.0
 end
@@ -142,67 +145,45 @@ end
 # Graphics
 #################################################################################
 
-function node_to_mitsuba(n::QTAggNode, room_dims)
-    @unpack center, dims = (n.node)
-    pos = Vector{Float32}(undef, 3)
-    pos[1:2] = center .* room_dims
-    pos[3] = 0.75
-    sdim = Vector{Float32}(undef, 3)
-    sdim[1:2] = dims .* room_dims
-    sdim[3] = 1.
-    m = @pycall fs_py.create_cube(pos, sdim, n.mu)::PyObject
-end
-
 function stats_from_qt(lv::Vector{QTAggNode},
                        p::QuadTreeModel)
-    @unpack gt, img_size, spp, base_sigma = p
+    @unpack gt, dims, scene, sparams, skey, spp, base_sigma = p
     n = length(lv)
-    scene_d = _init_mitsuba_scene(gt, img_size)
-    for i = 1:n
-        scene_d["cube_$(i)"] = node_to_mitsuba(lv[i], gt.steps)
-    end
-    result = @pycall mi.render(mi.load_dict(scene_d), spp=spp)::PyObject
+    weights = project_qt(lv, dims)
+    # turn off walls
+    weights[data(gt) .== wall_tile] .= 0
+    # need to transpose for mitsuba
+    weights = Matrix{Float64}(weights')
+    obs_ten = reshape(weights, (1, size(weights)..., 1))
+    prev_val = sync_params!(sparams, skey, obs_ten)
+
+    result = @pycall mi.render(scene, spp=spp)::PyObject
     # need to set gamma correction for proper numpy export
     result = @pycall mi.Bitmap(result).convert(srgb_gamma=true)::PyObject
     mu = @pycall numpy.array(result)::PyArray
-    dr.flush_kernel_cache()
-    dr.flush_malloc_cache()
     sd = fill(p.base_sigma, size(mu))
-    (mu, sd)
+
+    # REVIEW: might not be necessary
+    sync_params!(sparams, skey, prev_val)
+
+    return (mu, sd)
 end
 
 
-function tile_to_mitsuba(room::GridRoom, tile::Int64)
-    r,c  = steps(room)
-    center = idx_to_node_space(tile, r)
-    pos = Vector{Float32}(undef, 3)
-    pos[1:2] = center .* bounds(room)
-    pos[3] = 0.75
-    sdim = Vector{Float32}(undef, 3)
-    delta = (bounds(room) ./ (r,c))
-    sdim[1:2] = [delta[1], delta[2]]
-    sdim[3] = 1
-    m = @pycall fs_py.create_cube(pos, sdim, 1.0)::PyObject
-end
+function render_mitsuba(r::GridRoom, scene, params, key, spp)
+    obs_mat = zeros(steps(r))
+    obs_mat[data(r) .== obstacle_tile] .= 1.0
+    # need to transport data matrix for mitsuba
+    obs_mat = Matrix{Float64}(obs_mat')
+    obs_ten = reshape(obs_mat, (1, size(obs_mat)..., 1))
+    prev_val = sync_params!(params, key, obs_ten)
 
-function render_mitsuba(r::GridRoom, img_size, spp)
-    (row,col) = steps(r)
-    delta = bounds(r) ./ (row, col)
-    obstacle_tiles = findall(vec(data(r)) .== obstacle_tile)
-    no = length(obstacle_tiles)
-    scene_d = _init_mitsuba_scene(r, img_size)
-    for i = 1:no
-        obs_idx = @inbounds obstacle_tiles[i]
-        obs_pos = idx_to_node_space(obs_idx, row)
-        scene_d["cube_$(i)"] = tile_to_mitsuba(r, obs_idx)
-    end
-    result = @pycall mi.render(mi.load_dict(scene_d), spp=spp)::PyObject
+    result = @pycall mi.render(scene, spp=spp)::PyObject
     bitmap = @pycall mi.Bitmap(result).convert(srgb_gamma=true)::PyObject
-    # mi.util.write_bitmap("/spaths/tests/render_mitsuba.png", result)
     # H x W x C
     mu = @pycall numpy.array(bitmap)::Array{Float32, 3}
-    @pycall dr.flush_kernel_cache()::PyObject
-    @pycall dr.flush_malloc_cache()::PyObject
+    # REVIEW: might not be necessary
+    sync_params!(params, key, prev_val)
     return mu
 end
 
@@ -210,9 +191,12 @@ end
 # Planning
 #################################################################################
 
+function a_star_heuristic(nodes::Vector{QTAggNode}, dest::QTAggNode)
+    src -> dist(nodes[src].node, dest.node)
+end
 function a_star_heuristic(nodes::Vector{QTAggNode}, dest::Int64)
     _dest = nodes[dest]
-    src -> dist(nodes[src].node, _dest.node)
+    a_star_heuristic(nodes, _dest)
 end
 
 function nav_graph(lv::Vector{QTAggNode})
@@ -258,14 +242,39 @@ function qt_a_star(lv::Vector{QTAggNode}, d::Int64, ent::Int64, ext::Int64)
     rmul!(dm, d)
     g = SimpleGraph(ad)
     # map entrance and exit in room to qt
-    ent_p = idx_to_node_space(ent, d)
-    a = findfirst(s -> contains(s, ent_p), lv)
-    ext_p = idx_to_node_space(ext, d)
-    b = findfirst(s -> contains(s, ext_p), lv)
+    ent_point = idx_to_node_space(ent, d)
+    a = findfirst(s -> contains(s, ent_point), lv)
+    ext_point = idx_to_node_space(ext, d)
+    b = findfirst(s -> contains(s, ext_point), lv)
     heuristic = a_star_heuristic(lv, b)
     # compute path and path grid
     path = a_star(g, a, b, dm, heuristic)
     QTPath(g, dm, path)
+end
+
+
+# same as above but uses qt root
+function qt_a_star(root::QTAggNode, lv::Vector{QTAggNode},
+                   d::Int64, ent::Int64, ext::Int64)
+    # TODO: should be able to search from root
+    # and also refer to leaves
+    qt_a_star(lv, d, ent, ext)
+    # #REVIEW: Shouldn't this either be 1 or >4?
+    # length(lv) == 1 && return QTPath(first(lv))
+    # # adjacency, distance matrix, and leaves
+    # ad, dm = nav_graph(lv)
+    # # scale dist matrix by room size
+    # rmul!(dm, d)
+    # g = SimpleGraph(ad)
+    # # map entrance and exit in room to qt
+    # ent_point = idx_to_node_space(ent, d)
+    # a = traverse_qt(root, ent_point)
+    # ext_point = idx_to_node_space(ext, d)
+    # b = traverse_qt(root, ext_point)
+    # heuristic = a_star_heuristic(lv, b)
+    # # compute path and path grid
+    # path = a_star(g, a, b, dm, heuristic)
+    # QTPath(g, dm, path)
 end
 
 #################################################################################
@@ -302,6 +311,7 @@ end
 function _init_mitsuba_scene(room::GridRoom, res)
     # variant should already be configured in project `__init__`
     # see src/FunctionalScenes.jl
+    mi.set_variant("cuda_ad_rgb")
     (r,c) = steps(room)
     delta = bounds(room) ./ (r,c)
     dim = [c, r, 5]
@@ -318,12 +328,25 @@ function _init_mitsuba_scene(room::GridRoom, res)
     door_left = maximum(exit_ys)
     door_right = minimum(exit_ys)
     door = [door_left, -door_right]
+    # empty room
     scene_d = @pycall fs_py.initialize_scene(dim, door, res)::PyDict
+    # add volume grid
+    scene_d["grid"] = @pycall fs_py.create_volume([r, c])::PyObject
+    scene = @pycall mi.load_dict(scene_d)::PyObject
+    return scene
 end
 
 function create_obs(p::QuadTreeModel)
     @unpack gt = p
     constraints = Gen.choicemap()
-    constraints[:viz] = render_mitsuba(gt, p.img_size, p.spp)
+    constraints[:viz] = render_mitsuba(gt, p.scene, p.sparams,
+                                       p.skey, p.spp)
     constraints
+end
+
+function sync_params!(params::PyObject, key, val)::PyObject
+    prev = get(params, PyObject, key)
+    set!(params, key, val)
+    py"$params.update()"o
+    return prev
 end

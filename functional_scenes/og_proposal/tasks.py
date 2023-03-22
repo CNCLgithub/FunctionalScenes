@@ -9,7 +9,7 @@ from torchvision.transforms.functional import (resize,
                                                rotate)
 
 from . pytypes import *
-from . model import VAE, Decoder
+from . vae import VAE, Decoder
 
 class SceneEmbedding(pl.LightningModule):
     """Task of embedding image space into z-space"""
@@ -53,6 +53,12 @@ class SceneEmbedding(pl.LightningModule):
         x = batch[0]
         mu, log_var, y = self.forward(x)
         l = self.loss_function(y, x, mu, log_var)
+        vutils.save_image(x.data,
+                          os.path.join(self.logger.log_dir ,
+                                       "reconstructions",
+                                       f"recons_{self.logger.name}_epoch_{self.current_epoch}_gt.png"),
+                          normalize=True,
+                          nrow=12)
         vutils.save_image(y.data,
                           os.path.join(self.logger.log_dir ,
                                        "reconstructions",
@@ -121,28 +127,33 @@ class OGDecoder(pl.LightningModule):
         x, og = batch
         pred_og = self.forward(x)
         val_loss = self.loss_function(pred_og, og)
-        og_pred_img = rotate(resize(pred_og.unsqueeze(1), 256), 90).data
+        self.log('val_loss', val_loss)
+        # og_pred_img = rotate(resize(pred_og.unsqueeze(1), 256), 90).data
+        # og_pred_img = torch.flip(resize(pred_og.unsqueeze(1), 256), (2,)).data
+        og_pred_img = torch.flip(pred_og.unsqueeze(1), (2,)).data
         vutils.save_image(og_pred_img,
                           os.path.join(self.logger.log_dir ,
                                        "reconstructions",
                                        f"recons_{self.logger.name}_Epoch_{self.current_epoch}.png"),
                           normalize=False,
                           nrow=2)
-        og_gt_img = rotate(resize(og.unsqueeze(1), 256), 90).data
-        vutils.save_image(og_gt_img,
-                          os.path.join(self.logger.log_dir ,
-                                       "reconstructions",
-                                       f"gt_{self.logger.name}_Epoch_{self.current_epoch}.png"),
-                          normalize=False,
-                          nrow=2)
-        vutils.save_image(x.data,
-                          os.path.join(self.logger.log_dir ,
-                                       "reconstructions",
-                                       f"input_{self.logger.name}_Epoch_{self.current_epoch}.png"),
-                          normalize=True,
-                          nrow=2)
-        self.log('val_loss', val_loss)
-        self.sample_ogs()
+        # og_gt_img = rotate(resize(og.unsqueeze(1), 256), 90).data
+        # og_gt_img = torch.flip(resize(og.unsqueeze(1), 256), (2,)).data
+        og_gt_img = torch.flip(og.unsqueeze(1), (2,)).data
+        if self.current_epoch % 5 == 0:
+            vutils.save_image(og_gt_img,
+                            os.path.join(self.logger.log_dir ,
+                                        "reconstructions",
+                                        f"gt_{self.logger.name}_Epoch_{self.current_epoch}.png"),
+                            normalize=False,
+                            nrow=2)
+            vutils.save_image(x.data,
+                            os.path.join(self.logger.log_dir ,
+                                        "reconstructions",
+                                        f"input_{self.logger.name}_Epoch_{self.current_epoch}.png"),
+                            normalize=True,
+                            nrow=2)
+            self.sample_ogs()
 
     def test_step(self, batch, batch_idx):
         self.validation_step(batch, batch_idx)

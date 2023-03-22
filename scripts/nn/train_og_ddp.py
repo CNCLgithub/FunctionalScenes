@@ -10,8 +10,8 @@ from lightning.pytorch.loggers import CSVLogger
 from lightning.pytorch.callbacks import (LearningRateMonitor,
                                          ModelCheckpoint)
 
-from functional_scenes.og_proposal.model import (VAE,
-                                                 Decoder)
+from functional_scenes.og_proposal.vae import (VAE,
+                                               Decoder)
 from functional_scenes.og_proposal.tasks import (SceneEmbedding,
                                                  OGDecoder)
 from functional_scenes.og_proposal.dataset import (ogvae_loader,
@@ -60,7 +60,7 @@ def main():
                                          save_last=True),
                      ],
                      accelerator = 'auto',
-                     deterministic = True,
+                     deterministic = False,
                      **config['trainer_params'])
     device = runner.device_ids[0]
     train_loader = loader(config['path_params']['train_path'],

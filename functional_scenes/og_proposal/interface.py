@@ -3,7 +3,7 @@ import yaml
 import torch
 import numpy as np
 
-from . model import VAE, Decoder
+from . vae import VAE, Decoder
 from . tasks import SceneEmbedding, OGDecoder
 
 # intialization of neural network for forward execution

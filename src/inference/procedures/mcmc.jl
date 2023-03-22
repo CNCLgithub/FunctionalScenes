@@ -128,7 +128,7 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
         node = st.lv[i].node
         accept_ct = 0
         e_dist = 0
-        println("INIT KERNEL: node $(node.tree_idx)")
+        # println("INIT KERNEL: node $(node.tree_idx)")
         for j = 1:init_cycles
             _t, alpha = rw_move(t, node.tree_idx)
             w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
@@ -144,8 +144,8 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
         # map node to sensitivity matrix
         sidx = node_to_idx(node, size(st.gs, 1))
         chain.auxillary.sensitivities[sidx] .= e_dist
-        println("\t avg distance: $(e_dist)")
-        println("\t acceptance ratio: $(accept_ct/init_cycles)")
+        # println("\t avg distance: $(e_dist)")
+        # println("\t acceptance ratio: $(accept_ct/init_cycles)")
     end
 
     chain.state = t
@@ -167,8 +167,6 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     room_idx = categorical(auxillary.weights)
     node = room_to_leaf(st, room_idx, params.dims[1]).node
 
-    @debug "Attending to node $(node.tree_idx)"
-
     println("ATTENTION KERNEL: node $(node.tree_idx)")
 
     # RW moves
@@ -179,7 +177,7 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
         w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
         obj_t_prime = objective(_t)
         e_dist += distance(obj_t, obj_t_prime) * w
-        @show alpha
+        # @show alpha
         if log(rand()) < alpha
             t = _t
             obj_t = obj_t_prime
@@ -194,40 +192,42 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     println("\t avg distance: $(e_dist)")
     println("\t rw acceptance ratio: $(accept_ct/rw_cycles)")
 
-    display_selected_node(sidx, size(st.gs))
+    # display_selected_node(sidx, size(st.gs))
 
     # SM moves
     # split randomly
     # or deterministically if node is root
     # (can still merge lvl 2 into root)
-    is_balanced = balanced_split_merge(t, node.tree_idx)
-    moves = is_balanced ? [split_move, merge_move] : [split_move]
-    move = rand(moves)
-    _t, _ls = split_merge_move(t, node.tree_idx, move)
-    accept_ct = 0
-    for i = 1 : proc.sm_cycles
-        _t, _w = rw_move(move, _t, node.tree_idx)
-        _ls += _w
-        @show _ls
-        if log(rand()) < _ls
-            t = _t
-            accept_ct += 1
-            break
+    can_split = node.max_level > node.level
+    if can_split
+        is_balanced = balanced_split_merge(t, node.tree_idx)
+        moves = is_balanced ? [split_move, merge_move] : [split_move]
+        accept_ct = 0
+        for i = 1 : proc.sm_cycles
+            move = rand(moves)
+            _t, _w = split_merge_move(t, node.tree_idx, move)
+            # _t, _w = rw_move(move, sm_t, node.tree_idx)
+            # @show _ls
+            if log(rand()) < _w
+                t = _t
+                accept_ct += 1
+                break
+            end
         end
+        # move = rand(moves)
+        # sm_t, sm_ls = split_merge_move(t, node.tree_idx, move)
+        # accept_ct = 0
+        # for i = 1 : proc.sm_cycles
+        #     _t, _w = rw_move(move, sm_t, node.tree_idx)
+        #     # @show _ls
+        #     if log(rand()) < sm_ls + _w
+        #         t = _t
+        #         accept_ct += 1
+        #         break
+        #     end
+        # end
+        println("\t accepted SM move: $(accept_ct == 1)")
     end
-    # for i = 1 : proc.sm_cycles
-    #     move = rand(moves)
-    #     # split = rand() > 0.5 || node.tree_idx == 1
-    #     # move = split ? split_move : merge_move
-    #     _t, _ls = split_merge_move(t, node.tree_idx, move)
-    #     @show _ls
-    #     if log(rand()) < _ls
-    #         t = _t
-    #         accept_ct += 1
-    #         break
-    #     end
-    # end
-    println("\t accepted SM move: $(accept_ct == 1)")
 
     # update trace
     chain.state = t
@@ -247,8 +247,8 @@ function viz_chain(chain::StaticMHChain)
     #                     size(auxillary.sensitivities)))
     println("Inferred state")
     display_mat(trace_st.gs)
-    println("Predicted Image")
-    display_img(trace_st.img_mu)
+    # println("Predicted Image")
+    # display_img(trace_st.img_mu)
 end
 
 function display_selected_node(sidx, dims)

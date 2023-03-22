@@ -34,12 +34,14 @@ function __init__()
     copy!(torch, pyimport("torch"))
     copy!(dr, pyimport("drjit"))
     copy!(mi, pyimport("mitsuba"))
-    copy!(fs_py, pyimport("functional_scenes"))
 
-    # mitsuba variant
+    # mitsuba variant must be set first
     variants = @pycall mi.variants()::PyObject
     variant = "cuda_ad_rgb" in variants ? "cuda_ad_rgb" : "scalar_rgb"
     mi.set_variant(variant)
+
+
+    copy!(fs_py, pyimport("functional_scenes"))
 end
 
 #################################################################################

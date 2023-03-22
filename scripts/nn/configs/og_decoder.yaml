@@ -3,7 +3,7 @@ mode: 'og_decoder'
 model_params:
   in_channels: 3
   latent_dim: 128
- 
+
 vae_chkpt: "/spaths/checkpoints/scene_vae/version_0/checkpoints/last.ckpt"
 
 
@@ -16,7 +16,7 @@ path_params:
   test_path: "/spaths/datasets/ccn_2023_ddp_test_11f_32x32"
 
 loader_params:
-  batch_size: 36
+  batch_size: 32
   num_workers: 4
 
 exp_params:

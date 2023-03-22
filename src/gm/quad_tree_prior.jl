@@ -71,7 +71,7 @@ function node_to_idx(n::QTProdNode, d::Int64)
         upper = center + fac * dims
         steps = Int64(exp2(max_level - level))
         # xy ordering to match julia col-wise
-        # doesn't actually matter
+        # doesn't actually matter for square scenes
         xs = LinRange(lower[1], upper[1], steps)
         ys = LinRange(upper[2], lower[2], steps)
         idx = Vector{Int64}(undef, steps^2)
@@ -308,6 +308,22 @@ function traverse_qt(root::QTAggNode, dest::Int64)
         root = root.children[path[i]]
     end
     root
+end
+
+
+"""
+    traverse_qt(root, dest)
+
+Returns the quad tree node that contains `dest`.
+"""
+function traverse_qt(root::QTAggNode, dest::SVector{2, Float64})
+    # assuming root must contain dest
+    head = root
+    while !isempty(head.children)
+        idx = findfirst(s -> contains(s, dest), head.children)
+        head = @inbounds head.children[idx]
+    end
+    return head
 end
 
 

@@ -1,4 +1,5 @@
 using CSV
+using Gen: get_retval
 using JSON
 using JLD2
 using FileIO
@@ -139,8 +140,9 @@ function main(c)
     # Load estimator - Adaptive MCMC
     model_params = first(query.args)
     ddp_params = DataDrivenState(;config_path = args["ddp"],
-                                 var = 0.13)
-    gt_img = render_mitsuba(room, model_params)
+                                 var = 0.2)
+    gt_img = render_mitsuba(room, model_params.scene, model_params.sparams,
+                            model_params.skey, model_params.spp)
     proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
                                  ddp_args = (ddp_params, gt_img, model_params))
 

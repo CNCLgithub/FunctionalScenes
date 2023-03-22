@@ -19,17 +19,17 @@ end
 #################################################################################
 
 function display_mat(m::Matrix{Float64};
+                     rotate::Bool = true,
                      c1=colorant"black",
                      c2=colorant"white")
     img = weighted_color_mean.(m, c2, c1)
-    img = rotr90(img, 3)
+    img = rotate ? rotr90(img, 3) : img
     display(img)
     return nothing
 end
 
 function display_img(m::Array{Float64, 3})
-    img = colorview(RGB, m)
-    # img = rotr90(img, 3)
+    img = colorview(RGB, permutedims(m, (3,1,2)))
     display(img)
     return nothing
 end

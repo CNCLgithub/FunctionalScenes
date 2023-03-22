@@ -18,7 +18,7 @@ export qt_model
     pred = @trace(broadcasted_normal(viz[1], viz[2]), :viz)
 
     # shortest path given qt uncertainty
-    qtpath::QTPath = qt_a_star(leaves, params.dims[1],
+    qtpath::QTPath = qt_a_star(qt, leaves, params.dims[1],
                                params.entrance,
                                params.exit)
 
