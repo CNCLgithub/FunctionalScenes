@@ -85,19 +85,6 @@ struct QTPath
     edges::Vector{AbstractEdge}
 end
 
-
-struct QuadTreeState
-    qt::QTAggNode
-    gs::Matrix{Float64}
-    img_mu::Array{Float64, 3}
-    path::QTPath
-    lv::Vector{QTAggNode}
-end
-
-function QuadTreeState(qt, gs, img_mu,  pg)
-   QuadTreeState(qt, gs, img_mu, pg, leaf_vec(qt))
-end
-
 function QTPath(st::QTAggNode)
     g = SimpleGraph(1)
     dm = Matrix{Float64}(undef, 1, 1)
@@ -106,50 +93,26 @@ function QTPath(st::QTAggNode)
     QTPath(g, dm, edges)
 end
 
-function add_from_state_flip(params::QuadTreeModel,
-                             occupied::AbstractVector{Bool})::GridRoom
-    @unpack template = params
-    d = vec(data(template))
-    possible = @. occupied && !(d == wall_tile)
-    add(template, Set{Int64}(findall(possible)))
+
+struct QuadTreeState
+    qt::QuadTree
+    img_mu::Array{Float64, 3}
+    img_sd::Array{Float64, 3}
+    path::QTPath
 end
 
-"""
-    project_qt(lv, dims)
 
-Projects the quad tree to a nxn matrix
-
-# Arguments
-- `lv::Vector{QTAggNode}`: The leaves of a quad tree
-- `dims`: Dimensions of the target grid
-"""
-function project_qt(lv::Vector{QTAggNode}, dims::Tuple{Int64, Int64})
-    gs = Matrix{Float64}(undef, dims[1], dims[2])
-    project_qt!(gs, lv)
-    return gs
-end
-
-function project_qt!(gs::Matrix{Float64},
-                     lv::Vector{QTAggNode})
-    d = size(gs, 1)
-    for x in lv
-        idx = node_to_idx(x.node, d)
-        # potentially broadcast coarse states
-        gs[idx] .= weight(x)
-    end
-    return nothing
-end
 
 
 #################################################################################
 # Graphics
 #################################################################################
 
-function stats_from_qt(lv::Vector{QTAggNode},
+function stats_from_qt(qt::QuadTree,
                        p::QuadTreeModel)
+    @unpack projected = qt
     @unpack gt, dims, scene, sparams, skey, spp, base_sigma = p
-    n = length(lv)
-    weights = project_qt(lv, dims)
+    weights = Matrix{Float64}(projected)
     # turn off walls
     weights[data(gt) .== wall_tile] .= 0
     # need to transpose for mitsuba
@@ -191,40 +154,42 @@ end
 # Planning
 #################################################################################
 
-function a_star_heuristic(nodes::Vector{QTAggNode}, dest::QTAggNode)
-    src -> dist(nodes[src].node, dest.node)
+function a_star_heuristic(nodes::Vector{QTAggNode}, dest::QTAggNode,
+                          scale::Float64)
+    src -> dist(nodes[src].node, dest.node) * scale
 end
-function a_star_heuristic(nodes::Vector{QTAggNode}, dest::Int64)
+function a_star_heuristic(nodes::Vector{QTAggNode}, dest::Int64, scale::Float64)
     _dest = nodes[dest]
     a_star_heuristic(nodes, _dest)
 end
 
-function nav_graph(lv::Vector{QTAggNode})
+function nav_graph(lv::Vector{QTAggNode}, dist_weight::Float64)
     n = length(lv)
     adm = fill(false, (n, n))
     dsm = fill(Inf, (n, n))
+
     @inbounds for i = 1:(n-1), j = (i+1):n
         x = lv[i]
         y = lv[j]
         # only care when nodes are touching
         contact(x.node, y.node) || continue
-        d = dist(x.node, y.node)
+        d = dist(x.node, y.node) * dist_weight
         #  work to traverse each node
         p = area(x.node) / (area(x.node) + area(y.node))
-        work = d * (p * weight(x) + (1-p)*weight(y))
+        work = d + (p * weight(x) + (1-p)*weight(y))
         adm[i, j] = adm[j, i] = true
         dsm[i, j] = dsm[j, i] = work
     end
-    (adm, dsm, lv)
+    (adm, dsm)
 end
 
 """
-    qt_a_star(st, d, ent, ext)
+    qt_a_star(qt, d, ent, ext)
 
 Applies `a_star` to the quad tree.
 
 # Arguments
-- `st::QTAggNode`: The root node of the QT
+- `qt::QuadTree`: A quad tree to traverse over leaves
 - `d::Int64`: The row dimensions of the room
 - `ent::Int64`: The entrance tile
 - `ext::Int64`: The exit tile
@@ -233,48 +198,29 @@ Applies `a_star` to the quad tree.
 A tuple, first element is `QTPath` and the second is a vector
  of the leave nodes in QT.
 """
-function qt_a_star(lv::Vector{QTAggNode}, d::Int64, ent::Int64, ext::Int64)
-    #REVIEW: Shouldn't this either be 1 or >4?
-    length(lv) == 1 && return QTPath(first(lv))
-    # adjacency, distance matrix, and leaves
-    ad, dm = nav_graph(lv)
-    # scale dist matrix by room size
-    rmul!(dm, d)
+function qt_a_star(qt::QuadTree, dw::Float64, ent::Int64, ext::Int64)
+    @unpack root, leaves, mapping = qt
+    length(leaves) == 1 && return QTPath(first(leaves))
+    # adjacency, distance matrix
+    ad, dm = nav_graph(leaves, dw)
+
     g = SimpleGraph(ad)
+
     # map entrance and exit in room to qt
-    ent_point = idx_to_node_space(ent, d)
-    a = findfirst(s -> contains(s, ent_point), lv)
-    ext_point = idx_to_node_space(ext, d)
-    b = findfirst(s -> contains(s, ext_point), lv)
-    heuristic = a_star_heuristic(lv, b)
+    row_d::Int64 = max_leaves(qt.root.node)
+    ent_point = idx_to_node_space(ent, row_d)
+    ent_node = traverse_qt(root, ent_point)
+    ent_idx = mapping[ent_node.node.tree_idx]
+
+    ext_point = idx_to_node_space(ext, row_d)
+    ext_node = traverse_qt(root, ext_point)
+    ext_idx = mapping[ext_node.node.tree_idx]
+
+    # L2 heuristic used in A*
+    heuristic = a_star_heuristic(leaves, ext_node, dw)
     # compute path and path grid
-    path = a_star(g, a, b, dm, heuristic)
+    path = a_star(g, ent_idx, ext_idx, dm, heuristic)
     QTPath(g, dm, path)
-end
-
-
-# same as above but uses qt root
-function qt_a_star(root::QTAggNode, lv::Vector{QTAggNode},
-                   d::Int64, ent::Int64, ext::Int64)
-    # TODO: should be able to search from root
-    # and also refer to leaves
-    qt_a_star(lv, d, ent, ext)
-    # #REVIEW: Shouldn't this either be 1 or >4?
-    # length(lv) == 1 && return QTPath(first(lv))
-    # # adjacency, distance matrix, and leaves
-    # ad, dm = nav_graph(lv)
-    # # scale dist matrix by room size
-    # rmul!(dm, d)
-    # g = SimpleGraph(ad)
-    # # map entrance and exit in room to qt
-    # ent_point = idx_to_node_space(ent, d)
-    # a = traverse_qt(root, ent_point)
-    # ext_point = idx_to_node_space(ext, d)
-    # b = traverse_qt(root, ext_point)
-    # heuristic = a_star_heuristic(lv, b)
-    # # compute path and path grid
-    # path = a_star(g, a, b, dm, heuristic)
-    # QTPath(g, dm, path)
 end
 
 #################################################################################
@@ -294,9 +240,7 @@ Returns
 """
 function room_to_leaf(st::QuadTreeState, ridx::Int64, c::Int64)
     point = idx_to_node_space(ridx, c)
-    # TODO: traverse through the QT should be faster
-    l = findfirst(s -> contains(s, point), st.lv)
-    st.lv[l]
+    traverse_qt(st.qt, point)
 end
 
 const qt_model_all_downstream_selection = StaticSelection(select(:instances))

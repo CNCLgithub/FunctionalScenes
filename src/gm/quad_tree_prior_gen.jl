@@ -12,16 +12,17 @@ end
                              children::Vector{QTAggNode})
     local mu
     if isempty(children)
-        # prior sharpens with node depth
-        w = 1.0 - 0.2 * (n.level - 1)
-        clamp(w, 0.2, 0.99)
-        mu = @trace(beta(w, w), :mu)
-        # mu = @trace(uniform(0., 1.), :mu)
+        # REVIEW: beta may cause -Inf log scores?
+        # # prior sharpens with node depth
+        # w = 1.0 - 0.2 * (n.level - 1)
+        # clamp(w, 0.2, 0.99)
+        # mu = @trace(beta(w, w), :mu)
+        mu = @trace(uniform(0., 1.), :mu)
     else
         mu = mean(weight.(children))
     end
 
-    agg::QTAggNode = aggregate_qt(n, mu, children)
+    agg::QTAggNode = QTAggNode(n, mu, children)
     return agg
 end
 

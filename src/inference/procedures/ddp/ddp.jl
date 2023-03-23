@@ -49,12 +49,9 @@ function generate_qt_from_ddp(ddp_params::DataDrivenState, img, model_params)
     x = @pycall x.unsqueeze(0)::PyObject
     x = @pycall nn.forward(x)::PyObject
     state = @pycall x.detach().cpu().numpy()::Matrix{Float64}
-    println("Initial state")
+    state = Matrix{Float64}(state')
+    println("Data-driven state")
     display_mat(state)
-    # bottom-left quadrant
-    # z = zeros(size(state))
-    # z[1:16, 1:16] = state[1:16, 1:16]
-    # display_mat(z)
     head = model_params.start_node
     d = model_params.dims[2]
     # Iterate through QT

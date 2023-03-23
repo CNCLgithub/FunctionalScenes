@@ -37,7 +37,7 @@ function build(r::GridRoom;
     # buffer along sides
     start_y = side_buffer + 1
     stop_y = first(dims) - side_buffer
-    weights[start_x:stop_x, start_y:stop_y] .= 1.0
+    weights[start_y:stop_y, start_x:stop_x] .= 1.0
     vmap = PersistentVector(vec(weights))
 
     # generate furniture once and then apply to
@@ -72,7 +72,7 @@ function main()
     name = "ccn_2023_ddp_train_11f_32x32"
     n = 5000
     # name = "ccn_2023_ddp_test_11f_32x32"
-    # n = 20
+    # n = 16
     room_dims = (16, 16)
     entrance = [8, 9]
     door_rows = [5, 12]

@@ -1,6 +1,6 @@
 using Base.Iterators: product
 
-export QTProdNode, QTAggNode
+export QTProdNode, QTAggNode, QuadTree
 
 
 #################################################################################
@@ -34,6 +34,13 @@ end
 The area of the node.
 """
 area(n::QTProdNode) = prod(n.dims)
+
+"""
+    max_leaves(n::QTProdNode)::Int
+
+The finest resolutions supported
+"""
+max_leaves(n::QTProdNode) = 2^(n.max_level - 1)
 
 # helper constants
 const _slope =  SVector{2, Float64}([1., -1.])
@@ -135,10 +142,7 @@ end
 # REVIEW: Some way to parameterize weights?
 function produce_weight(n::QTProdNode)::Float64
     @unpack level, max_level = n
-    # maximum depth, do not split
-    # otherwise uniform
-    level == max_level && return 0.0
-    return 0.5
+    level == max_level ? 0. : 0.5
 end
 
 const sqrt_v = SVector{2, Float64}(fill(sqrt(2), 2))
@@ -196,6 +200,26 @@ leaves(st::QTAggNode) = st.leaves
 node(st::QTAggNode) = st.node
 Base.length(st::QTAggNode) = st.k
 
+
+"""
+
+Aggregates quad tree production nodes into a tree, keeping track of
+DOF.
+"""
+function QTAggNode(n::QTProdNode, y::Float64, children::Vector{QTAggNode})
+    if isempty(children)
+        u  = 0.0
+        k = 1
+        l = 1
+    else
+        # equal area => mean of variance
+        u = sqrt(mean(dof.(children).^2))
+        k = sum(length.(children)) + 1
+        l = sum(leaves.(children))
+    end
+    QTAggNode(y, u, k, l, n, children)
+end
+
 function contains(st::QTAggNode, p::SVector{2, Float64})
     contains(st.node, p)
 end
@@ -210,6 +234,7 @@ function leaf_vec(s::QTAggNode)::Vector{QTAggNode}
     add_leaves!(v, s)
     return v
 end
+
 
 function add_leaves!(v::Vector{QTAggNode}, s::QTAggNode)
     heads::Vector{QTAggNode} = [s]
@@ -226,43 +251,37 @@ function add_leaves!(v::Vector{QTAggNode}, s::QTAggNode)
     return nothing
 end
 
-"""
 
-Aggregates quad tree production nodes into a tree, keeping track of
-DOF.
-"""
-function aggregate_qt(n::QTProdNode, y::Float64,
-                      children::Vector{QTAggNode})::QTAggNode
-    if isempty(children)
-        u  = 0.0
-        k = 1
-        l = 1
-    else
-        # equal area => mean of variance
-        u = sqrt(mean(dof.(children).^2))
-        k = sum(length.(children)) + 1
-        l = sum(leaves.(children))
+function leaf_mapping(lv::Vector{QTAggNode})::Dict{Int64, Int64}
+    mapping = Dict{Int64, Int64}()
+    for i = 1:length(lv)
+        leaf = @inbounds lv[i]
+        mapping[leaf.node.tree_idx] = i
     end
-    QTAggNode(y, u, k, l, n, children)
+    return mapping
 end
 
-# struct QuadTree
-#     g::SimpleDiGraph{Int64, Float64}
-#     d::Vector{QTAggNode}
-# end
 
-# function QuadTree(root::QTAggNode)
-#     @unpack n = root
-#     d = Vector{QTAggNode}(undef, n)
-#     adj = fill(false, (n, n))
-#     @inbounds for i = 1:n
-#         pass
-#     end
-# end
 
 #################################################################################
-# Misc.
+# Tree and traversal
 #################################################################################
+
+
+struct QuadTree
+    root::QTAggNode
+    leaves::Vector{QTAggNode}
+    mapping::Dict{Int64, Int64}
+    projected::Matrix{Float64}
+end
+
+function QuadTree(root::QTAggNode)
+    lvs = leaf_vec(root)
+    mapping = leaf_mapping(lvs)
+    nmax = max_leaves(root.node)
+    projected = project_qt(lvs, nmax)
+    QuadTree(root, lvs, mapping, projected)
+end
 
 """
     get_depth(n::Int64)
@@ -271,11 +290,10 @@ Returns the depth of a node in a quad tree,
 using Gen's `Recurse` indexing system.
 """
 function get_depth(n::Int64)
-    n == 1 && return 1
-    p = Gen.get_parent(n, 4)
-    d = 2
-    while p != 1
-        p = Gen.get_parent(p, 4)
+    head = n
+    d::Int64 = 1
+    while head > 1
+        head = Gen.get_parent(head, 4)
         d += 1
     end
     d
@@ -314,7 +332,7 @@ end
 """
     traverse_qt(root, dest)
 
-Returns the quad tree node that contains `dest`.
+Returns the *smallest* quad tree node that contains `dest`.
 """
 function traverse_qt(root::QTAggNode, dest::SVector{2, Float64})
     # assuming root must contain dest
@@ -326,37 +344,30 @@ function traverse_qt(root::QTAggNode, dest::SVector{2, Float64})
     return head
 end
 
+traverse_qt(qt::QuadTree, dest) = traverse_qt(qt.root, dest)
 
-# function inh_adj_matrix(st::QTAggNode)
-#     am = Matrix{Bool}(falses(st.k + 1, st.k + 1))
-#     if st.k == 1
-#         am[1,2] = true
-#     end
-#     inh_adj_matrix!(am, st, 1, 1)
-#     return am
-# end
+"""
+    project_qt(lv, dims)
 
-# function inh_adj_matrix!(am::Matrix{Bool},
-#                      st::QTAggNode,
-#                      node::Int64,
-#                      node_index::Int64)
-#     c_index = node_index + 1
-#     isempty(st.children) && return c_index
-#     @show node => node_index
-#     # TODO: inbounds
-#     for i = 1:4
-#         # child in gen space
-#         c = get_child(node, i, 4)
-#         # child in graph space
-#         # add edge to adj matrix
-#         @show node => node_index =>  c_index
-#         am[node_index, c_index] = true
-#         # recurse through children
-#         c_index = adj_matrix!(am, st.children[i], c, c_index)
-#     end
-#     println("ret c_index: $(c_index)")
-#     return c_index
-# end
-# function inheritance_graph(st::QTAggNode)
-#     SimpleDiGraph(inh_adj_matrix(st))
-# end
+Projects the quad tree to a nxn matrix
+
+# Arguments
+- `lv::Vector{QTAggNode}`: The leaves of a quad tree
+- `n`: Maximum number of leaves possible (see `max_leaves`)
+"""
+function project_qt(lv::Vector{QTAggNode}, n::Int64)
+    gs = Matrix{Float64}(undef, n, n)
+    project_qt!(gs, lv)
+    return gs
+end
+
+function project_qt!(gs::Matrix{Float64},
+                     lv::Vector{QTAggNode})
+    d = size(gs, 1)
+    for x in lv
+        idx = node_to_idx(x.node, d)
+        # potentially broadcast coarse states
+        gs[idx] .= weight(x)
+    end
+    return nothing
+end

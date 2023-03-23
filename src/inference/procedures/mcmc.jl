@@ -60,13 +60,6 @@ end
 
 function Gen_Compose.initialize_chain(proc::AttentionMH,
                                       query::StaticQuery)
-    # draw random sample from prior
-    # trace,_ = Gen.generate(query.forward_function,
-    #                        query.args,
-    #                        query.observations)
-    # initialize with data-driven proposal
-    # trace,_ = proc.ddp(trace, proc.ddp_args)
-
     # Intialize using DDP
     cm = query.observations
     tracker_cm = generate_qt_from_ddp(proc.ddp_args...)
@@ -124,8 +117,8 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
     st::QuadTreeState = get_retval(t)
     _t  = t
     accept_ct = 0
-    for i = 1:length(st.lv)
-        node = st.lv[i].node
+    for i = 1:length(st.qt.leaves)
+        node = st.qt.leaves[i].node
         accept_ct = 0
         e_dist = 0
         # println("INIT KERNEL: node $(node.tree_idx)")
@@ -142,7 +135,7 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
         end
         e_dist /= init_cycles
         # map node to sensitivity matrix
-        sidx = node_to_idx(node, size(st.gs, 1))
+        sidx = node_to_idx(node, size(st.qt.projected, 1))
         chain.auxillary.sensitivities[sidx] .= e_dist
         # println("\t avg distance: $(e_dist)")
         # println("\t acceptance ratio: $(accept_ct/init_cycles)")
@@ -185,49 +178,33 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
         end
     end
     e_dist /= rw_cycles
-    sidx = node_to_idx(node, size(st.gs, 1))
+    sidx = node_to_idx(node, size(st.qt.projected, 1))
     auxillary.sensitivities[sidx] .= e_dist
     auxillary.node = node.tree_idx
 
     println("\t avg distance: $(e_dist)")
     println("\t rw acceptance ratio: $(accept_ct/rw_cycles)")
 
-    # display_selected_node(sidx, size(st.gs))
-
     # SM moves
     # split randomly
     # or deterministically if node is root
     # (can still merge lvl 2 into root)
     can_split = node.max_level > node.level
+    accept_ct = 0
     if can_split
         is_balanced = balanced_split_merge(t, node.tree_idx)
         moves = is_balanced ? [split_move, merge_move] : [split_move]
-        accept_ct = 0
         for i = 1 : proc.sm_cycles
             move = rand(moves)
             _t, _w = split_merge_move(t, node.tree_idx, move)
-            # _t, _w = rw_move(move, sm_t, node.tree_idx)
-            # @show _ls
             if log(rand()) < _w
                 t = _t
                 accept_ct += 1
                 break
             end
         end
-        # move = rand(moves)
-        # sm_t, sm_ls = split_merge_move(t, node.tree_idx, move)
-        # accept_ct = 0
-        # for i = 1 : proc.sm_cycles
-        #     _t, _w = rw_move(move, sm_t, node.tree_idx)
-        #     # @show _ls
-        #     if log(rand()) < sm_ls + _w
-        #         t = _t
-        #         accept_ct += 1
-        #         break
-        #     end
-        # end
-        println("\t accepted SM move: $(accept_ct == 1)")
     end
+    println("\t accepted SM move: $(accept_ct == 1)")
 
     # update trace
     chain.state = t
@@ -243,10 +220,8 @@ function viz_chain(chain::StaticMHChain)
     trace_st = get_retval(state)
     println("Attention")
     display_mat(auxillary.sensitivities)
-    # display_mat(reshape(auxillary.weights,
-    #                     size(auxillary.sensitivities)))
     println("Inferred state")
-    display_mat(trace_st.gs)
+    display_mat(trace_st.qt.projected)
     # println("Predicted Image")
     # display_img(trace_st.img_mu)
 end

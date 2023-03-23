@@ -29,7 +29,7 @@ end
 
 function ex_global_state(c::StaticMHChain)
      st = get_retval(c.state)
-     deepcopy(st.gs)
+     deepcopy(st.qt.projected)
 end
 
 function ex_img_mu(c::StaticMHChain)

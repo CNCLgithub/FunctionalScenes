@@ -19,7 +19,7 @@ function load_base_scene(path::String)
 end
 function mytest()
 
-    scene = 9
+    scene = 1
     door = 1
     base_path = "/spaths/datasets/$(dataset)/scenes"
     base_p = joinpath(base_path, "$(scene)_$(door).json")
@@ -45,9 +45,7 @@ function mytest()
 
     trace_st = get_retval(tr)
     println("Inferred state")
-    display_mat(trace_st.gs)
-    # set_submap!(cm, :trackers,
-    #             get_submap(tracker_cm, :trackers))
+    display_mat(trace_st.qt.projected)
 
 
     return nothing
