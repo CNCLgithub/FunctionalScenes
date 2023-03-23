@@ -49,7 +49,7 @@ function generate_qt_from_ddp(ddp_params::DataDrivenState, img, model_params)
     x = @pycall x.unsqueeze(0)::PyObject
     x = @pycall nn.forward(x)::PyObject
     state = @pycall x.detach().cpu().numpy()::Matrix{Float64}
-    state = Matrix{Float64}(state')
+    # state = Matrix{Float64}(state')
     println("Data-driven state")
     display_mat(state)
     head = model_params.start_node

@@ -20,10 +20,7 @@ def init_dd_state(config_path:str, device):
    decode_path = os.path.join(decode_path,
                               config['mode'])
    # TODO: generalize version
-   decode_path = os.path.join(decode_path,
-                              'version_0',
-                              'checkpoints',
-                              'last.ckpt')
+   decode_path = '/spaths/checkpoints/og_decoder.ckpt'
    task = OGDecoder.load_from_checkpoint(decode_path,
                                          encoder = encoder,
                                          decoder = decoder)

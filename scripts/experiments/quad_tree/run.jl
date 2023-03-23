@@ -182,7 +182,7 @@ end
 
 
 function outer()
-    args = Dict("scene" => 1)
+    args = Dict("scene" => 2)
     # args = parse_outer()
     i = args["scene"]
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))

@@ -135,7 +135,7 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
         end
         e_dist /= init_cycles
         # map node to sensitivity matrix
-        sidx = node_to_idx(node, size(st.qt.projected, 1))
+        sidx = node_to_idx(node, max_leaves(st.qt))
         chain.auxillary.sensitivities[sidx] .= e_dist
         # println("\t avg distance: $(e_dist)")
         # println("\t acceptance ratio: $(accept_ct/init_cycles)")
@@ -178,7 +178,7 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
         end
     end
     e_dist /= rw_cycles
-    sidx = node_to_idx(node, size(st.qt.projected, 1))
+    sidx = node_to_idx(node, max_leaves(st.qt))
     auxillary.sensitivities[sidx] .= e_dist
     auxillary.node = node.tree_idx
 

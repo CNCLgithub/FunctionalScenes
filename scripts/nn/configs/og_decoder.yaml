@@ -4,7 +4,7 @@ model_params:
   in_channels: 3
   latent_dim: 128
 
-vae_chkpt: "/spaths/checkpoints/scene_vae/version_0/checkpoints/last.ckpt"
+vae_chkpt: "/spaths/checkpoints/scene_vae.ckpt"
 
 
 vae_params:

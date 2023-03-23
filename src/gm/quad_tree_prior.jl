@@ -224,6 +224,8 @@ function contains(st::QTAggNode, p::SVector{2, Float64})
     contains(st.node, p)
 end
 
+max_leaves(n::QTAggNode) = max_leaves(n.node)
+
 """
     leaf_vec(s)
 
@@ -282,6 +284,8 @@ function QuadTree(root::QTAggNode)
     projected = project_qt(lvs, nmax)
     QuadTree(root, lvs, mapping, projected)
 end
+
+max_leaves(qt::QuadTree) = max_leaves(qt.root.node)
 
 """
     get_depth(n::Int64)

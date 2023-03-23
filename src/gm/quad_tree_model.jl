@@ -42,11 +42,11 @@ Parameters for an instance of the `QuadTreeModel`.
     start_node::QTProdNode = QTProdNode(center, bounds, 1, max_depth, 1)
 
     #############################################################################
-    # Multigranular empirical estimation
+    # Planning / Navigation
     #############################################################################
     #
-    # number of draws from stochastic scene state
-    instances::Int64 = 20
+    # weight to balance cost of distance with obstacle occupancy
+    dist_cost::Float64 = 1.0
 
     #############################################################################
     # Graphics
