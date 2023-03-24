@@ -122,7 +122,11 @@ function main(;c=ARGS)
     door = args["door"]
     base_p = joinpath(base_path, "$(scene)_$(door).json")
 
+    println("Running inference on scene $(scene)")
+
     out_path = "/spaths/experiments/$(dataset)/$(scene)_$(door)"
+
+    println("Saving results to: $(out_path)")
 
     if isnothing(args["move"])
         room = load_base_scene(base_p)
@@ -166,16 +170,32 @@ function main(;c=ARGS)
             println("chain $c restarting")
             rm(out)
         end
-        local results 
+        complete = false
         if isfile(out)
-            println("resuming chain $c")
-            results = resume_inference(out, proc)
-        else
+            corrupted = true
+            jldopen(out, "r") do file
+                # if it doesnt have this key
+                # or it didnt finish steps, restart
+                if haskey(file, "current_idx")
+                    n_steps = file["current_idx"]
+                    if n_steps == proc.samples
+                        println("Chain $(c) already completed")
+                        corrupted = false
+                        complete = true
+                    else
+                        println("Chain $(c) corrupted. Restarting...")
+                    end
+                end
+            end
+            corrupted && rm(out)
+        end
+        if !complete
             println("starting chain $c")
             results = run_inference(query, proc, out )
+            save_img_array(get_retval(results.state).img_mu,
+                        "$(out_path)/img_mu.png")
+            println("Chain $(c) complete")
         end
-        save_img_array(get_retval(results.state).img_mu,
-                       "$(out_path)/img_mu.png")
 
     end
     return nothing
@@ -184,12 +204,13 @@ end
 
 
 function outer()
-    args = Dict("scene" => 4)
+    args = Dict("scene" => 26)
     # args = parse_outer()
     i = args["scene"]
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
     # scene | door | chain | attention
-    cmd = ["--restart", "$(i)","1", "5", "A"]
+    # cmd = ["--restart", "$(i)","1", "1", "A"]
+    cmd = ["$(i)","1", "1", "A"]
     # cmd = ["--restart", "$(i)", "2", "1", "A"]
     main(c=cmd);
     # for r in eachrow(df[df.id  .== i, :])
@@ -220,5 +241,5 @@ function parse_outer()
     return parse_args(s)
 end
 
-# main();
-outer();
+main();
+# outer();

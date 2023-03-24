@@ -27,7 +27,7 @@ function ex_choicemap(tr::Gen.Trace)
     get_selected(choices, s)
 end
 
-function ex_global_state(c::StaticMHChain)
+function ex_projected(c::StaticMHChain)
      st = get_retval(c.state)
      deepcopy(st.qt.projected)
 end
@@ -35,6 +35,36 @@ end
 function ex_img_mu(c::StaticMHChain)
     st = get_retval(c.state)
     deepcopy(st.img_mu)
+end
+
+function ex_granularity(c::StaticMHChain)
+    st = get_retval(c.state)
+    n = size(st.qt.projected, 1)
+    m = Matrix{Int64}(undef, n, n)
+    for x in st.qt.leaves
+        idx = node_to_idx(x.node, n)
+        m[idx] .= x.node.level
+    end
+    m
+end
+
+function ex_path(c::StaticMHChain)
+    st = get_retval(c.state)
+    n = size(st.qt.projected, 1)
+    leaves = st.qt.leaves
+    m = Matrix{Int64}(undef, n, n)
+    c::Int64 = 1
+    for e in st.path.edges
+        src_node = leaves[src(e)].node
+        idx = node_to_idx(src_node, n)
+        m[idx] .= c
+        c += 1
+        dst_node = leaves[dst(e)].node
+        idx = node_to_idx(src_node, n)
+        m[idx] .= c
+        c += 1
+    end
+    m
 end
 
 function ex_attention(c::StaticMHChain)
@@ -47,7 +77,10 @@ end
 function query_from_params(room::GridRoom, path::String; kwargs...)
 
     _lm = Dict{Symbol, Any}(
-        :state => s -> deepcopy(get_retval(s.state)),
+        :projected => ex_projected,
+        :granularity => ex_granularity,
+        :path => ex_path,
+        :img_mu => ex_img_mu,
         :attention => ex_attention
     )
     latent_map = LatentMap(_lm)

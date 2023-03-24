@@ -123,7 +123,7 @@ function stats_from_qt(qt::QuadTree,
     result = @pycall mi.render(scene, spp=spp)::PyObject
     # need to set gamma correction for proper numpy export
     result = @pycall mi.Bitmap(result).convert(srgb_gamma=true)::PyObject
-    mu = @pycall numpy.array(result)::PyArray
+    mu = @pycall numpy.array(result)::Array{Float32, 3}
     sd = fill(p.base_sigma, size(mu))
 
     # REVIEW: might not be necessary
