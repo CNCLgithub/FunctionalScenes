@@ -155,8 +155,8 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     obj_t = objective(t)
     params = first(get_args(t))
     st::QuadTreeState = get_retval(t)
+
     # select node to rejuv
-    # room_idx = 1
     room_idx = categorical(auxillary.weights)
     node = room_to_leaf(st, room_idx, params.dims[1]).node
 

@@ -243,6 +243,7 @@ function room_to_leaf(st::QuadTreeState, ridx::Int64, c::Int64)
     traverse_qt(st.qt, point)
 end
 
+#TODO: Remove
 const qt_model_all_downstream_selection = StaticSelection(select(:instances))
 function all_downstream_selection(p::QuadTreeModel)
     s = select()

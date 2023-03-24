@@ -19,7 +19,7 @@ function load_base_scene(path::String)
 end
 function mytest()
 
-    scene = 1
+    scene = 4
     door = 1
     base_path = "/spaths/datasets/$(dataset)/scenes"
     base_p = joinpath(base_path, "$(scene)_$(door).json")
@@ -30,7 +30,7 @@ function mytest()
 
     ddp_path = "/project/scripts/nn/configs/og_decoder.yaml"
     ddp_params = DataDrivenState(;config_path = ddp_path,
-                                 var = 0.2)
+                                 var = 0.15)
     gt_img = render_mitsuba(room, model_params.scene, model_params.sparams,
                             model_params.skey, model_params.spp)
     tracker_cm = generate_qt_from_ddp(ddp_params, gt_img, model_params)

@@ -90,11 +90,14 @@ function balanced_split_merge(t::Gen.Trace, tidx::Int64)::Bool
     # REVIEW
     st.node.tree_idx === tidx || return false
 
+    # Root node cannot merge
+    st.node.tree_idx === 1 && return false
+
     # cannot split or merge if max depth
     st.node.level == st.node.max_level && return false
     # balanced if node is terminal : Split <-> Merge
     # and if siblings are all terminal : Merge <-> Split
-    parent_idx = tidx == 1 ? tidx : Gen.get_parent(tidx, 4)
-    parent_st = tidx == 1 ? qt.root : traverse_qt(qt, parent_idx)
+    parent_idx = Gen.get_parent(tidx, 4)
+    parent_st = traverse_qt(qt, parent_idx)
     all(x -> isempty(x.children), parent_st.children)
 end
