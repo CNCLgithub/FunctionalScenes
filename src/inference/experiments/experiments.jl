@@ -47,9 +47,7 @@ end
 function query_from_params(room::GridRoom, path::String; kwargs...)
 
     _lm = Dict{Symbol, Any}(
-        :trackers => ex_choicemap,
-        :global_state => ex_global_state,
-        :img_mu => ex_img_mu,
+        :state => s -> deepcopy(get_retval(s.state)),
         :attention => ex_attention
     )
     latent_map = LatentMap(_lm)

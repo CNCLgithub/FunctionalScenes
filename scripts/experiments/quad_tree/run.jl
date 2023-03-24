@@ -113,7 +113,7 @@ end
 
 
 
-function main(c)
+function main(;c=ARGS)
     args = parse_commandline(c)
     att_mode = args["%COMMAND%"]
 
@@ -145,6 +145,8 @@ function main(c)
                             model_params.skey, model_params.spp)
     proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
                                  ddp_args = (ddp_params, gt_img, model_params))
+
+    println("Loaded configuration...")
 
     try
         isdir("/spaths/experiments/$(dataset)") || mkpath("/spaths/experiments/$(dataset)")
@@ -218,5 +220,5 @@ function parse_outer()
     return parse_args(s)
 end
 
-# main();
-outer();
+main();
+# outer();

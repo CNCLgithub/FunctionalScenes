@@ -8,8 +8,6 @@ from slurmpy import sbatch
 
 script = 'bash {0!s}/env.d/run.sh julia ' + \
         '/project/scripts/experiments/quad_tree/run.jl'
-# script = 'bash {0!s}/run.sh julia -C "generic" ' + \
-#          '/project/scripts/experiments/exp1/run.jl'
 
 def att_tasks(args, df):
     tasks = []
@@ -17,8 +15,8 @@ def att_tasks(args, df):
         # base scene
         tasks.append((r['id'], r['door'], args.chains, 'A'))
         # shifted scene
-        tasks.append((f"--move {r.move}", f"--furniture {r.furniture}",
-                      r['id'], r['door'], args.chains, 'A'))
+        # tasks.append((f"--move {r.move}", f"--furniture {r.furniture}",
+        #               r['id'], r['door'], args.chains, 'A'))
     return (tasks, [], [])
     
 def main():
@@ -28,7 +26,7 @@ def main():
     )
 
     parser.add_argument('--scenes', type = str,
-                        default = 'vss_pilot_11f_32x32_restricted',
+                        default = 'ccn_2023_exp',
                         help = 'number of scenes') ,
     parser.add_argument('--chains', type = int, default = 5,
                         help = 'number of chains')
@@ -40,22 +38,21 @@ def main():
     args = parser.parse_args()
     df_path = f"/spaths/datasets/{args.scenes}/scenes.csv"
     df = pd.read_csv(df_path)
-    print(df)
 
     tasks, kwargs, extras = att_tasks(args, df)
+    # run one job first to test and profile
     # tasks = tasks[:1]
-    print(len(tasks))
 
     interpreter = '#!/bin/bash'
     slurm_out = os.path.join(os.getcwd(), 'env.d/spaths/slurm')
     resources = {
-        'cpus-per-task' : '4',
-        'mem-per-cpu' : '2GB',
+        'cpus-per-task' : '2',
+        'mem' : '8GB',
         'time' : '{0:d}'.format(args.duration),
-        'partition' : 'scavenge',
+        'partition' : 'psych_scavenge',
         'gres' : 'gpu:1',
         'requeue' : None,
-        'job-name' : 'rooms',
+        'job-name' : 'rooms-ccn',
         'chdir' : os.getcwd(),
         'output' : f"{slurm_out}/%A_%a.out"
     }
