@@ -77,9 +77,10 @@ function split_merge_move(trace::Gen.Trace,
         end
         error("-Inf in SM move")
     end
-    (new_trace, w2) = rw_move(direction, new_trace, node)
-    @debug "vm components w1, w2 : $(w1) + $(w2) = $(w1 + w2)"
-    (new_trace, w1+w2, direction)
+    (new_trace, w1)
+    # (new_trace, w2) = rw_move(direction, new_trace, node)
+    # @debug "vm components w1, w2 : $(w1) + $(w2) = $(w1 + w2)"
+    # (new_trace, w1+w2, direction)
 end
 
 function balanced_split_merge(t::Gen.Trace, tidx::Int64)::Bool

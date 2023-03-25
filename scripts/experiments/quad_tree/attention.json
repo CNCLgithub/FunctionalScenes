@@ -1,6 +1,6 @@
 {
     "samples" : 50,
-    "smoothness" : 1.0,
+    "smoothness" : 1250.0,
     "init_cycles" : 1,
     "rw_cycles" : 5,
     "sm_cycles" : 5

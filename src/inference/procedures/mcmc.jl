@@ -160,7 +160,7 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     room_idx = categorical(auxillary.weights)
     node = room_to_leaf(st, room_idx, params.dims[1]).node
 
-    println("ATTENTION KERNEL: node $(node.tree_idx)")
+    println("ATTENTION KERNEL: node $(node.tree_idx), prob $(auxillary.weights[room_idx])")
 
     # RW moves
     accept_ct = 0
@@ -218,8 +218,9 @@ function viz_chain(chain::StaticMHChain)
     @unpack auxillary, state = chain
     params = first(get_args(state))
     trace_st = get_retval(state)
-    println("Attention")
-    display_mat(auxillary.sensitivities)
+    # println("Attention")
+    # s = size(auxillary.sensitivities)
+    # display_mat(reshape(auxillary.weights, s))
     println("Inferred state")
     display_mat(trace_st.qt.projected)
     # println("Predicted Image")

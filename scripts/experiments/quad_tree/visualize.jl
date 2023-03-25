@@ -9,7 +9,7 @@ using DataFrames
 using LinearAlgebra
 
 
-dataset = "vss_pilot_11f_32x32_restricted"
+dataset = "ccn_2023_exp"
 
 function aggregate_chains(path::String, chains::Int64)
     att_d = "$(path)/attention"
@@ -34,8 +34,6 @@ function aggregate_chains(path::String, chains::Int64)
             isfile(c_path) || return nothing
             local data
             data = load(c_path, "$i")
-            # att_hm = Gadfly.spy(data[:attention][:sensitivities])
-            # att_hm |> PNG("$(att_d)/$(i).png", 4inch, 4inch)
             sens += data[:attention][:sensitivities]
             st = data[:qt]
             gs += st.gs

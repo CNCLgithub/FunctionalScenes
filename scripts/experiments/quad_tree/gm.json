@@ -1,4 +1,4 @@
 {
-   "base_sigma" : 0.1,
+   "base_sigma" : 0.2,
    "dist_cost" : 1.0
 }

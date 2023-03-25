@@ -144,7 +144,7 @@ function main(;c=ARGS)
     # Load estimator - Adaptive MCMC
     model_params = first(query.args)
     ddp_params = DataDrivenState(;config_path = args["ddp"],
-                                 var = 0.15)
+                                 var = 0.175)
     gt_img = render_mitsuba(room, model_params.scene, model_params.sparams,
                             model_params.skey, model_params.spp)
     proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
@@ -204,13 +204,13 @@ end
 
 
 function outer()
-    args = Dict("scene" => 26)
+    args = Dict("scene" => 6)
     # args = parse_outer()
     i = args["scene"]
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
     # scene | door | chain | attention
     # cmd = ["--restart", "$(i)","1", "1", "A"]
-    cmd = ["$(i)","1", "1", "A"]
+    cmd = ["$(i)","1", "5", "A"]
     # cmd = ["--restart", "$(i)", "2", "1", "A"]
     main(c=cmd);
     # for r in eachrow(df[df.id  .== i, :])
