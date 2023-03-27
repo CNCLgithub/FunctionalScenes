@@ -89,7 +89,7 @@ from plotly.subplots import make_subplots
 
 
 EXPNAME = 'ccn_2023_exp'
-burn_in = 10
+burn_in = 15
 
 def main():
     n = 30
@@ -109,7 +109,8 @@ def main():
         agg = np.load(agg_path)
         geo = np.mean(agg['geo'][:, burn_in:], axis = (0,1))
         d1 =  go.Heatmap(z = geo.T,
-                         colorscale = "blues",
+                         # colorscale = "blues",
+                         coloraxis="coloraxis"
                          )
 
         scene = f'{i+1}_2'
@@ -118,7 +119,8 @@ def main():
         agg = np.load(agg_path)
         geo = np.mean(agg['geo'][:, burn_in:], axis = (0,1))
         d2 =  go.Heatmap(z = geo.T,
-                         colorscale = "blues",
+                         # colorscale = "blues",
+                         coloraxis="coloraxis"
                          )
 
         fig.add_trace(d1, row = i+1, col = 1)
@@ -127,6 +129,8 @@ def main():
     fig.update_layout(
         height = 325 * n,
         width = 600,
+        coloraxis=dict(colorscale='blues'),
+        showlegend=False
         # aspectratio = {'x' : 1, 'y' : 1},
     )
     fig.write_html(f'/spaths/experiments/{EXPNAME}_geo.html')
@@ -144,7 +148,7 @@ def main():
         agg = np.load(agg_path)
         att = np.mean(agg['att'][:, burn_in:], axis = (0,1))
         d1 =  go.Heatmap(z = att.T,
-                         colorscale = "reds",
+                         coloraxis="coloraxis"
                          )
 
         scene = f'{i+1}_2'
@@ -153,7 +157,44 @@ def main():
         agg = np.load(agg_path)
         att = np.mean(agg['att'][:, burn_in:], axis = (0,1))
         d2 =  go.Heatmap(z = att.T,
-                         colorscale = "reds",
+                         coloraxis="coloraxis"
+                         )
+
+        fig.add_trace(d1, row = i+1, col = 1)
+        fig.add_trace(d2, row = i+1, col = 2)
+
+    fig.update_layout(
+        height = 325 * n,
+        width = 600,
+        coloraxis=dict(colorscale='reds'),
+        showlegend=False
+        # aspectratio = {'x' : 1, 'y' : 1},
+    )
+    fig.write_html(f'/spaths/experiments/{EXPNAME}_att.html')
+
+    fig = make_subplots(rows=n, cols=2,
+                        shared_xaxes=True,
+                        shared_yaxes=True,
+                        subplot_titles = titles)
+    for i in range(n):
+        scene = f'{i+1}_1'
+        path = f'/spaths/experiments/{EXPNAME}/{scene}'
+        agg_path = f'{path}/aggregated.npz'
+        agg = np.load(agg_path)
+        pmat = np.mean(agg['pmat'][:, burn_in:], axis = (0,1))
+        pmat[np.abs(pmat) > 10000] = 0
+        d1 =  go.Heatmap(z = pmat.T,
+                         colorscale = "sunsetdark",
+                         )
+
+        scene = f'{i+1}_2'
+        path = f'/spaths/experiments/{EXPNAME}/{scene}'
+        agg_path = f'{path}/aggregated.npz'
+        agg = np.load(agg_path)
+        pmat = np.mean(agg['pmat'][:, burn_in:], axis = (0,1))
+        pmat[np.abs(pmat) > 10000] = 0
+        d2 =  go.Heatmap(z = pmat.T,
+                         colorscale = "sunsetdark",
                          )
 
         fig.add_trace(d1, row = i+1, col = 1)
@@ -164,36 +205,7 @@ def main():
         width = 600,
         # aspectratio = {'x' : 1, 'y' : 1},
     )
-    fig.write_html(f'/spaths/experiments/{EXPNAME}_att.html')
-    # pmat = np.mean(agg['pmat'][:, burn_in:], axis = (0,1))
-    # pmat[pmat > 100] = 0
-    # fig = go.Figure(data = go.Heatmap(z = pmat.T,
-    #                                   colorscale = "hot",
-    #                                   ))
-    # fig.update_scenes(
-    #     aspectratio = {'x' : 1, 'y' : 1},
-    # )
-    # fig.write_html(f'{path}/path.html')
-
-
-    # att = np.mean(agg['att'][:, burn_in:], axis = (0,1))
-    # fig = go.Figure(data = go.Heatmap(z = att.T,
-    #                                   colorscale = "reds",
-    #                                   ))
-    # fig.update_scenes(
-    #     aspectratio = {'x' : 1, 'y' : 1},
-    # )
-    # fig.write_html(f'{path}/att.html')
-
-
-    # gran = np.mean(agg['gran'][:, burn_in:], axis = (0,1))
-    # fig = go.Figure(data = go.Heatmap(z = gran.T,
-    #                                   colorscale = "reds",
-    #                                   ))
-    # fig.update_scenes(
-    #     aspectratio = {'x' : 1, 'y' : 1},
-    # )
-    # fig.write_html(f'{path}/gran.html')
+    fig.write_html(f'/spaths/experiments/{EXPNAME}_pmat.html')
 
 
 

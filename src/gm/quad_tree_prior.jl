@@ -123,21 +123,30 @@ end
 True if a wall of each node are touching.
 > Note: Both nodes can be of different area (granularity)
 """
+# function contact(a::QTProdNode, b::QTProdNode)
+#     d = dist(a,b) - (0.5*a.dims[1]) - (0.5*b.dims[1])
+#     contact(a, b, d)
+# end
+# function contact(a::QTProdNode, b::QTProdNode, d::Float64)
+#     aa = area(a)
+#     ab = area(b)
+#     # if same size, then contact is simply distance
+#     aa == ab && return isapprox(d, 0.)
+#     # otherwise must account for diagonal
+#     big, small = aa > ab ? (a, b) : (b, a)
+#     dlevel = small.level - big.level
+#     thresh = 0.5 * big.dims[1] * (1 - exp2(-(dlevel + 1)))
+#     d < thresh
+# end
+
 function contact(a::QTProdNode, b::QTProdNode)
-    d = dist(a,b) - (0.5*a.dims[1]) - (0.5*b.dims[1])
-    contact(a, b, d)
+    # check if any of the walls touch
+    a.center[1] - 0.5* a.dims[1] <= b.center[1] + 0.5*b.dims[1] &&
+        a.center[1] + 0.5 * a.dims[1] >= b.center[1] - 0.5 * b.dims[1] &&
+        a.center[2] - 0.5 * a.dims[2] <= b.center[2] + 0.5 * b.dims[2] &&
+        a.center[2] + 0.5 * a.dims[2] >= b.center[2] - 0.5 * b.dims[2]
 end
-function contact(a::QTProdNode, b::QTProdNode, d::Float64)
-    aa = area(a)
-    ab = area(b)
-    # if same size, then contact is simply distance
-    aa == ab && return isapprox(d, 0.)
-    # otherwise must account for diagonal
-    big, small = aa > ab ? (a, b) : (b, a)
-    dlevel = small.level - big.level
-    thresh = 0.5 * big.dims[1] * (1 - exp2(-(dlevel + 1)))
-    d < thresh
-end
+
 
 # REVIEW: Some way to parameterize weights?
 function produce_weight(n::QTProdNode)::Float64

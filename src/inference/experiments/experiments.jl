@@ -52,7 +52,7 @@ function ex_path(c::StaticMHChain)
     st = get_retval(c.state)
     n = size(st.qt.projected, 1)
     leaves = st.qt.leaves
-    m = Matrix{Int64}(undef, n, n)
+    m = zeros(Int64, (n,n))
     c::Int64 = 1
     for e in st.path.edges
         src_node = leaves[src(e)].node

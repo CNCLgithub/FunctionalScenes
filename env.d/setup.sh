@@ -31,6 +31,7 @@ cont_pull_url="https://yale.box.com/shared/static/ycvqzzp57v54dog2pompyitj8d7c9e
 SING="${SENV[sing]}"
 BUILD="${SENV[envd]}/${SENV[def]}"
 cont_dest="${SENV[envd]}/${SENV[cont]}"
+rstudio_dest="${SENV[envd]}/rstudio"
 
 
 #################################################################################
@@ -50,6 +51,11 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
 [[ "${@}" =~ "cont_build" ]] && echo "building ${BUILD} -> ${cont_dest}" && \
     APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
     "$cont_dest" "$BUILD"
+
+
+[[ "${@}" =~ "rstudio_build" ]] && echo "building ${BUILD} -> ${rstudio_dest}" && \
+    APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
+    "$rstudio_dest" "${SENV[envd]}/Singularity.rstudio"
 
 #################################################################################
 # Python setup
