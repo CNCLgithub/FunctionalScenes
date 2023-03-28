@@ -10,6 +10,7 @@ script = 'bash {0!s}/env.d/run.sh julia ' + \
         '/project/scripts/experiments/quad_tree/run.jl'
 
 def att_tasks(args, df):
+    # tasks = [(26, 1, 5, 'A')]
     tasks = []
     for (ri, r) in df.iterrows():
         # base scene
@@ -30,7 +31,7 @@ def main():
                         help = 'number of scenes') ,
     parser.add_argument('--chains', type = int, default = 5,
                         help = 'number of chains')
-    parser.add_argument('--duration', type = int, default = 60,
+    parser.add_argument('--duration', type = int, default = 45,
                         help = 'job duration (min)')
 
 
@@ -46,15 +47,16 @@ def main():
     interpreter = '#!/bin/bash'
     slurm_out = os.path.join(os.getcwd(), 'env.d/spaths/slurm')
     resources = {
-        'cpus-per-task' : '2',
-        'mem' : '8GB',
+        'cpus-per-task' : '1',
+        'mem-per-cpu' : '10GB',
         'time' : '{0:d}'.format(args.duration),
         'partition' : 'psych_scavenge',
         'gres' : 'gpu:1',
         'requeue' : None,
         'job-name' : 'rooms-ccn',
         'chdir' : os.getcwd(),
-        'output' : f"{slurm_out}/%A_%a.out"
+        'output' : f"{slurm_out}/%A_%a.out",
+        'exclude' : 'r811u30n01' # ran into CUDA error
     }
     func = script.format(os.getcwd())
     batch = sbatch.Batch(interpreter, func, tasks,
