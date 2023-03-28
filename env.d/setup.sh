@@ -31,6 +31,7 @@ cont_pull_url="https://yale.box.com/shared/static/ycvqzzp57v54dog2pompyitj8d7c9e
 SING="${SENV[sing]}"
 BUILD="${SENV[envd]}/${SENV[def]}"
 cont_dest="${SENV[envd]}/${SENV[cont]}"
+min_dest="${SENV[envd]}/min.sif"
 rstudio_dest="${SENV[envd]}/rstudio"
 
 
@@ -52,6 +53,9 @@ rstudio_dest="${SENV[envd]}/rstudio"
     APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
     "$cont_dest" "$BUILD"
 
+[[ "${@}" =~ "min_build" ]] && echo "building ${BUILD} -> ${min_dest}" && \
+    APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
+    "$min_dest" "${SENV[envd]}/Singularity.minimal"
 
 [[ "${@}" =~ "rstudio_build" ]] && echo "building ${BUILD} -> ${rstudio_dest}" && \
     APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \

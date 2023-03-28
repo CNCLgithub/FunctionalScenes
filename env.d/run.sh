@@ -39,8 +39,8 @@ COMMAND="$@"
 #################################################################################
 # Mount additional file systems
 #################################################################################
-SING="${SENV[sing]} exec --nv"
-# SING="${SENV[sing]} exec "
+# SING="${SENV[sing]} exec --nv"
+SING="${SENV[sing]} exec "
 mounts=(${SENV[mounts]})
 BS=""
 echo "( ) Adding mount points"

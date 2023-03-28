@@ -1,0 +1,52 @@
+bootstrap: docker
+from: ubuntu:20.04
+
+%environment
+    export PATH=$PATH:"/usr/local/julia-1.8.5/bin"
+
+%runscript
+    exec bash "$@"
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    export TZ=Etc/UTC
+    apt-get update
+    apt-get install -y software-properties-common
+    apt-get install -y build-essential \
+                       wget \
+                       git \
+                       ffmpeg \
+                       cmake \
+                       python3.9-dev \
+                       python3-pip \
+                       libopencv-dev \
+                       libturbojpeg0-dev \
+                       llvm
+    apt-get clean
+
+    python3.9 -m pip install --upgrade pip
+    python3.9 -m pip install pipenv virtualenv
+
+    # build context
+    mkdir /build-ctx && cd /build-ctx
+
+    # Set up Julia
+    JURL="https://julialang-s3.julialang.org/bin/linux/x64/1.8/julia-1.8.5-linux-x86_64.tar.gz"
+    wget "$JURL" -O "julia.tar.gz"
+    tar -xzf "julia.tar.gz" -C "/usr/local/"
+    chmod +x /usr/local/julia-1.8.5/bin/*
+
+    # clean up
+    rm -rf /build-ctx
+
+    # Add an sbatch workaround
+    echo '#!/bin/bash\nssh -y "$HOSTNAME"  sbatch "$@"'  > /usr/bin/sbatch
+    chmod +x /usr/bin/sbatch
+
+    # Add an scancel workaround
+    echo '#!/bin/bash\nssh -y "$HOSTNAME"  scancel "$@"'  > /usr/bin/scancel
+    chmod +x /usr/bin/scancel
+
+    # Add an srun workaround
+    echo '#!/bin/bash\nssh -y "$HOSTNAME"  srun "$@"'  > /usr/bin/srun
+    chmod +x /usr/bin/srun

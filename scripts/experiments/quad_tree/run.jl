@@ -229,5 +229,5 @@ function parse_outer()
     return parse_args(s)
 end
 
-main();
-# outer();
+# main();
+outer();
