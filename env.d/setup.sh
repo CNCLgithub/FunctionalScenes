@@ -28,6 +28,7 @@ examples:
 # Variable declarations
 #################################################################################
 cont_pull_url="https://yale.box.com/shared/static/ycvqzzp57v54dog2pompyitj8d7c9e93.sif"
+min_pull_url="https://yale.box.com/shared/static/piau0ilrc23ki62ohgpo34oh4sq7mkrz.sif"
 SING="${SENV[sing]}"
 BUILD="${SENV[envd]}/${SENV[def]}"
 cont_dest="${SENV[envd]}/${SENV[cont]}"
@@ -52,6 +53,10 @@ rstudio_dest="${SENV[envd]}/rstudio"
 [[ "${@}" =~ "cont_build" ]] && echo "building ${BUILD} -> ${cont_dest}" && \
     APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
     "$cont_dest" "$BUILD"
+
+[[ "${@}" =~ "min_pull" ]] && \
+    echo "pulling container" && \
+    wget "$min_pull_url" -O "${min_dest}"
 
 [[ "${@}" =~ "min_build" ]] && echo "building ${BUILD} -> ${min_dest}" && \
     APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
