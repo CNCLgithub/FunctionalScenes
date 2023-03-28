@@ -61,18 +61,6 @@ parsed_trials <- read_csv(exp_path) %>%
 
 exp_data <- read_csv(exp_scenes) %>%
   rename(scene = id) 
-# %>%
-#   right_join(parsed_trials, by = c("scene", "door", "furniture", "move", "flip"))
-
-# covariates <- read_csv("~/env.d/spaths/experiments/1_exit_22x40_doors_rep/covariates.csv") %>%
-#   rename(scene = id) %>%
-#   mutate(summed_cycles = base_cycles_furniture + move_cycles_furniture,
-#          summed_cycles_total = base_cycles_total + move_cycles_total,
-#          summed_cycles_pct = summed_cycles / summed_cycles_total)
-
-# exp_data <- exp_data %>%
-#   left_join(covariates, by = c("scene", "door", "furniture", "move"))
-
 ```
 
 
@@ -293,7 +281,7 @@ f3 <- upright_dhr_analysis %>%
         axis.text = element_text(size = 20))
 
 ggsave(file="vss_poster/vss_poster_files/figure-html/results_2_2.svg", plot=f3,
-       width = 9, height = 7)
+     width = 9, height = 7)
 
 upright_dhr_analysis %>%
   with(lm(upright ~ f_mean)) %>%
@@ -311,36 +299,36 @@ t.test(upright_dhr_analysis$up_diff, upright_dhr_analysis$abs_f_diff)
 ```
 
 ```{r}
-model_raw <- read_csv("~/project/spaths/experiments/vss_pilot_11f_32x32_restricted/chain_summary.csv")
+model_raw <- read_csv("~/project/spaths/experiments/ccn_2023_exp/chain_summary.csv")
 
 
 between_trials <- model_raw %>%
   left_join(passed_hits)
 
 between_trials %>%
-  filter(raw_att > 0.0) %>%
-  ggplot(aes(x = raw_att, y = f)) + 
+  ggplot(aes(x = geo_p, y = f)) + 
   geom_point()
 
 between_trials %>%
-  filter(raw_att > 0.0) %>%
-  with(lm(f ~ raw_att)) %>%
+  with(lm(f ~ geo_p)) %>%
   summary()
 
-model <- model_raw %>%
+
+pair_diff <- model_raw %>%
   select(-c(move, furniture)) %>%
-group_by(scene) %>%
+  group_by(scene) %>%
   arrange(door) %>%
   summarise(across(-door, 
                    list(mean = mean, max = max, min = min, diff = diff))) %>%
+  mutate(abs_geo_p_diff = abs(geo_p_diff)) %>%
   left_join(delta_hr_by_scene)
   
-model %>%
-  with(lm(abs_f_diff ~ raw_att_diff)) %>%
+pair_diff %>%
+  with(lm(f_diff ~ geo_p_diff)) %>%
   summary()
 
-model %>%
-  ggplot(aes(x = raw_att_diff, y = f_diff)) +
+pair_diff %>%
+  ggplot(aes(x = abs_geo_p_diff, y = abs_f_diff)) +
   geom_point()
 
 ```

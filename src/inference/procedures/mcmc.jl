@@ -179,7 +179,8 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     end
     e_dist /= rw_cycles
     sidx = node_to_idx(node, max_leaves(st.qt))
-    auxillary.sensitivities[sidx] .= e_dist
+    auxillary.sensitivities[sidx] .*= 0.5
+    auxillary.sensitivities[sidx] .+= 0.5 * e_dist
     auxillary.node = node.tree_idx
 
     println("\t avg distance: $(e_dist)")

@@ -5,6 +5,7 @@ using FileIO
 using PyCall
 using DataFrames
 using FunctionalScenes
+using Statistics
 # using FunctionalScenes:
 
 
@@ -12,7 +13,7 @@ np = pyimport("numpy")
 
 # assuming scenes are 32x32
 dataset = "ccn_2023_exp"
-burnin = 15
+burnin = 1
 
 function aggregate_chains(path::String, chains::Int64, steps)
     att = zeros((chains, steps, 32, 32))
@@ -57,7 +58,7 @@ function add_metrics!(results, r, att, gs)
     raw_att = sum(att[idxs])
     tot_att = sum(att)
     prop_att = raw_att / tot_att
-    geo_p = sum(gs[idxs])
+    geo_p = sum(gs[idxs]) / length(idxs)
     push!(results, (scene = r.id,
                     door = r.door,
                     furniture = r.furniture,
