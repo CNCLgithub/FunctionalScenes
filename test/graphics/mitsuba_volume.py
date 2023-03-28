@@ -4,13 +4,13 @@ import numpy as np
 import drjit as dr
 import mitsuba as mi
 from pprint import pprint
-mi.set_variant('cuda_ad_rgb')
+mi.set_variant('llvm_ad_rgb')
 from mitsuba import ScalarTransform4f as T
 from functional_scenes.render.interface import (initialize_scene,
                                                 create_volume)
 
 def main():
-    mi.set_variant('cuda_ad_rgb')
+    mi.set_variant('llvm_ad_rgb')
     dimensions = [32, 32, 5]
     door = [10, -8]
     res = (128, 128)
@@ -22,8 +22,8 @@ def main():
     scene = mi.load_dict(d)
     key = 'object.interior_medium.sigma_t.data'
     params = mi.traverse(scene)
-    # params[key] = np.random.rand(*dimensions, 1)
-    # params.update()
+    params[key] = np.random.rand(1, 32, 32, 1)
+    params.update()
     # print(params)
     start_time = time.time()
     result = mi.render(scene, spp=24)

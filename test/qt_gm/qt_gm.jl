@@ -24,7 +24,7 @@ function mytest()
     #     cm[:trackers => (i + 1, Val(:production)) => :produce] = i == 2
     # end
 
-    (trace, ll) = generate(qt_model, (params,))
+    @time (trace, ll) = generate(qt_model, (params,))
     # display(@benchmark generate($qt_model, ($params,), $cm) seconds=10 )
     # Profile.clear()
     # @profilehtml (trace, ll) = generate(qt_model, (params,), cm)

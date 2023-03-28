@@ -4,8 +4,9 @@ using JSON
 using FileIO
 using PyCall
 using DataFrames
-using FunctionalScenes
+# using FunctionalScenes
 using Statistics
+using LinearAlgebra
 # using FunctionalScenes:
 
 
@@ -13,7 +14,7 @@ np = pyimport("numpy")
 
 # assuming scenes are 32x32
 dataset = "ccn_2023_exp"
-burnin = 1
+burnin = 50
 
 function aggregate_chains(path::String, chains::Int64, steps)
     att = zeros((chains, steps, 32, 32))
@@ -46,47 +47,49 @@ function aggregate_chains(path::String, chains::Int64, steps)
     return att_mu, geo_mu
 end
 
-function add_metrics!(results, r, att, gs)
-    base_p = "/spaths/datasets/$(dataset)/scenes/$(r.id)_$(r.door).json"
-    local base_s
-    open(base_p, "r") do f
-        base_s = JSON.parse(f)
-    end
-    base = from_json(GridRoom, base_s)
-    idxs = furniture(base)[r.furniture]
+# function add_metrics!(results, r, att, gs)
+#     base_p = "/spaths/datasets/$(dataset)/scenes/$(r.id)_$(r.door).json"
+#     local base_s
+#     open(base_p, "r") do f
+#         base_s = JSON.parse(f)
+#     end
+#     base = from_json(GridRoom, base_s)
+#     idxs = furniture(base)[r.furniture]
 
-    raw_att = sum(att[idxs])
-    tot_att = sum(att)
-    prop_att = raw_att / tot_att
-    geo_p = sum(gs[idxs]) / length(idxs)
-    push!(results, (scene = r.id,
-                    door = r.door,
-                    furniture = r.furniture,
-                    move = r.move,
-                    raw_att = raw_att,
-                    prop_att = prop_att,
-                    tot_att = tot_att,
-                    geo_p = geo_p
-                    ))
-end
+#     raw_att = sum(att[idxs])
+#     tot_att = sum(att)
+#     prop_att = raw_att / tot_att
+#     # geo_p = sum(gs[idxs]) / length(idxs)
+#     geo_p = sum(gs[idxs]) / length(idxs)
+#     push!(results, (scene = r.id,
+#                     door = r.door,
+#                     furniture = r.furniture,
+#                     move = r.move,
+#                     raw_att = raw_att,
+#                     prop_att = prop_att,
+#                     tot_att = tot_att,
+#                     geo_p = geo_p
+#                     ))
+# end
 
 function main()
     exp_path = "/spaths/experiments/$(dataset)"
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
     results = DataFrame(scene = Int64[],
-                        door = Int64[],
-                        furniture = Int64[],
-                        move = String[],
-                        raw_att = Float64[],
-                        prop_att = Float64[],
-                        tot_att = Float64[],
-                        geo_p = Float64[])
-    for r in eachrow(df)
-        base_path = "$(exp_path)/$(r.id)_$(r.door)"
-        isdir(base_path) || continue
+                        att_diff = Float64[],
+                        geo_diff = Float64[])
+    for scene = 1:30
+        base_path = "$(exp_path)/$(scene)_1"
         @show base_path
-        att, gs = aggregate_chains(base_path, 5, 50)
-        add_metrics!(results, r, att, gs)
+        att1, gs1 = aggregate_chains(base_path, 5, 100)
+        base_path = "$(exp_path)/$(scene)_2"
+        @show base_path
+        att2, gs2 = aggregate_chains(base_path, 5, 100)
+        l2_att = norm(att1 - att2)
+        l2_geo = norm(gs1 - gs2)
+        push!(results, (scene = scene, att_diff = l2_att,
+                        geo_diff = l2_geo))
+
     end
     CSV.write("$(exp_path)/chain_summary.csv", results)
     return nothing

@@ -89,7 +89,7 @@ from plotly.subplots import make_subplots
 
 
 EXPNAME = 'ccn_2023_exp'
-burn_in = 15
+burn_in = 50
 
 def main():
     n = 30

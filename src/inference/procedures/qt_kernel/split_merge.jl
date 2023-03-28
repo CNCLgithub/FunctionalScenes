@@ -16,44 +16,6 @@ function construct_translator(::Merge, node::Int64)
                              qt_involution)
 end
 
-# this is just a copy of the `translator` method from Gen
-# to expose internal scores.
-function mytransform(translator::SymmetricTraceTranslator{TraceTransformDSLProgram},
-                     prev_model_trace::Trace; check=false, observations=EmptyChoiceMap())
-
-    # simulate from auxiliary program
-    forward_proposal_trace =
-        simulate(translator.q, (prev_model_trace, translator.q_args...,))
-
-    # apply trace transform
-    (new_model_trace, backward_proposal_trace, log_abs_determinant) =
-        Gen.run_transform(translator, prev_model_trace, forward_proposal_trace)
-
-    # compute log weight
-    prev_model_score = get_score(prev_model_trace)
-    new_model_score = get_score(new_model_trace)
-    forward_proposal_score = get_score(forward_proposal_trace)
-    backward_proposal_score = get_score(backward_proposal_trace)
-    log_weight = new_model_score - prev_model_score +
-        backward_proposal_score - forward_proposal_score + log_abs_determinant
-
-    # @show new_model_score
-    # @show prev_model_score
-    # @show backward_proposal_score
-    # @show forward_proposal_score
-    # @show log_abs_determinant
-
-    if check
-        check_observations(get_choices(new_model_trace), observations)
-        (prev_model_trace_rt, forward_proposal_trace_rt, _) =
-            run_transform(translator, new_model_trace, backward_proposal_trace)
-        check_round_trip(prev_model_trace, prev_model_trace_rt,
-                         forward_proposal_trace, forward_proposal_trace_rt)
-    end
-
-    return (new_model_trace, log_weight)
-end
-
 function split_merge_move(trace::Gen.Trace,
                           node::Int64,
                           direction::MoveDirection)
@@ -78,9 +40,6 @@ function split_merge_move(trace::Gen.Trace,
         error("-Inf in SM move")
     end
     (new_trace, w1)
-    # (new_trace, w2) = rw_move(direction, new_trace, node)
-    # @debug "vm components w1, w2 : $(w1) + $(w2) = $(w1 + w2)"
-    # (new_trace, w1+w2, direction)
 end
 
 function balanced_split_merge(t::Gen.Trace, tidx::Int64)::Bool

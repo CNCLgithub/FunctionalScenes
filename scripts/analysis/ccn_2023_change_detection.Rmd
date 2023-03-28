@@ -302,6 +302,19 @@ t.test(upright_dhr_analysis$up_diff, upright_dhr_analysis$abs_f_diff)
 model_raw <- read_csv("~/project/spaths/experiments/ccn_2023_exp/chain_summary.csv")
 
 
+pair_diff <- model_raw %>%
+  left_join(delta_hr_by_scene)
+
+pair_diff %>%
+  with(lm(f_diff ~ att_diff)) %>%
+  summary()
+
+pair_diff %>%
+  ggplot(aes(x = att_diff, y = f_diff)) +
+  geom_point()
+
+
+
 between_trials <- model_raw %>%
   left_join(passed_hits)
 
@@ -328,8 +341,19 @@ pair_diff %>%
   summary()
 
 pair_diff %>%
-  ggplot(aes(x = abs_geo_p_diff, y = abs_f_diff)) +
+  ggplot(aes(x = geo_p_diff, y = f_diff)) +
   geom_point()
+
+
+
+between_trials %>%
+  ggplot(aes(x = prop_att, y = f)) + 
+  geom_point()
+
+between_trials %>%
+  with(lm(f ~ prop_att)) %>%
+  summary()
+
 
 ```
 

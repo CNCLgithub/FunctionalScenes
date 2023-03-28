@@ -162,42 +162,42 @@ function main(;c=ARGS)
     # save the gt image for reference
     save_img_array(gt_img, "$(out_path)/gt.png")
 
-    for c = 1:args["chain"]
-        Random.seed!(c)
-        out = joinpath(out_path, "$(c).jld2")
-        
-        if isfile(out) && args["restart"]
-            println("chain $c restarting")
-            rm(out)
-        end
-        complete = false
-        if isfile(out)
-            corrupted = true
-            jldopen(out, "r") do file
-                # if it doesnt have this key
-                # or it didnt finish steps, restart
-                if haskey(file, "current_idx")
-                    n_steps = file["current_idx"]
-                    if n_steps == proc.samples
-                        println("Chain $(c) already completed")
-                        corrupted = false
-                        complete = true
-                    else
-                        println("Chain $(c) corrupted. Restarting...")
-                    end
+    # which chain to run
+    c = args["chain"]
+    Random.seed!(c)
+    out = joinpath(out_path, "$(c).jld2")
+
+    if isfile(out) && args["restart"]
+        println("chain $c restarting")
+        rm(out)
+    end
+    complete = false
+    if isfile(out)
+        corrupted = true
+        jldopen(out, "r") do file
+            # if it doesnt have this key
+            # or it didnt finish steps, restart
+            if haskey(file, "current_idx")
+                n_steps = file["current_idx"]
+                if n_steps == proc.samples
+                    println("Chain $(c) already completed")
+                    corrupted = false
+                    complete = true
+                else
+                    println("Chain $(c) corrupted. Restarting...")
                 end
             end
-            corrupted && rm(out)
         end
-        if !complete
-            println("starting chain $c")
-            results = run_inference(query, proc, out )
-            save_img_array(get_retval(results.state).img_mu,
-                        "$(out_path)/img_mu.png")
-            println("Chain $(c) complete")
-        end
-
+        corrupted && rm(out)
     end
+    if !complete
+        println("starting chain $c")
+        results = run_inference(query, proc, out )
+        save_img_array(get_retval(results.state).img_mu,
+                    "$(out_path)/($c)_img_mu.png")
+        println("Chain $(c) complete")
+    end
+
     return nothing
 end
 
@@ -207,22 +207,10 @@ function outer()
     args = Dict("scene" => 6)
     # args = parse_outer()
     i = args["scene"]
-    df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
     # scene | door | chain | attention
-    # cmd = ["--restart", "$(i)","1", "1", "A"]
     # cmd = ["$(i)","1", "1", "A"]
     cmd = ["--restart", "$(i)", "1", "1", "A"]
     main(c=cmd);
-    # for r in eachrow(df[df.id  .== i, :])
-    #     cmd = [
-    #         "-f=$(r.furniture)",
-    #         "-m=$(r.move)",
-    #         "$(i)", "$(r.door)", "1", "A",
-    #     ]
-
-    #     display(cmd)
-    #     main(cmd);
-    # end
 end
 
 

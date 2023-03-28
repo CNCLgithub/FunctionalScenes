@@ -37,7 +37,8 @@ function __init__()
 
     # mitsuba variant must be set first
     variants = @pycall mi.variants()::PyObject
-    variant = "cuda_ad_rgb" in variants ? "cuda_ad_rgb" : "scalar_rgb"
+    # variant = "cuda_ad_rgb" in variants ? "cuda_ad_rgb" : "scalar_rgb"
+    variant = "llvm_ad_rgb"
     mi.set_variant(variant)
 
 
