@@ -144,7 +144,7 @@ function main(;c=ARGS)
     # Load estimator - Adaptive MCMC
     model_params = first(query.args)
     ddp_params = DataDrivenState(;config_path = args["ddp"],
-                                 var = 0.175)
+                                 var = 0.125)
     gt_img = render_mitsuba(room, model_params.scene, model_params.sparams,
                             model_params.skey, model_params.spp)
     proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
@@ -163,39 +163,40 @@ function main(;c=ARGS)
     save_img_array(gt_img, "$(out_path)/gt.png")
 
     # which chain to run
-    c = args["chain"]
-    Random.seed!(c)
-    out = joinpath(out_path, "$(c).jld2")
+    for c = 1:argcs["chain"]
+        Random.seed!(c)
+        out = joinpath(out_path, "$(c).jld2")
 
-    if isfile(out) && args["restart"]
-        println("chain $c restarting")
-        rm(out)
-    end
-    complete = false
-    if isfile(out)
-        corrupted = true
-        jldopen(out, "r") do file
-            # if it doesnt have this key
-            # or it didnt finish steps, restart
-            if haskey(file, "current_idx")
-                n_steps = file["current_idx"]
-                if n_steps == proc.samples
-                    println("Chain $(c) already completed")
-                    corrupted = false
-                    complete = true
-                else
-                    println("Chain $(c) corrupted. Restarting...")
+        if isfile(out) && args["restart"]
+            println("chain $c restarting")
+            rm(out)
+        end
+        complete = false
+        if isfile(out)
+            corrupted = true
+            jldopen(out, "r") do file
+                # if it doesnt have this key
+                # or it didnt finish steps, restart
+                if haskey(file, "current_idx")
+                    n_steps = file["current_idx"]
+                    if n_steps == proc.samples
+                        println("Chain $(c) already completed")
+                        corrupted = false
+                        complete = true
+                    else
+                        println("Chain $(c) corrupted. Restarting...")
+                    end
                 end
             end
+            corrupted && rm(out)
         end
-        corrupted && rm(out)
-    end
-    if !complete
-        println("starting chain $c")
-        results = run_inference(query, proc, out )
-        save_img_array(get_retval(results.state).img_mu,
-                    "$(out_path)/($c)_img_mu.png")
-        println("Chain $(c) complete")
+        if !complete
+            println("starting chain $c")
+            results = run_inference(query, proc, out )
+            save_img_array(get_retval(results.state).img_mu,
+                        "$(out_path)/$(c)_img_mu.png")
+            println("Chain $(c) complete")
+        end
     end
 
     return nothing
@@ -204,12 +205,12 @@ end
 
 
 function outer()
-    args = Dict("scene" => 6)
+    args = Dict("scene" => 7)
     # args = parse_outer()
     i = args["scene"]
     # scene | door | chain | attention
     # cmd = ["$(i)","1", "1", "A"]
-    cmd = ["--restart", "$(i)", "1", "1", "A"]
+    cmd = ["--restart", "$(i)", "2", "1", "A"]
     main(c=cmd);
 end
 
@@ -229,5 +230,5 @@ function parse_outer()
     return parse_args(s)
 end
 
-# main();
-outer();
+main();
+# outer();

@@ -1,4 +1,3 @@
-using Plots
 using Images
 using Statistics
 using CSV
@@ -10,6 +9,10 @@ using LinearAlgebra
 
 
 dataset = "ccn_2023_exp"
+
+function _img(data)
+
+end
 
 function aggregate_chains(path::String, chains::Int64)
     att_d = "$(path)/attention"
@@ -28,17 +31,16 @@ function aggregate_chains(path::String, chains::Int64)
         sens = zeros(32, 32)
         gs = zeros(32, 32)
         pg = zeros(32, 32)
-        img_mu = zeros(256, 256, 3)
+        img_mu = zeros(128, 128, 3)
         for c = 1:chains
             c_path = "$(path)/$(c).jld2"
             isfile(c_path) || return nothing
             local data
             data = load(c_path, "$i")
             sens += data[:attention][:sensitivities]
-            st = data[:qt]
-            gs += st.gs
+            gs += data[:projected]
             pg += data[:path]
-            img_mu += permutedims(st.img_mu, (2, 3, 1))
+            img_mu += permutedims(data[:img_mu], (2, 3, 1))
         end
 
         rmul!(sens, 1.0 / chains)
@@ -81,12 +83,12 @@ end
 function main()
     exp_path = "/spaths/experiments/$(dataset)"
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
-    df = df[df.id .== 10, :]
+    df = df[df.id .== 7, :]
     for r in eachrow(df)
         base_path = "$(exp_path)/$(r.id)_$(r.door)"
         isdir(base_path) || continue
         @show base_path
-        aggregate_chains(base_path, 2)
+        aggregate_chains(base_path, 1)
         # shift_path = "$(base_path)_furniture_$(r.move)/1.jld2"
         # isdir(shift_path) || continue
         # @show shift_path

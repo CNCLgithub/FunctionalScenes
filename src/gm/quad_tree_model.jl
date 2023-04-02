@@ -256,8 +256,8 @@ end
 function _init_mitsuba_scene(room::GridRoom, res)
     # variant should already be configured in project `__init__`
     # see src/FunctionalScenes.jl
-    # mi.set_variant("cuda_ad_rgb")
-    mi.set_variant("llvm_ad_rgb")
+    mi.set_variant("cuda_ad_rgb")
+    # mi.set_variant("llvm_ad_rgb")
     (r,c) = steps(room)
     delta = bounds(room) ./ (r,c)
     dim = [c, r, 5]

@@ -39,8 +39,8 @@ COMMAND="$@"
 #################################################################################
 # Mount additional file systems
 #################################################################################
-# SING="${SENV[sing]} exec --nv"
-SING="${SENV[sing]} exec "
+SING="${SENV[sing]} exec --nv"
+# SING="${SENV[sing]} exec "
 mounts=(${SENV[mounts]})
 BS=""
 echo "( ) Adding mount points"
@@ -80,3 +80,5 @@ $SING $BS $CONT bash -c "source /project/${SENV[pyenv]}/bin/activate \
 printf "=%.0s"  $(seq 1 63)
 printf "\n"
 printf "(\xE2\x9C\x94) Executing %s\n" "${COMMAND}"
+
+    # source deps/mitsuba3/build/setpath.sh && \

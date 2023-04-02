@@ -1,4 +1,5 @@
 using PyCall
+using JSON
 using FunctionalScenes
 using FunctionalScenes: render_mitsuba,
     _init_mitsuba_scene,
@@ -17,14 +18,14 @@ end
 
 function mytest()
 
-    scene_id = 1
+    scene_id = 7
     door = 1
     base_path = "/spaths/datasets/$(dataset)/scenes"
     base_p = joinpath(base_path, "$(scene_id)_$(door).json")
     room = load_base_scene(base_p)
     display(room)
 
-    scene = _init_mitsuba_scene(room, (128, 128))
+    scene = _init_mitsuba_scene(room, (512, 512))
     params = @pycall mi.traverse(scene)::PyObject
     key = "grid.interior_medium.sigma_t.data"
     @time mu = render_mitsuba(room, scene, params, key, 24)

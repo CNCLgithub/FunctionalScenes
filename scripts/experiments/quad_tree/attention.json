@@ -1,5 +1,5 @@
 {
-    "samples" : 20,
+    "samples" : 200,
     "smoothness" : 150.0,
     "init_cycles" : 1,
     "rw_cycles" : 5,

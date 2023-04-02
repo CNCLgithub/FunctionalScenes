@@ -13,12 +13,11 @@ def att_tasks(args, df):
     # tasks = [(26, 1, 5, 'A')]
     tasks = []
     for (ri, r) in df.iterrows():
-        for c in range(args.chains):
-            # base scene
-            tasks.append((r['id'], r['door'], c, 'A'))
-            # shifted scene
-            tasks.append((f"--move {r.move}", f"--furniture {r.furniture}",
-                          r['id'], r['door'], c, 'A'))
+        # base scene
+        tasks.append((r['id'], r['door'], args.chains, 'A'))
+        # shifted scene
+        tasks.append((f"--move {r.move}", f"--furniture {r.furniture}",
+                        r['id'], r['door'], args.chains, 'A'))
     return (tasks, [], [])
     
 def main():
@@ -43,16 +42,16 @@ def main():
 
     tasks, kwargs, extras = att_tasks(args, df)
     # run one job first to test and profile
-    tasks = tasks[:5]
+    tasks = tasks[:args.chains]
 
     interpreter = '#!/bin/bash'
     slurm_out = os.path.join(os.getcwd(), 'env.d/spaths/slurm')
     resources = {
-        'cpus-per-task' : '4',
-        'mem-per-cpu' : '2GB',
+        'cpus-per-task' : '1',
+        'mem-per-cpu' : '8GB',
         'time' : '{0:d}'.format(args.duration),
         'partition' : 'psych_scavenge',
-        # 'gres' : 'gpu:1',
+        'gres' : 'gpu:1',
         'requeue' : None,
         'job-name' : 'rooms-ccn',
         'chdir' : os.getcwd(),
