@@ -51,15 +51,15 @@ end
 
 function mytest()
 
-    scene = 10
+    scene = 22
     door = 2
     base_path = "/spaths/datasets/$(dataset)/scenes"
     base_p = joinpath(base_path, "$(scene)_$(door).json")
     room = load_base_scene(base_p)
     display(room)
-    model_params = QuadTreeModel(;gt = room, base_sigma = 0.4,
-                                 # dist_cost = 0.001,
-                                 dist_cost = 0.01,
+    model_params = QuadTreeModel(;gt = room, base_sigma = 0.1,
+                                 dist_cost = 0.001,
+                                 # dist_cost = 0.01,
                                  # dist_cost = 1.0,
                                  )
 

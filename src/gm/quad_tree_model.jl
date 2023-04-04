@@ -175,8 +175,9 @@ function nav_graph(lv::Vector{QTAggNode}, dist_weight::Float64)
         contact(x.node, y.node) || continue
         d = dist(x.node, y.node) * dist_weight
         #  work to traverse each node
-        p = area(x.node) / (area(x.node) + area(y.node))
-        work = d + (p * weight(x) + (1-p)*weight(y))
+        # p = area(x.node) / (area(x.node) + area(y.node))
+        # work = d + (p * weight(x) + (1-p)*weight(y))
+        work = d + (area(x.node) * weight(x) + area(y.node)*weight(y))
         adm[i, j] = adm[j, i] = true
         dsm[i, j] = dsm[j, i] = work
     end
