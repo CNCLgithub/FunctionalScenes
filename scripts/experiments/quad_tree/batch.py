@@ -6,11 +6,10 @@ import argparse
 import pandas as pd
 from slurmpy import sbatch
 
-script = 'bash {0!s}/env.d/run.sh julia ' + \
-        '/project/scripts/experiments/quad_tree/run.jl'
+script = 'bash {0!s}/env.d/run.sh ' + \
+        '/project/scripts/experiments/quad_tree/run.sh'
 
 def att_tasks(args, df):
-    # tasks = [(26, 1, 5, 'A')]
     tasks = []
     for (ri, r) in df.iterrows():
         # base scene
@@ -42,7 +41,7 @@ def main():
 
     tasks, kwargs, extras = att_tasks(args, df)
     # run one job first to test and profile
-    tasks = tasks[:args.chains]
+    # tasks = tasks[:args.chains]
 
     interpreter = '#!/bin/bash'
     slurm_out = os.path.join(os.getcwd(), 'env.d/spaths/slurm')
@@ -56,7 +55,7 @@ def main():
         'job-name' : 'rooms-ccn',
         'chdir' : os.getcwd(),
         'output' : f"{slurm_out}/%A_%a.out",
-        # 'exclude' : 'r811u30n01' # ran into CUDA error
+        'exclude' : 'r811u30n01' # ran into CUDA error
     }
     func = script.format(os.getcwd())
     batch = sbatch.Batch(interpreter, func, tasks,
