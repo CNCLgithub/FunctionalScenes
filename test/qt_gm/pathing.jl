@@ -33,40 +33,34 @@ function ex_path(trace)
     st = get_retval(trace)
     n = size(st.qt.projected, 1)
     leaves = st.qt.leaves
-    m = zeros((n,n))
-    c::Int64 = 1
-    @show st.path.edges
+    m = fill(false, (n,n))
     for e in st.path.edges
         src_node = leaves[src(e)].node
         idx = node_to_idx(src_node, n)
-        m[idx] .= c
-        c += 1
+        m[idx] .= true
         dst_node = leaves[dst(e)].node
         idx = node_to_idx(src_node, n)
-        m[idx] .= c
-        c += 1
+        m[idx] .= true
     end
-    m ./ maximum(m)
+    Matrix{Float64}(m)
 end
 
 function mytest()
 
     scene = 22
-    door = 2
+    door = 1
     base_path = "/spaths/datasets/$(dataset)/scenes"
     base_p = joinpath(base_path, "$(scene)_$(door).json")
     room = load_base_scene(base_p)
     display(room)
     model_params = QuadTreeModel(;gt = room, base_sigma = 0.1,
-                                 dist_cost = 0.001,
-                                 # dist_cost = 0.01,
-                                 # dist_cost = 1.0,
+                                 obs_cost = 1E5
                                  )
 
 
     ddp_path = "/project/scripts/nn/configs/og_decoder.yaml"
     ddp_params = DataDrivenState(;config_path = ddp_path,
-                                 var = 0.125)
+                                 var = 0.175)
     gt_img = render_mitsuba(room, model_params.scene, model_params.sparams,
                             model_params.skey, model_params.spp)
     tracker_cm = generate_qt_from_ddp(ddp_params, gt_img, model_params)

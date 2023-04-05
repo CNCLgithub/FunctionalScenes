@@ -140,11 +140,21 @@ True if a wall of each node are touching.
 # end
 
 function contact(a::QTProdNode, b::QTProdNode)
-    # check if any of the walls touch
-    a.center[1] - 0.5* a.dims[1] <= b.center[1] + 0.5*b.dims[1] &&
-        a.center[1] + 0.5 * a.dims[1] >= b.center[1] - 0.5 * b.dims[1] &&
-        a.center[2] - 0.5 * a.dims[2] <= b.center[2] + 0.5 * b.dims[2] &&
-        a.center[2] + 0.5 * a.dims[2] >= b.center[2] - 0.5 * b.dims[2]
+    d1 = b.center[1] + 0.5 * b.dims[1] - (a.center[1] - 0.5 * a.dims[1])
+    d2 = a.center[1] + 0.5 * a.dims[1] - (b.center[1] - 0.5 * b.dims[1])
+
+    d3 = b.center[2] + 0.5 * b.dims[2] - (a.center[2] - 0.5 * a.dims[2])
+    d4 = a.center[2] + 0.5 * a.dims[2] - (b.center[2] - 0.5 * b.dims[2])
+
+    # diagonal
+    (d1 == 0 || d2 == 0) && (d3 == 0 || d4 == 0) && return false
+    # all other cases
+    (d1 >= 0 && d2 >= 0 && d3 >= 0 && d4 >= 0)
+    # # check if any of the walls touch
+    # a.center[1] - 0.5* a.dims[1] <= b.center[1] + 0.5*b.dims[1] &&
+    #     a.center[1] + 0.5 * a.dims[1] >= b.center[1] - 0.5 * b.dims[1] &&
+    #     a.center[2] - 0.5 * a.dims[2] <= b.center[2] + 0.5 * b.dims[2] &&
+    #     a.center[2] + 0.5 * a.dims[2] >= b.center[2] - 0.5 * b.dims[2]
 end
 
 
