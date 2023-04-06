@@ -44,6 +44,7 @@ end
 function generate_qt_from_ddp(ddp_params::DataDrivenState, img, model_params)
     @unpack nn, device, var = ddp_params
 
+    max_depth::Int64 = 4
     pimg = permutedims(img, (3,1,2))
     x = @pycall torch.tensor(pimg, device = device)::PyObject
     x = @pycall x.unsqueeze(0)::PyObject
@@ -62,8 +63,9 @@ function generate_qt_from_ddp(ddp_params::DataDrivenState, img, model_params)
         idx = node_to_idx(head, d)
         mu = mean(state[idx])
         sd = std(state[idx], mean = mu)
-        # @show (head.tree_idx => sd)
-        split = sd > ddp_params.var && head.level < head.max_level
+        # split = sd > ddp_params.var && head.level < head.max_level
+        # restricting depth of nn
+        split = sd > ddp_params.var && head.level < max_depth
         cm[:trackers => (head.tree_idx, Val(:production)) => :produce] = split
         if split
             # add children to queue

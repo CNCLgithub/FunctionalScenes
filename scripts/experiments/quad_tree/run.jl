@@ -205,12 +205,12 @@ end
 
 
 function outer()
-    args = Dict("scene" => 22)
+    args = Dict("scene" => 8)
     # args = parse_outer()
     i = args["scene"]
     # scene | door | chain | attention
     # cmd = ["$(i)","1", "1", "A"]
-    cmd = ["--restart", "$(i)", "2", "1", "A"]
+    cmd = ["--restart", "$(i)", "1", "1", "A"]
     main(c=cmd);
 end
 
