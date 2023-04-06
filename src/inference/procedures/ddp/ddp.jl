@@ -47,7 +47,7 @@ function generate_qt_from_ddp(ddp_params::DataDrivenState, img, model_params)
     pimg = permutedims(img, (3,1,2))
     x = @pycall torch.tensor(pimg, device = device)::PyObject
     x = @pycall x.unsqueeze(0)::PyObject
-    x = @pycall nn.forward(x)::PyObject
+    x = @pycall nn.determ_forward(x)::PyObject
     state = @pycall x.detach().cpu().numpy()::Matrix{Float64}
     # state = Matrix{Float64}(state')
     println("Data-driven state")
