@@ -15,17 +15,16 @@ def downsample(a, n:int = 2):
 
 EXPNAME = 'ccn_2023_exp'
 burn_in = 50
-scale = 4
+scale = 1
 
 def main():
-    # scenes = [10, 22, 7]
-    scenes = [8, 10, 22]
+    scenes = [7, 8, 10, 22, 27, 30]
     titles = ['geo', 'att', 'pmat']
 
 
     df_path = f"/spaths/datasets/{EXPNAME}/scenes.csv"
     df = pd.read_csv(df_path)
-    df = df.loc[map(lambda x: x in scenes, df['id'])]
+    # df = df.loc[map(lambda x: x in scenes, df['id'])]
 
     row_count = 1
     fig = make_subplots(rows=2*len(df), cols=len(titles),
