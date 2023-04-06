@@ -299,60 +299,23 @@ t.test(upright_dhr_analysis$up_diff, upright_dhr_analysis$abs_f_diff)
 ```
 
 ```{r}
-model_raw <- read_csv("~/project/spaths/experiments/ccn_2023_exp/chain_summary.csv")
+model_raw <- read_csv("~/project/spaths/experiments/ccn_2023_exp/chain_summary_25.csv")
 
 
 pair_diff <- model_raw %>%
+  # group_by(scene) %>%
+  # arrange(door) %>%
+  # summarise(across(-door, 
+  #                  list(mean = mean, max = max, min = min, diff = diff))) %>%
   left_join(delta_hr_by_scene)
 
 pair_diff %>%
-  with(lm(f_diff ~ att_diff)) %>%
+  with(lm(f_diff ~ diff_geo)) %>%
   summary()
 
 pair_diff %>%
-  ggplot(aes(x = att_diff, y = f_diff)) +
+  ggplot(aes(x = diff_geo, y = f_diff)) +
   geom_point()
-
-
-
-between_trials <- model_raw %>%
-  left_join(passed_hits)
-
-between_trials %>%
-  ggplot(aes(x = geo_p, y = f)) + 
-  geom_point()
-
-between_trials %>%
-  with(lm(f ~ geo_p)) %>%
-  summary()
-
-
-pair_diff <- model_raw %>%
-  select(-c(move, furniture)) %>%
-  group_by(scene) %>%
-  arrange(door) %>%
-  summarise(across(-door, 
-                   list(mean = mean, max = max, min = min, diff = diff))) %>%
-  mutate(abs_geo_p_diff = abs(geo_p_diff)) %>%
-  left_join(delta_hr_by_scene)
-  
-pair_diff %>%
-  with(lm(f_diff ~ geo_p_diff)) %>%
-  summary()
-
-pair_diff %>%
-  ggplot(aes(x = geo_p_diff, y = f_diff)) +
-  geom_point()
-
-
-
-between_trials %>%
-  ggplot(aes(x = prop_att, y = f)) + 
-  geom_point()
-
-between_trials %>%
-  with(lm(f ~ prop_att)) %>%
-  summary()
 
 
 ```

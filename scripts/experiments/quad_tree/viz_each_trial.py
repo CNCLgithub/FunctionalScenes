@@ -12,6 +12,7 @@ def downsample(a, n:int = 2):
     a_downsampled = a.reshape(-1, n, b, n).sum((-1, -3)) / (n*n)
     return a_downsampled
 
+
 EXPNAME = 'ccn_2023_exp'
 burn_in = 50
 scale = 4
@@ -27,9 +28,9 @@ def main():
     df = df.loc[map(lambda x: x in scenes, df['id'])]
 
     row_count = 1
-    fig = make_subplots(rows=len(df), cols=len(titles),
-                        # shared_xaxes=True,
-                        # shared_yaxes=True,
+    fig = make_subplots(rows=2*len(df), cols=len(titles),
+                        shared_xaxes=True,
+                        shared_yaxes=True,
                         subplot_titles = titles)
 
     for (ri, r) in df.iterrows():
@@ -43,51 +44,48 @@ def main():
 
         geo_a = np.mean(data_1['geo'][:, burn_in:], axis = (0,1))
         geo_a = downsample(geo_a, n = scale)
-
-
-        geo_b = np.mean(data_2['geo'][:, burn_in:], axis = (0,1))
-        geo_b = downsample(geo_b, n = scale)
-
-        geo_a_init = np.mean(data_1['geo'][:, :1], axis = (0,1))
-        geo_a_init = downsample(geo_a_init, n = scale)
-
-        geo_b_init = np.mean(data_2['geo'][:, :1], axis = (0,1))
-        geo_b_init = downsample(geo_b_init, n = scale)
-
-
-        geo_diff = (geo_a - geo_b) - (geo_a_init - geo_b_init)
-        geo_hm =  go.Heatmap(z = geo_diff.T, coloraxis="coloraxis1")
+        geo_hm =  go.Heatmap(z = geo_a.T, coloraxis="coloraxis1")
         fig.add_trace(geo_hm, row = row_count, col = 1)
 
         att_a = np.mean(data_1['att'][:, burn_in:], axis = (0,1))
         att_a = downsample(att_a, n = scale)
-        att_b = np.mean(data_2['att'][:, burn_in:], axis = (0,1))
-        att_b = downsample(att_b, n = scale)
-        att_diff = att_a - att_b
-        att_hm =  go.Heatmap(z = att_diff.T, coloraxis="coloraxis2")
+        att_hm =  go.Heatmap(z = att_a.T, coloraxis="coloraxis2")
         fig.add_trace(att_hm, row = row_count, col = 2)
-
 
         pmat_a = np.mean(data_1['pmat'][:, burn_in:], axis = (0,1))
         pmat_a = downsample(pmat_a, n = scale)
+        pmat_hm =  go.Heatmap(z = pmat_a.T, coloraxis="coloraxis3")
+        fig.add_trace(pmat_hm, row = row_count, col = 3)
+
+        row_count += 1
+
+        geo_b = np.mean(data_2['geo'][:, burn_in:], axis = (0,1))
+        geo_b = downsample(geo_b, n = scale)
+        geo_hm =  go.Heatmap(z = geo_b.T, coloraxis="coloraxis1")
+        fig.add_trace(geo_hm, row = row_count, col = 1)
+
+        att_b = np.mean(data_2['att'][:, burn_in:], axis = (0,1))
+        att_b = downsample(att_b, n = scale)
+        att_hm =  go.Heatmap(z = att_b.T, coloraxis="coloraxis2")
+        fig.add_trace(att_hm, row = row_count, col = 2)
+
         pmat_b = np.mean(data_2['pmat'][:, burn_in:], axis = (0,1))
         pmat_b = downsample(pmat_b, n = scale)
-        pmat_diff = pmat_a - pmat_b
-        pmat_hm =  go.Heatmap(z = pmat_diff.T, coloraxis="coloraxis3")
+        pmat_hm =  go.Heatmap(z = pmat_b.T, coloraxis="coloraxis3")
         fig.add_trace(pmat_hm, row = row_count, col = 3)
 
         row_count += 1
 
     fig.update_layout(
-        height = 325 * len(df),
+        height = 325 * len(df) * 2,
         width = 900,
-        coloraxis1=dict(colorscale='picnic'),
-        coloraxis2=dict(colorscale='picnic'),
-        coloraxis3=dict(colorscale='picnic'),
+        coloraxis1=dict(colorscale='blues'),
+        coloraxis2=dict(colorscale='reds'),
+        coloraxis3=dict(colorscale='greens'),
         showlegend=False
         # aspectratio = {'x' : 1, 'y' : 1},
     )
-    fig.write_html(f'/spaths/experiments/{EXPNAME}_diff.html')
+    fig.write_html(f'/spaths/experiments/{EXPNAME}_each_trial.html')
 
 if __name__ == '__main__':
     main()
