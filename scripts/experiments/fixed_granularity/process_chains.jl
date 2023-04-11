@@ -57,7 +57,7 @@ function aggregate_chains(path::String, chains::Int64, steps)
 end
 
 function main()
-    exp_path = "/spaths/experiments/$(dataset)"
+    exp_path = "/spaths/experiments/$(dataset)_fixed_granularity"
     df = DataFrame(CSV.File("/spaths/datasets/$(dataset)/scenes.csv"))
     results = DataFrame(scene = Int64[],
                         max_diff_geo = Float64[],

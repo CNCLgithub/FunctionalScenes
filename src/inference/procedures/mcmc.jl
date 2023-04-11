@@ -115,8 +115,13 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
     obj_t = objective(t)
     # loop through each node in initial trace
     st::QuadTreeState = get_retval(t)
+    if init_cycles == 0
+        chain.auxillary.initialized = true
+        return nothing
+    end
     _t  = t
     accept_ct = 0
+    println("Running init kernel on $(length(st.qt.leaves)) nodes")
     for i = 1:length(st.qt.leaves)
         node = st.qt.leaves[i].node
         accept_ct = 0

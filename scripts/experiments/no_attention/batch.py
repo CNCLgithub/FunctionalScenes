@@ -7,7 +7,7 @@ import pandas as pd
 from slurmpy import sbatch
 
 script = 'bash {0!s}/env.d/run.sh ' + \
-        '/project/scripts/experiments/fixed_granularity/run.sh'
+        '/project/scripts/experiments/quad_tree/run.sh'
 
 def att_tasks(args, df):
     tasks = []

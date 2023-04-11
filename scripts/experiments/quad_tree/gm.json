@@ -1,4 +1,4 @@
 {
-   "base_sigma" : 0.01,
-   "obs_cost" : 75.0
+   "base_sigma" : 0.05,
+   "obs_cost" : 500.0
 }
