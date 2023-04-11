@@ -299,7 +299,7 @@ t.test(upright_dhr_analysis$up_diff, upright_dhr_analysis$abs_f_diff)
 ```
 
 ```{r}
-model_raw <- read_csv("~/project/spaths/experiments/ccn_2023_exp/chain_summary_25.csv")
+model_raw <- read_csv("~/project/spaths/experiments/ccn_2023_exp/chain_summary_max_diff_50.csv")
 
 
 pair_diff <- model_raw %>%
@@ -314,8 +314,9 @@ pair_diff %>%
   summary()
 
 pair_diff %>%
-  ggplot(aes(x = diff_geo, y = f_diff)) +
-  geom_point()
+  ggplot(aes(x = diff_geo, y = f_diff, label = as.character(scene))) +
+  geom_point() + 
+  geom_text(hjust=0, vjust=0)
 
 
 ```
