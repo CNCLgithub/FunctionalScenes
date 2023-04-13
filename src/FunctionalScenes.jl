@@ -10,7 +10,7 @@ using Graphs
 using Setfield
 using Statistics
 using Parameters
-# using Gen_Compose
+using Gen_Compose
 using Lazy: @>, @>>
 using LinearAlgebra
 using OptimalTransport
@@ -25,10 +25,23 @@ using FunctionalCollections
 
 using PyCall
 const torch = PyNULL()
-const functional_scenes = PyNULL()
+const mi = PyNULL()
+const dr = PyNULL()
+const fs_py = PyNULL()
+const numpy = PyNULL()
 function __init__()
+    copy!(numpy, pyimport("numpy"))
     copy!(torch, pyimport("torch"))
-    copy!(functional_scenes, pyimport("functional_scenes"))
+    copy!(dr, pyimport("drjit"))
+    copy!(mi, pyimport("mitsuba"))
+
+    # mitsuba variant must be set first
+    variants = @pycall mi.variants()::PyObject
+    variant = "cuda_ad_rgb" in variants ? "cuda_ad_rgb" : "scalar_rgb"
+    mi.set_variant(variant)
+
+
+    copy!(fs_py, pyimport("functional_scenes"))
 end
 
 #################################################################################

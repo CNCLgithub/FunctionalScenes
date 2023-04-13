@@ -5,7 +5,7 @@ ENVD=$(cd "$ENVD" && pwd)    # absolutized and normalized
 WDIR="$ENVD/rstudio"
 # echo "$ENVD"
 # echo "$WDIR"
-singularity exec --bind "$WDIR/run":"/run" \
+apptainer exec --bind "$WDIR/run":"/run" \
     --bind "$WDIR/var":"/var/lib/rstudio-server",\
     --bind "$WDIR/database.conf":"/etc/rstudio/database.conf" \
     --bind "$WDIR":"/home/rstudio" \

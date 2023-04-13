@@ -27,10 +27,13 @@ examples:
 #################################################################################
 # Variable declarations
 #################################################################################
-cont_pull_url="https://yale.box.com/shared/static/934sa3kkcl63aj0nwzmqwxtw25efgpj8.sif"
+cont_pull_url="https://yale.box.com/shared/static/ycvqzzp57v54dog2pompyitj8d7c9e93.sif"
+min_pull_url="https://yale.box.com/shared/static/piau0ilrc23ki62ohgpo34oh4sq7mkrz.sif"
 SING="${SENV[sing]}"
 BUILD="${SENV[envd]}/${SENV[def]}"
 cont_dest="${SENV[envd]}/${SENV[cont]}"
+min_dest="${SENV[envd]}/min.sif"
+rstudio_dest="${SENV[envd]}/rstudio"
 
 
 #################################################################################
@@ -48,8 +51,20 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
     wget "$cont_pull_url" -O "${cont_dest}"
 
 [[ "${@}" =~ "cont_build" ]] && echo "building ${BUILD} -> ${cont_dest}" && \
-    SINGULARITY_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
+    APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
     "$cont_dest" "$BUILD"
+
+[[ "${@}" =~ "min_pull" ]] && \
+    echo "pulling container" && \
+    wget "$min_pull_url" -O "${min_dest}"
+
+[[ "${@}" =~ "min_build" ]] && echo "building ${BUILD} -> ${min_dest}" && \
+    APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
+    "$min_dest" "${SENV[envd]}/Singularity.minimal"
+
+[[ "${@}" =~ "rstudio_build" ]] && echo "building ${BUILD} -> ${rstudio_dest}" && \
+    APPTAINER_TMPDIR="${SPATHS[tmp]}" sudo -E $SING build \
+    "$rstudio_dest" "${SENV[envd]}/Singularity.rstudio"
 
 #################################################################################
 # Python setup
@@ -59,14 +74,9 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
     echo "building python env at ${SENV[pyenv]}" && \
     $SING exec "${cont_dest}" bash -c "virtualenv ${SENV[pyenv]} && \
     source ${SENV[pyenv]}/bin/activate && \
-    python -m pip install --upgrade pip && \
-    python -m pip install --no-cache-dir -r requirements.txt" && \
-    # install pytorch3d. current requires special treatment
-    # ./env.d/run.sh curl -LO https://github.com/NVIDIA/cub/archive/1.10.0.tar.gz && \
-    ./env.d/run.sh tar xzf 1.10.0.tar.gz -C "${SENV[pyenv]}" && \
-    # ./env.d/run.sh python -m pip install --no-index  -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu113_pyt1100/download.html pytorch3d==0.6.1
-    ./env.d/run.sh python -m pip install -v git+https://github.com/facebookresearch/pytorch3d.git@main
-    # python -m pip install --no-cache-dir -r requirements.txt"
+    python -m pip install --upgrade pip" && \
+    ./env.d/run.sh python -m pip install --no-cache-dir -r /project/requirements.txt
+
 
 #################################################################################
 # Julia setup
@@ -84,14 +94,15 @@ cont_dest="${SENV[envd]}/${SENV[cont]}"
     echo "Not touching datasets"
 [[ "${@}" =~ "all" ]] || [[ "${@}" =~ "datasets" ]] && \
     echo "pulling datasets" && \
-    wget "https://yale.box.com/shared/static/6nfzj0i9wbhseduiy9n9kq53hiwdfd50.tar" \
-    -O "${SPATHS[datasets]}/alexnet_places365.pth.tar"
+    wget "https://yale.box.com/shared/static/2fif6cgs7by5kt35n5zskze4m5b8sxjk.gz" \
+    -O "${SPATHS[datasets]}/ccn_2023_exp.tar.gz" && \
+    tar -xzf "${SPATHS[datasets]}/ccn_2023_exp.tar.gz" -C "${SPATHS[datasets]}/"
 
 [[ "${@}" =~ "checkpoints" ]] || [[ "${@}" =~ "checkpoints" ]] || \
     echo "Not touching checkpoints"
 [[ "${@}" =~ "all" ]] || [[ "${@}" =~ "checkpoints" ]] && \
 echo "pulling checkpoints" && \
-    wget "https://yale.box.com/shared/static/uxhtsdqfec28cu2tpbf8rtvkph16dhqz" \
-    -O "${SPATHS[checkpoints]}/ddp" && \
-    wget "https://yale.box.com/shared/static/cuwcgxk0b0o7h5jck35xbhmw80h8wm6v" \
-    -O "${SPATHS[checkpoints]}/vae"
+    wget "https://yale.box.com/shared/static/bhxpl16t015fmics1qxdmes3wndsv2yu.ckpt" \
+    -O "${SPATHS[checkpoints]}/scene_vae.ckpt" && \
+    wget "https://yale.box.com/shared/static/4myglrftnixyce8u9l41c0zhuz11yv9g.ckpt" \
+    -O "${SPATHS[checkpoints]}/og_decoder.ckpt"

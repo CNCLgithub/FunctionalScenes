@@ -1,5 +1,11 @@
 using JSON
 using UnicodePlots
+using FileIO: save
+using Colors
+using Images: colorview
+using ImageInTerminal
+
+export save_img_array
 
 
 # index arrays using sets. Order doesn't matter
@@ -7,9 +13,38 @@ function Base.to_index(i::Set{T}) where {T}
     Base.to_index(collect(T, i))
 end
 
+
+#################################################################################
+# Visuals
+#################################################################################
+
+function display_mat(m::Matrix{Float64};
+                     rotate::Bool = true,
+                     c1=colorant"black",
+                     c2=colorant"white")
+    img = weighted_color_mean.(m, c2, c1)
+    img = rotate ? rotr90(img, 3) : img
+    display(img)
+    return nothing
+end
+
+function display_img(m::Array{Float64, 3})
+    img = colorview(RGB, permutedims(m, (3,1,2)))
+    display(img)
+    return nothing
+end
+
+
 #################################################################################
 # IO
 #################################################################################
+
+function save_img_array(array::Array, path::String)
+    _array = permutedims(array, (3,1,2))
+    img = colorview(RGB, _array)
+    save(path, img)
+end
+
 
 function _load_device()
     if torch.cuda.is_available()
@@ -40,11 +75,14 @@ function read_json(path)
     return sym_data
 end
 
-function _init_graphics(r, img_size, device)
-    graphics = functional_scenes.SimpleGraphics(img_size, device)
-    base_d = translate(r, Int64[])
-    graphics.set_from_scene(base_d)
-    return graphics
+function _init_graphics()
+    variants = @pycall mi.variants()::PyObject
+    if "cuda_ad_rgb" in variants
+        @pycall mi.set_variant("cuda_ad_rgb")::PyObject
+    else
+        @pycall mi.set_variant("scalar_rgb")::PyObject
+    end
+    return nothing
 end
 
 #################################################################################

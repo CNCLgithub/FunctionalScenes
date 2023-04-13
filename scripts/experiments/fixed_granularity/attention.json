@@ -1,6 +1,7 @@
 {
-    "tracker_cycles" : 15,
-    "samples" : 160,
-    "smoothness" : 10.0,
-    "explore" : 0.10
+    "samples" : 150,
+    "smoothness" : 1.0,
+    "init_cycles" : 0,
+    "rw_cycles" : 15,
+    "sm_cycles" : 0
 }

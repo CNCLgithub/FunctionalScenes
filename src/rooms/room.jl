@@ -120,6 +120,50 @@ function expand(r::GridRoom, factor::Int64)::GridRoom
     GridRoom(s, bounds(r) .* factor, sents, sexits, sg, sd)
 end
 
+function voxelize(r::GridRoom, tile::Tile)
+    #REVIEW: Generalize to non-square rooms
+    d = maximum(steps(r))
+    voxels = fill(false, (d,d,d))
+    voxelize!(voxels, r, tile)
+    return voxels
+end
+
+function voxelize!(voxels::Array{Bool, 3},
+                   r::GridRoom,
+                   tile::Floor)
+    #REVIEW: constant?
+    #REVIEW: parameterize wall height? (x-dim)
+    h = 6
+    voxels[1, :, :] .= true
+    voxels[h + 1, :, :] .= true
+    return nothing
+end
+
+function voxelize!(voxels::Array{Bool, 3},
+                   r::GridRoom,
+                   tile::Wall)
+    #REVIEW: parameterize wall height? (x-dim)
+    h = 6
+    w = reverse(data(r) .== wall_tile, dims = 1)
+    for z = 1:h
+        voxels[z, :, :] = w
+    end
+    return nothing
+end
+
+function voxelize!(voxels::Array{Bool, 3},
+                   r::GridRoom,
+                   tile::Obstacle)
+    #REVIEW: parameterize height? (x-dim)
+    h = 3
+    # need to reverse because of `pytorch.cubify`
+    # REVIEW: perhaps correct for row flip in `functional_scenes`?
+    w = reverse(data(r) .== obstacle_tile, dims = 1)
+    for z = 1:h
+        voxels[z, :, :] = w
+    end
+    return nothing
+end
 
 const _char_map = Dict{Symbol, String}(
     :entrance => "◉",
@@ -167,54 +211,4 @@ function from_json(::Type{GridRoom}, jd::Dict)
     en = collect(Int64, jd["entrance"])
     ex = collect(Int64, jd["exits"])
     GridRoom(s,b,en,ex, g, d)
-end
-
-
-# Debug visualization
-
-function print_room(r::GridRoom, ocg::Matrix{Float64})
-    d = data(r)
-    c = deepcopy(ocg)
-    c[d .== obstacle_tile] .= -1.
-    c[d .== wall_tile] .= -2.
-    spy(c,
-        title = "Obstacles + path",
-        # canvas = BrailleCanvas,
-        canvas = BlockCanvas,
-        font = "JuliaMono",
-        # height = 30,
-        background = UnicodePlots.ansi_color((0, 0, 0)),
-        width = 60)
-end
-function print_room(r::GridRoom, p::Vector{Int64})
-    m = zeros(steps(r))
-    m[p] .= 1
-    print_room(r, m)
-end
-
-function viz_room(r::GridRoom, ocg::Matrix{Float64})
-    println(print_room(r, ocg))
-end
-function viz_room(r::GridRoom, ocg::Matrix{Bool})
-    viz_room(r, Float64.(ocg))
-end
-function viz_room(r::GridRoom)
-    c = zeros(steps(r))
-    viz_room(r, c)
-end
-function viz_room(r::GridRoom, p::Vector{Int64})
-    println(print_room(r, p))
-end
-
-
-function viz_ocg(ocg; title = "occupancy grid")
-    # ocg = mean(ocg)
-    println(heatmap(ocg,
-                    title = title,
-                    border = :none,
-                    colorbar_border = :none,
-                    # colormap = :inferno,
-                    xfact = 2.0,
-                    yfact = 2.0
-                    ))
 end

@@ -1,4 +1,6 @@
 using CSV
+using Gen: get_retval
+using JSON
 using JLD2
 using FileIO
 using ArgParse
@@ -6,9 +8,11 @@ using DataFrames
 using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
-experiment = "1_exit_22x40_doors"
+using Random
 
-function parse_commandline(vs)
+dataset = "ccn_2023_exp"
+
+function parse_commandline(c)
     s = ArgParseSettings()
 
     @add_arg_table! s begin
@@ -22,15 +26,10 @@ function parse_commandline(vs)
         arg_type = String
         default = "$(@__DIR__)/proc.json"
 
-        "--vae"
-        help = "DDP VAE weights"
-        arg_type = String
-        default = "/checkpoints/vae"
-
         "--ddp"
-        help = "DDP decoder weights"
+        help = "DDP config"
         arg_type = String
-        default = "/checkpoints/ddp"
+        default = "/project/scripts/nn/configs/og_decoder.yaml"
 
         "--restart", "-r"
         help = "Whether to resume inference"
@@ -90,17 +89,23 @@ function parse_commandline(vs)
         default = "$(@__DIR__)/naive.json"
     end
 
-    return parse_args(vs, s)
+    return parse_args(c, s)
 end
 
-load_base_scene(path::String, door::Int64) = load(path)["rs"][door]
+function load_base_scene(path::String)
+    local base_s
+    open(path, "r") do f
+        base_s = JSON.parse(f)
+    end
+    base = from_json(GridRoom, base_s)
+end
 
 
 function load_moved_scene(base_p::String, args)
     move = args["move"]
     furn = args["furniture"]
     door = args["door"]
-    base = load_base_scene(base_p, door)
+    base = load_base_scene(base_p)
     room = shift_furniture(base,
                            furniture(base)[furn],
                            move)
@@ -108,83 +113,105 @@ end
 
 
 
-function main(cmd)
-    args = parse_commandline(cmd)
+function main(;c=ARGS)
+    args = parse_commandline(c)
     att_mode = args["%COMMAND%"]
 
-    base_path = "/experiments/$(experiment)_$(att_mode)"
+    base_path = "/spaths/datasets/$(dataset)/scenes"
     scene = args["scene"]
     door = args["door"]
-    path = joinpath(base_path, "$(scene)_$(door)")
+    base_p = joinpath(base_path, "$(scene)_$(door).json")
 
-    base_p = "/scenes/$(experiment)/$(scene).jld2"
+    println("Running inference on scene $(scene)")
+
+    out_path = "/spaths/experiments/$(dataset)_fixed_granularity/$(scene)_$(door)"
+
+    println("Saving results to: $(out_path)")
+
     if isnothing(args["move"])
-        room = load_base_scene(base_p, args["door"])
+        room = load_base_scene(base_p)
     else
         room = load_moved_scene(base_p, args)
         move = args["move"]
         furn = args["furniture"]
         door = args["door"]
-        path = "$(path)_$(move)_$(furniture)_$(move)"
+        out_path = "$(out_path)_$(furniture)_$(move)"
     end
 
-    tracker_ps = ones(3, 6)
-    tracker_ps[:, 1:2] .= 0.01
-    tracker_ps = vec(tracker_ps)
-    query = query_from_params(room, args["gm"],
-                              img_size = (240, 360),
-                              dims = (6,6),
-                              tracker_ps = tracker_ps
-                              )
+    # Load query (identifies the estimand)
+    query = query_from_params(room, args["gm"])
 
+    # Load estimator - Adaptive MCMC
     model_params = first(query.args)
-    proc = FunctionalScenes.proc_from_params(room, model_params,
-                                             args[att_mode]["params"],
-                                             args["vae"], args["ddp"];
-                                             objective = multires_path,
-                                             distance = sinkhorn_div)
+    ddp_params = DataDrivenState(;config_path = args["ddp"],
+                                 var = 0.175)
+    gt_img = render_mitsuba(room, model_params.scene, model_params.sparams,
+                            model_params.skey, model_params.spp)
+    proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
+                                 ddp_args = (ddp_params, gt_img, model_params, 6))
+
+    println("Loaded configuration...")
 
     try
-        isdir(base_path) || mkpath(base_path)
-        isdir(path) || mkpath(path)
+        isdir("/spaths/experiments/$(dataset)") || mkpath("/spaths/experiments/$(dataset)")
+        isdir(out_path) || mkpath(out_path)
     catch e
-        println("could not make dir $(path)")
-    end
-    c = args["chain"]
-    out = joinpath(path, "$(c).jld2")
-
-    if isfile(out) && !args["restart"]
-        println("chain $c complete")
-        return
+        println("could not make dir $(out_path)")
     end
 
-    println("running chain $c")
-    results = run_inference(query, proc, out )
-    FunctionalScenes.viz_gt(room)
+    # save the gt image for reference
+    save_img_array(gt_img, "$(out_path)/gt.png")
+
+    # which chain to run
+    for c = 1:args["chain"]
+        Random.seed!(c)
+        out = joinpath(out_path, "$(c).jld2")
+
+        if isfile(out) && args["restart"]
+            println("chain $c restarting")
+            rm(out)
+        end
+        complete = false
+        if isfile(out)
+            corrupted = true
+            jldopen(out, "r") do file
+                # if it doesnt have this key
+                # or it didnt finish steps, restart
+                if haskey(file, "current_idx")
+                    n_steps = file["current_idx"]
+                    if n_steps == proc.samples
+                        println("Chain $(c) already completed")
+                        corrupted = false
+                        complete = true
+                    else
+                        println("Chain $(c) corrupted. Restarting...")
+                    end
+                end
+            end
+            corrupted && rm(out)
+        end
+        if !complete
+            println("starting chain $c")
+            results = run_inference(query, proc, out )
+            save_img_array(get_retval(results.state).img_mu,
+                        "$(out_path)/$(c)_img_mu.png")
+            println("Chain $(c) complete")
+        end
+    end
+
     return nothing
 end
 
 
 
 function outer()
-    # args = Dict("scene" => 1)
-    args = parse_outer()
+    args = Dict("scene" => 8)
+    # args = parse_outer()
     i = args["scene"]
-    df = DataFrame(CSV.File("/scenes/$(experiment).csv"))
-    cmd = ["$(i)","1", "1", "A"]
-    main(cmd);
-    cmd = ["$(i)", "2", "1", "A"]
-    main(cmd);
-    for r in eachrow(df[df.id  .== i, :])
-        cmd = [
-            "-f=$(r.furniture)",
-            "-m=$(r.move)",
-            "$(i)", "$(r.door)", "1", "A",
-        ]
-
-        display(cmd)
-        main(cmd);
-    end
+    # scene | door | chain | attention
+    # cmd = ["$(i)","1", "1", "A"]
+    cmd = ["--restart", "$(i)", "1", "1", "A"]
+    main(c=cmd);
 end
 
 
@@ -203,4 +230,5 @@ function parse_outer()
     return parse_args(s)
 end
 
-outer();
+main();
+# outer();

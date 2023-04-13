@@ -27,14 +27,41 @@ function ex_choicemap(tr::Gen.Trace)
     get_selected(choices, s)
 end
 
-function ex_global_state(c::StaticMHChain)
+function ex_projected(c::StaticMHChain)
      st = get_retval(c.state)
-     deepcopy(st.gs)
+     deepcopy(st.qt.projected)
 end
 
 function ex_img_mu(c::StaticMHChain)
     st = get_retval(c.state)
     deepcopy(st.img_mu)
+end
+
+function ex_granularity(c::StaticMHChain)
+    st = get_retval(c.state)
+    n = size(st.qt.projected, 1)
+    m = Matrix{Int64}(undef, n, n)
+    for x in st.qt.leaves
+        idx = node_to_idx(x.node, n)
+        m[idx] .= x.node.level
+    end
+    m
+end
+
+function ex_path(c::StaticMHChain)
+    st = get_retval(c.state)
+    n = size(st.qt.projected, 1)
+    leaves = st.qt.leaves
+    m = fill(false, (n,n))
+    for e in st.path.edges
+        src_node = leaves[src(e)].node
+        idx = node_to_idx(src_node, n)
+        m[idx] .= true
+        dst_node = leaves[dst(e)].node
+        idx = node_to_idx(src_node, n)
+        m[idx] .= true
+    end
+    m
 end
 
 function ex_attention(c::StaticMHChain)
@@ -47,8 +74,9 @@ end
 function query_from_params(room::GridRoom, path::String; kwargs...)
 
     _lm = Dict{Symbol, Any}(
-        :trackers => ex_choicemap,
-        :global_state => ex_global_state,
+        :projected => ex_projected,
+        :granularity => ex_granularity,
+        :path => ex_path,
         :img_mu => ex_img_mu,
         :attention => ex_attention
     )
@@ -57,7 +85,7 @@ function query_from_params(room::GridRoom, path::String; kwargs...)
     gm_params = load(QuadTreeModel, path; gt = room,
                      kwargs...)
 
-    obs = create_obs(gm_params, room)
+    obs = create_obs(gm_params)
     # add_init_constraints!(obs, gm_params, room)
 
     viz_room(room)
@@ -85,21 +113,3 @@ end
 #                                  ddp_args = ddp_args,
 #                                  kwargs...)
 # end
-
-
-function proc_from_params(gt::GridRoom,
-                          model_params::QuadTreeModel,
-                          proc_path::String,
-                          nn_config::String,
-                          kwargs...)
-
-    # init ddp
-    img = image_from_instances([gt], model_params)
-    ddp_params = DataDrivenState(;config_path = nn_config)
-    all_selection = all_downstream_selection(model_params)
-    ddp_args = ((ddp_params, img), all_selection)
-
-    proc = FunctionalScenes.load(AttentionMH, proc_path;
-                                 ddp_args = ddp_args,
-                                 kwargs...)
-end

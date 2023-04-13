@@ -1,4 +1,4 @@
 {
-    "instances" : 5,
-    "base_sigma" : 0.025
+   "base_sigma" : 0.05,
+   "obs_cost" : 500.0
 }

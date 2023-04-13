@@ -1,21 +1,29 @@
+using PyCall
 using JSON
 using Images
 using Lazy: @>>
 using FunctionalScenes
+using FunctionalScenes: _init_mitsuba_scene,
+    mi
 using FunctionalCollections: PersistentVector
-using FunctionalScenes: _init_graphics, _load_device, occupancy_position,
-    functional_scenes
 
-IMG_RES = (256, 256)
-device = _load_device()
-# device = FunctionalScenes.torch.device("cpu")
+mi.set_variant("cuda_ad_rgb")
+IMG_RES = (128, 128)
+SPP = 24
+KEY = "grid.interior_medium.sigma_t.data"
+
+function occupancy_position(r::GridRoom)::Matrix{Float64}
+    grid = zeros(steps(r))
+    grid[FunctionalScenes.data(r) .== obstacle_tile] .= 1.0
+    grid
+end
 
 function build(r::GridRoom;
                max_f::Int64 = 11,
                max_size::Int64 = 5,
-               factor::Int64 = 1,
                pct_open::Float64 = 0.3,
-               side_buffer::Int64 = 1)
+               side_buffer::Int64 = 2,
+               factor = 2)
 
     dims = steps(r)
     # prevent furniture generated in either:
@@ -38,12 +46,6 @@ function build(r::GridRoom;
     with_furn = expand(with_furn, factor)
 end
 
-function render(r::GridRoom)
-    graphics = _init_graphics(r, IMG_RES, device)
-    d = translate(r, Int64[]; cubes = true)
-    img = functional_scenes.render_scene_pil(d, graphics)
-end
-
 function save_trial(dpath::String, i::Int64, r::GridRoom,
                     img, og)
     out = "$(dpath)/$(i)"
@@ -58,7 +60,8 @@ function save_trial(dpath::String, i::Int64, r::GridRoom,
         r2j = r2 |> json
         write(f, r2j)
     end
-    img.save("$(out)/pytorch.png")
+    cimg = map(clamp01nan, img)
+    save_img_array(cimg, "$(out)/render.png")
     # occupancy grid saved as grayscale image
     save("$(out)/og.png", og)
     return nothing
@@ -66,8 +69,10 @@ end
 
 function main()
     # Parameters
-    name = "vss_pilot_ddp_test_11f_32x32"
-    n = 100
+    name = "ccn_2023_ddp_train_11f_32x32"
+    n = 5000
+    # name = "ccn_2023_ddp_test_11f_32x32"
+    # n = 16
     room_dims = (16, 16)
     entrance = [8, 9]
     door_rows = [5, 12]
@@ -75,9 +80,17 @@ function main()
     doors = inds[door_rows, room_dims[2]]
 
     # empty rooms with doors
-    templates = @>> doors begin
-        map(d -> GridRoom(room_dims, room_dims, entrance, [d]))
-        collect(GridRoom)
+    templates = Vector{GridRoom}(undef, length(doors))
+    # initialize mitsuba scenes
+    mi_scenes = Vector{PyObject}(undef, length(templates))
+    mi_params = Vector{PyObject}(undef, length(templates))
+    for i = 1:length(templates)
+        r = GridRoom(room_dims, room_dims, entrance, [doors[i]])
+        templates[i] = r
+        r = expand(r, 2)
+        scene = _init_mitsuba_scene(r, IMG_RES)
+        mi_scenes[i] = scene
+        mi_params[i] = @pycall mi.traverse(scene)::PyObject
     end
 
     # will store summary of generated rooms here
@@ -85,14 +98,19 @@ function main()
         :n => n,
         :templates => templates,
         :og_shape => (32, 32),
+        :img_res => IMG_RES
     )
     out = "/spaths/datasets/$(name)"
     isdir(out) || mkdir(out)
 
     for i = 1:n
-        t = templates[Int64(rand() > 0.5) + 1]
-        r = build(t, factor = 2)
-        r_img = render(r)
+        idx = ceil(Int64, i / n)
+        t = templates[idx]
+        r = build(t)
+        # select mitsuba scene
+        ms = mi_scenes[idx]
+        mp = mi_params[idx]
+        @time r_img = render_mitsuba(r, ms, mp, KEY, SPP)
         r_og = occupancy_position(r)
         save_trial(out, i, r, r_img, r_og)
     end
