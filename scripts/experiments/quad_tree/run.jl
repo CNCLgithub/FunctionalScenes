@@ -144,7 +144,7 @@ function main(;c=ARGS)
     # Load estimator - Adaptive MCMC
     model_params = first(query.args)
     ddp_params = DataDrivenState(;config_path = args["ddp"],
-                                 var = 0.125)
+                                 var = 0.175)
     gt_img = render_mitsuba(room, model_params.scene, model_params.sparams,
                             model_params.skey, model_params.spp)
     proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
@@ -163,7 +163,7 @@ function main(;c=ARGS)
     save_img_array(gt_img, "$(out_path)/gt.png")
 
     # which chain to run
-    for c = 1:argcs["chain"]
+    for c = 1:args["chain"]
         Random.seed!(c)
         out = joinpath(out_path, "$(c).jld2")
 
@@ -205,12 +205,12 @@ end
 
 
 function outer()
-    args = Dict("scene" => 7)
+    args = Dict("scene" => 8)
     # args = parse_outer()
     i = args["scene"]
     # scene | door | chain | attention
     # cmd = ["$(i)","1", "1", "A"]
-    cmd = ["--restart", "$(i)", "2", "1", "A"]
+    cmd = ["--restart", "$(i)", "1", "1", "A"]
     main(c=cmd);
 end
 

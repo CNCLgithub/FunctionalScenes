@@ -46,7 +46,7 @@ Parameters for an instance of the `QuadTreeModel`.
     #############################################################################
     #
     # weight to balance cost of distance with obstacle occupancy
-    dist_cost::Float64 = 1.0
+    obs_cost::Float64 = 1.0
 
     #############################################################################
     # Graphics
@@ -163,7 +163,7 @@ function a_star_heuristic(nodes::Vector{QTAggNode}, dest::Int64, scale::Float64)
     a_star_heuristic(nodes, _dest)
 end
 
-function nav_graph(lv::Vector{QTAggNode}, dist_weight::Float64)
+function nav_graph(lv::Vector{QTAggNode}, w::Float64)
     n = length(lv)
     adm = fill(false, (n, n))
     dsm = fill(Inf, (n, n))
@@ -173,10 +173,11 @@ function nav_graph(lv::Vector{QTAggNode}, dist_weight::Float64)
         y = lv[j]
         # only care when nodes are touching
         contact(x.node, y.node) || continue
-        d = dist(x.node, y.node) * dist_weight
+        d = dist(x.node, y.node)
         #  work to traverse each node
-        p = area(x.node) / (area(x.node) + area(y.node))
-        work = d + (p * weight(x) + (1-p)*weight(y))
+        # p = area(x.node) / (area(x.node) + area(y.node))
+        # work = d + (p * weight(x) + (1-p)*weight(y))
+        work = d + w*(area(x.node) * weight(x) + area(y.node)*weight(y))
         adm[i, j] = adm[j, i] = true
         dsm[i, j] = dsm[j, i] = work
     end
@@ -217,7 +218,7 @@ function qt_a_star(qt::QuadTree, dw::Float64, ent::Int64, ext::Int64)
     ext_idx = mapping[ext_node.node.tree_idx]
 
     # L2 heuristic used in A*
-    heuristic = a_star_heuristic(leaves, ext_node, dw)
+    heuristic = a_star_heuristic(leaves, ext_node, 1.0)
     # compute path and path grid
     path = a_star(g, ent_idx, ext_idx, dm, heuristic)
     QTPath(g, dm, path)
@@ -241,16 +242,6 @@ Returns
 function room_to_leaf(st::QuadTreeState, ridx::Int64, c::Int64)
     point = idx_to_node_space(ridx, c)
     traverse_qt(st.qt, point)
-end
-
-#TODO: Remove
-const qt_model_all_downstream_selection = StaticSelection(select(:instances))
-function all_downstream_selection(p::QuadTreeModel)
-    s = select()
-    for i = 1:p.instances
-        push!(s, :instances => i)
-    end
-    return s
 end
 
 function _init_mitsuba_scene(room::GridRoom, res)

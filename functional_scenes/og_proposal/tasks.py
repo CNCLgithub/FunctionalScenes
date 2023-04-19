@@ -113,6 +113,10 @@ class OGDecoder(pl.LightningModule):
         z = self.encoder.model.reparameterize(mu, log_var)
         return self.decoder(z)
 
+    def determ_forward(self, x: Tensor) -> Tensor:
+        mu, log_var = self.encoder.model.encode(x)
+        return self.decoder(mu)
+
     def loss_function(self, x: Tensor, y: Tensor):
         loss = F.mse_loss(x, y)
         return loss

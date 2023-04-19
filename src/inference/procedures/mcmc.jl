@@ -115,8 +115,13 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
     obj_t = objective(t)
     # loop through each node in initial trace
     st::QuadTreeState = get_retval(t)
+    if init_cycles == 0
+        chain.auxillary.initialized = true
+        return nothing
+    end
     _t  = t
     accept_ct = 0
+    println("Running init kernel on $(length(st.qt.leaves)) nodes")
     for i = 1:length(st.qt.leaves)
         node = st.qt.leaves[i].node
         accept_ct = 0
@@ -124,7 +129,8 @@ function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
         # println("INIT KERNEL: node $(node.tree_idx)")
         for j = 1:init_cycles
             _t, alpha = rw_move(t, node.tree_idx)
-            w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
+            w = exp(clamp(alpha, -Inf, 0))
+            # w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
             obj_t_prime = objective(_t)
             e_dist += distance(obj_t, objective(_t)) * w
             if log(rand()) < alpha
@@ -162,12 +168,13 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
 
     println("ATTENTION KERNEL: node $(node.tree_idx), prob $(auxillary.weights[room_idx])")
 
-    # RW moves
+    # RW moves - first stage
     accept_ct = 0
     e_dist = 0
     for j = 1:rw_cycles
         _t, alpha = rw_move(t, node.tree_idx)
-        w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
+        # w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
+        w = exp(clamp(alpha, -Inf, 0))
         obj_t_prime = objective(_t)
         e_dist += distance(obj_t, obj_t_prime) * w
         # @show alpha
@@ -177,25 +184,43 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
             accept_ct += 1
         end
     end
-    e_dist /= rw_cycles
+
+    # if RW acceptance ratio is high, add more
+    # otherwise, ready for SM
+    accept_ratio = accept_ct / rw_cycles
+    addition_rw_cycles = floor(Int64, sm_cycles * accept_ratio)
+    for j = 1:addition_rw_cycles
+        _t, alpha = rw_move(t, node.tree_idx)
+        # w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
+        w = exp(clamp(alpha, -Inf, 0))
+        obj_t_prime = objective(_t)
+        e_dist += distance(obj_t, obj_t_prime) * w
+        # @show alpha
+        if log(rand()) < alpha
+            t = _t
+            obj_t = obj_t_prime
+            accept_ct += 1
+        end
+    end
+
+    e_dist /= (rw_cycles + addition_rw_cycles)
+
     sidx = node_to_idx(node, max_leaves(st.qt))
     auxillary.sensitivities[sidx] .*= 0.5
     auxillary.sensitivities[sidx] .+= 0.5 * e_dist
     auxillary.node = node.tree_idx
 
     println("\t avg distance: $(e_dist)")
-    println("\t rw acceptance ratio: $(accept_ct/rw_cycles)")
+    println("\t rw acceptance ratio: $(accept_ratio)")
 
     # SM moves
-    # split randomly
-    # or deterministically if node is root
-    # (can still merge lvl 2 into root)
+    remaining_sm = sm_cycles - addition_rw_cycles
     can_split = node.max_level > node.level
     accept_ct = 0
     if can_split
         is_balanced = balanced_split_merge(t, node.tree_idx)
         moves = is_balanced ? [split_move, merge_move] : [split_move]
-        for i = 1 : proc.sm_cycles
+        for i = 1 : remaining_sm
             move = rand(moves)
             _t, _w = split_merge_move(t, node.tree_idx, move)
             if log(rand()) < _w
@@ -224,6 +249,9 @@ function viz_chain(chain::StaticMHChain)
     # display_mat(reshape(auxillary.weights, s))
     println("Inferred state")
     display_mat(trace_st.qt.projected)
+    println("Estimated path")
+    path = Matrix{Float64}(ex_path(chain))
+    display_mat(path)
     # println("Predicted Image")
     # display_img(trace_st.img_mu)
 end

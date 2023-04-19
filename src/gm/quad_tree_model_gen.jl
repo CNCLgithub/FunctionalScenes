@@ -14,7 +14,7 @@ export qt_model
     pred = {:viz} ~ broadcasted_normal(mu, var)
 
     # shortest path given qt uncertainty
-    qtpath::QTPath = qt_a_star(qt, params.dist_cost, params.entrance, params.exit)
+    qtpath::QTPath = qt_a_star(qt, params.obs_cost, params.entrance, params.exit)
 
     # Model state
     result::QuadTreeState = QuadTreeState(qt, mu, var, qtpath)

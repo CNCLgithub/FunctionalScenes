@@ -52,17 +52,14 @@ function ex_path(c::StaticMHChain)
     st = get_retval(c.state)
     n = size(st.qt.projected, 1)
     leaves = st.qt.leaves
-    m = zeros(Int64, (n,n))
-    c::Int64 = 1
+    m = fill(false, (n,n))
     for e in st.path.edges
         src_node = leaves[src(e)].node
         idx = node_to_idx(src_node, n)
-        m[idx] .= c
-        c += 1
+        m[idx] .= true
         dst_node = leaves[dst(e)].node
         idx = node_to_idx(src_node, n)
-        m[idx] .= c
-        c += 1
+        m[idx] .= true
     end
     m
 end
