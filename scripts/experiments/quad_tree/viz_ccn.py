@@ -2,16 +2,16 @@
 
 import pathlib
 import numpy as np
+import pandas as pd
 import plotly.express as px
 
 EXPNAME = 'ccn_2023_exp'
-burn_in = 10
-steps = 200
+steps = 150
+scene = 19
 
 def render_scene(path):
-    agg_path = f'{path}/aggregated.npz'
+    agg_path = f'{path}_aggregated.npz'
     agg = np.load(agg_path)
-    print(agg['geo'].shape)
 
     pathlib.Path(f'{path}/geo').mkdir(parents=True, exist_ok=True)
     pathlib.Path(f'{path}/att').mkdir(parents=True, exist_ok=True)
@@ -37,11 +37,15 @@ def render_scene(path):
 
 
 def main():
+    df_path = f"/spaths/datasets/{EXPNAME}/scenes.csv"
+    df = pd.read_csv(df_path)
+    df = df.loc[map(lambda x: x == scene, df['id'])]
     path = f'/spaths/experiments/{EXPNAME}'
-    scene = f'{path}/7_1'
-    render_scene(scene)
-    scene = f'{path}/7_2'
-    render_scene(scene)
+    for (ri, r) in df.iterrows():
+        path = f'{path}/{r.id}_{r.door}'
+        render_scene(path)
+        path = f'/spaths/experiments/{EXPNAME}/{r.id}_{r.door}_furniture_{r.move}_aggregated.npz'
+        render_scene(path)
 
 
 if __name__ == '__main__':
