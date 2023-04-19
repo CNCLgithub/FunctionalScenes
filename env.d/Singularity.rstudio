@@ -1,2 +1,2 @@
 bootstrap: docker
-from: rocker/verse:4.2
+from: rocker/verse:4.0.4

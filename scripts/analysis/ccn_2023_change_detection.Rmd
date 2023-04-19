@@ -30,12 +30,13 @@ knitr::opts_chunk$set(fig.pos = 'H',
 
 # dependencies and ggplot settings
 
-library(dplyr)
+library(tidyverse)
 library(ggplot2)
 library(readr)
 library(boot)
 library(svglite)
 
+library(tidyverse)
 ```
 
 
@@ -167,8 +168,8 @@ f1 <- delta_hr_by_scene %>%
         axis.ticks = element_blank())
 # summary(path_diff)
 
-ggsave(file="vss_poster/vss_poster_files/figure-html/abs_chng.svg", plot=f1,
-       width = 9, height = 6)
+# ggsave(file="vss_poster/vss_poster_files/figure-html/abs_chng.svg", plot=f1,
+#        width = 9, height = 6)
 ```
 
 Bootstrap analysis on average absolute difference between pairs.
@@ -298,65 +299,197 @@ t.test(upright_dhr_analysis$up_diff, upright_dhr_analysis$abs_f_diff)
 
 ```
 
+### Multi-granular Attention
+
 ```{r}
-model_raw <- read_csv("~/project/spaths/experiments/ccn_2023_exp/chain_summary.csv")
+qt_data <- read_csv("~/project/spaths/experiments/ccn_2023_exp/chain_summary_150_25.csv")%>%
+  select(scene, tot_diff_geo) %>%
+  rename(qt_tot_diff_geo = tot_diff_geo) 
+fg_data <- read_csv("~/project/spaths/experiments/ccn_2023_exp_fixed_granularity/chain_summary_150_25.csv")%>%
+  select(scene, tot_diff_geo) %>%
+  rename(fg_tot_diff_geo = tot_diff_geo)
+na_data <- read_csv("~/project/spaths/experiments/ccn_2023_exp_no_attention/chain_summary.csv")%>%
+  select(scene, tot_diff_geo) %>%
+  rename(na_tot_diff_geo = tot_diff_geo)
 
+all_models <- qt_data %>%
+  left_join(fg_data) %>%
+  left_join(na_data)
 
-pair_diff <- model_raw %>%
+pair_diff <- all_models %>%
   left_join(delta_hr_by_scene)
 
 pair_diff %>%
-  with(lm(f_diff ~ att_diff)) %>%
+  ggplot(aes(x = qt_tot_diff_geo, y = f_diff, label = scene)) +
+  geom_point() + 
+  geom_text(hjust=0, vjust=0)
+
+
+pair_diff %>%
+  ggplot(aes(x = fg_tot_diff_geo, y = f_diff, label = scene)) +
+  geom_point() + 
+  geom_text(hjust=0, vjust=0)
+
+pair_diff %>%
+  ggplot(aes(x = na_tot_diff_geo, y = f_diff, label = scene)) +
+  geom_point() + 
+  geom_text(hjust=0, vjust=0)
+
+pair_diff %>%
+  with(lm(f_diff ~ qt_tot_diff_geo)) %>%
   summary()
 
 pair_diff %>%
-  ggplot(aes(x = att_diff, y = f_diff)) +
-  geom_point()
-
-
-
-between_trials <- model_raw %>%
-  left_join(passed_hits)
-
-between_trials %>%
-  ggplot(aes(x = geo_p, y = f)) + 
-  geom_point()
-
-between_trials %>%
-  with(lm(f ~ geo_p)) %>%
-  summary()
-
-
-pair_diff <- model_raw %>%
-  select(-c(move, furniture)) %>%
-  group_by(scene) %>%
-  arrange(door) %>%
-  summarise(across(-door, 
-                   list(mean = mean, max = max, min = min, diff = diff))) %>%
-  mutate(abs_geo_p_diff = abs(geo_p_diff)) %>%
-  left_join(delta_hr_by_scene)
-  
-pair_diff %>%
-  with(lm(f_diff ~ geo_p_diff)) %>%
+  with(lm(f_diff ~ fg_tot_diff_geo)) %>%
   summary()
 
 pair_diff %>%
-  ggplot(aes(x = geo_p_diff, y = f_diff)) +
-  geom_point()
-
-
-
-between_trials %>%
-  ggplot(aes(x = prop_att, y = f)) + 
-  geom_point()
-
-between_trials %>%
-  with(lm(f ~ prop_att)) %>%
+  with(lm(f_diff ~ na_tot_diff_geo)) %>%
   summary()
-
 
 ```
+```{r subject bootstrap}
+set.seed(0)
 
+nested_by_subj <- good_data %>%
+  nest_by(ID)
+
+metric <- function(data, indices) {
+  d = data[indices,] %>% # sample subjects with replacement 
+     unnest(cols = c(ID, data))
+    
+  diff_hr <- d %>%
+    filter(!base) %>%
+    group_by(scene, door) %>%
+    summarise(c = sum(correct), # hit count
+              n = n(),          # number of subjects
+              f = c / n) %>%    # hit rate
+    arrange(scene, door) %>%
+    group_by(scene) %>%
+    select(c, f) %>%
+    summarise(across(everything(), 
+                     list(diff = diff)))
+  df <- all_models %>% left_join(diff_hr, by = "scene")
+  qt_fit <- df %>% with(lm(f_diff ~ qt_tot_diff_geo)) %>% summary
+  fg_fit <- df %>% with(lm(f_diff ~ fg_tot_diff_geo)) %>% summary
+  na_fit <- df %>% with(lm(f_diff ~ na_tot_diff_geo)) %>% summary
+
+  result <- c(qt_fit$r.squared,
+              fg_fit$r.squared,
+              na_fit$r.squared,
+              qt_fit$r.squared < fg_fit$r.squared,
+              qt_fit$r.squared < na_fit$r.squared)
+  return(result)
+}
+reps <- boot(data=nested_by_subj, 
+             statistic=metric,
+             R=10000, 
+             ncpus = 8,
+             parallel = "multicore")
+#view results of boostrapping
+reps
+plot(reps)
+# CIs
+qt_ci <- boot.ci(reps, type="all", index = 1)
+qt_mean <- mean(reps$t[,1])
+fg_ci <- boot.ci(reps, type="all", index = 2)
+fg_mean <- mean(reps$t[,2])
+na_ci <- boot.ci(reps, type="all", index = 3)
+na_mean <- mean(reps$t[,3])
+
+data.frame(model = c("qt", "fg", "na"),
+           mu = c(qt_mean, fg_mean, na_mean),
+           c.low = c(qt_ci$percent[4],
+                     fg_ci$percent[4],
+                     na_ci$percent[4]),
+           c.high = c(qt_ci$percent[5],
+                     fg_ci$percent[5],
+                     na_ci$percent[5])
+           
+           ) %>%
+  ggplot(aes(x = model, y = mu)) +
+  geom_col(width = 0.5, position = position_dodge(width = 0.9)) +
+  geom_errorbar(aes(ymin = c.low, ymax = c.high), width = 0.075, size = 0.7) +
+  ylim(0., 0.5) +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        # axis.text = element_blank(),
+        aspect.ratio = 1
+        )
+
+
+# direct hypothesis testing
+fg_vs_qt <- mean(reps$t[, 4])
+print(fg_vs_qt)
+na_vs_qt <- mean(reps$t[, 5])
+print(na_vs_qt)
+```
+```{r trial bootstrap}
+set.seed(0)
+
+metric <- function(data, indices) {
+  df = data[indices,] 
+  qt_fit <- df %>% with(lm(f_diff ~ qt_tot_diff_geo)) %>% summary
+  fg_fit <- df %>% with(lm(f_diff ~ fg_tot_diff_geo)) %>% summary
+  na_fit <- df %>% with(lm(f_diff ~ na_tot_diff_geo)) %>% summary
+
+  result <- c(qt_fit$r.squared,
+              fg_fit$r.squared,
+              na_fit$r.squared,
+              qt_fit$r.squared < fg_fit$r.squared,
+              qt_fit$r.squared < na_fit$r.squared)
+  return(result)
+}
+reps <- boot(data=pair_diff, 
+             statistic=metric,
+             R=10000, 
+             ncpus = 8,
+             parallel = "multicore")
+#view results of boostrapping
+reps
+plot(reps)
+# CIs
+qt_ci <- boot.ci(reps, type="all", index = 1)
+qt_mean <- mean(reps$t[,1])
+fg_ci <- boot.ci(reps, type="all", index = 2)
+fg_mean <- mean(reps$t[,2])
+na_ci <- boot.ci(reps, type="all", index = 3)
+na_mean <- mean(reps$t[,3])
+
+boot_df <- data.frame(model = c("quad-tree", "fixed", "no attention"),
+           mu = c(qt_mean, fg_mean, na_mean),
+           c.low = c(qt_ci$percent[4],
+                     fg_ci$percent[4],
+                     na_ci$percent[4]),
+           c.high = c(qt_ci$percent[5],
+                     fg_ci$percent[5],
+                     na_ci$percent[5]),
+           lesion = factor(c(0, 1, 1)))
+
+
+th <- theme_classic()
+theme_set(th)
+
+boot_df %>%
+  ggplot(aes(x = reorder(model, -mu), y = mu, fill=lesion)) +
+  geom_col(width = 0.6, position = position_dodge(width = 1.4)) +
+  # geom_errorbar(aes(ymin = c.low, ymax = c.high), width = 0.1, size = 0.7) +
+  ylim(0., 0.4) +
+  theme(legend.position = "none",
+        axis.title = element_blank(),
+        # axis.text = element_blank(),
+        aspect.ratio = 1.5,
+        axis.text = element_text(size = 20)
+        ) + 
+  scale_fill_manual(values = c("#5aa67b", "darkgrey"))
+
+
+# direct hypothesis testing
+fg_vs_qt <- mean(reps$t[, 4])
+print(fg_vs_qt)
+na_vs_qt <- mean(reps$t[, 5])
+print(na_vs_qt)
+```
 
 ```{r}
 
