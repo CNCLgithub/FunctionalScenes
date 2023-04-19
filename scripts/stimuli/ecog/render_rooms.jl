@@ -9,6 +9,9 @@ using UnicodePlots
 using FunctionalScenes
 import Base: println
 
+using Random
+Random.seed!(1235)
+
 cycles_args = Dict(
     :mode => "full",
     # :mode => "none",
@@ -23,7 +26,7 @@ end
 
 function rem_front_wall(r::GridRoom)
     newdata = deepcopy(data(r))
-    newdata[:, 1:2] .= floor_tile
+    newdata[:, 1:1] .= floor_tile
     newroom = GridRoom(r, newdata)
 
     # can be commented out, i just like seeing the rooms - Chloe 01/02/2023
@@ -68,6 +71,33 @@ function render_debug(ids, name::String)
         save("$(out)/$(id)_print.png", room_img)
         # error()
     end
+end
+
+function get_path_len(ids, name::String, df)
+    out = "/spaths/datasets/$(name)/render_debug"
+    isdir(out) || mkdir(out)
+
+    paths = []
+
+    for row in eachrow(df)
+        id = row.id
+        base_p = "/spaths/datasets/$(name)/scenes/$(id)_$(row.door).json"
+        p = "$(out)/$(id)_$(row.door)"
+        local base_s
+        open(base_p, "r") do f
+            base_s = JSON.parse(f)
+        end
+        base = from_json(GridRoom, base_s)
+
+        # sample a random path in an empty room (the template)
+        # with a temperature parameter determining complextiy
+        path = recurse_path_gm(base, 0.01)
+        append!(paths, length(path))
+    end
+
+    df.path_len = paths
+    @show df
+    CSV.write("/spaths/datasets/$(name)/scenes_path.csv", df)
 end
 
 function render_stims(ids, name::String;
@@ -159,7 +189,7 @@ end
 
 function main()
     args = Dict(
-        "dataset" => "ecog_pilot",
+        "dataset" => "vss_stims_path",
         "scene" => 0,
         "threads" => Sys.CPU_THREADS
     )
@@ -176,7 +206,8 @@ function main()
         ids = df.id
     end
 
-    render_debug(ids, name)
+    # render_debug(ids, name)
+    get_path_len(ids, name, df)
     # render_stims(ids, name,
     #              threads = args["threads"]
     #              )
