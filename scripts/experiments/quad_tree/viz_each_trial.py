@@ -16,7 +16,7 @@ def downsample(a, n:int = 2):
 EXPNAME = 'ccn_2023_exp'
 steps = 150
 burn_in = 1
-scale = 8
+scale = 1
 
 def main():
     scenes = [7, 8, 10, 22, 27, 30]

@@ -19,6 +19,21 @@ steps = 150
 burn_in = 1
 scale = 8
 
+def metric(model_data, human_data):
+    diff_cor = np.zeros(24)
+    for scene in range(24):
+        model_diff = downsample(model_data[scene, 0] - model_data[scene, 1], n=scale).flatten()
+        human_diff = downsample(human_data[scene,0]-human_data[scene,1],n=int(scale/2)).flatten()
+        diff_cor[scene] = scipy.stats.pearsonr(model_diff, human_diff).statistic**2
+    print(diff_cor)
+    return np.mean(diff_cor)
+
+def ordinary_bootstrap(model_data, human_data):
+    n =  human_data.shape[0]
+    inds = np.random.choice(n, n)
+    sample = human_data[sample].mean(dim = 0)
+    return metric(model_data, sample)
+
 def main():
     scenes = list(range(1, 25))
 
@@ -61,35 +76,8 @@ def main():
 
         row_count += 1
 
-    within_cor = np.zeros(24)
-    across_cor = np.zeros(24)
-    diff_cor = np.zeros(24)
-    for scene in range(24):
-        model_left_door = downsample(model_data[scene, 0], n = scale)
-        model_right_door = downsample(model_data[scene, 1], n = scale)
-  
-        human_left_door = downsample(avg_human_data[scene, 0], n=int(scale/2))
-        human_right_door = downsample(avg_human_data[scene, 1], n=int(scale/2))
-  
-        model_diff = downsample(model_data[scene, 0] - model_data[scene, 1], n=scale)
-        human_diff = downsample(avg_human_data[scene,0]-avg_human_data[scene,1],n=int(scale/2))
-        
-        diff_cor = scipy.stats.pearsonr(model_diff.flatten(), human_diff.flatten()).statistic**2
-   
-        within_left = scipy.stats.pearsonr(model_left_door.flatten(), human_left_door.flatten())
-        within_right = scipy.stats.pearsonr(model_right_door.flatten(), human_right_door.flatten())
-
-        across_lr = scipy.stats.pearsonr(model_left_door.flatten(), human_right_door.flatten())
-        across_rl = scipy.stats.pearsonr(model_right_door.flatten(), human_left_door.flatten())
-  
-
-        within_cor[scene] = 0.5 * (within_left.statistic + within_right.statistic)
-        across_cor[scene] = 0.5 * (across_lr.statistic + across_rl.statistic)
-
- 
-    print(f'{np.mean(within_cor)=}')
-    print(f'{np.mean(across_cor)=}')
-    print(f'{np.mean(diff_cor)=}')
+    diff_cor = metric(model_data, avg_human_data)
+    print(f'{diff_cor=}')
 
     fig.update_layout(
         height = 300 * len(df) * 2,
