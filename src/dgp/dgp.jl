@@ -121,6 +121,9 @@ function is_floor(r::GridRoom, t::Int64)::Bool
     has_vertex(g, t) && d[t] == floor_tile
 end
 
+function valid_move(r::Room, fid::Int64, m::Move)::Bool
+    valid_move(r, furniture(r)[fid], m)
+end
 function valid_move(r::Room, f::Furniture, m::Move)::Bool
     g = pathgraph(r)
     mf = move(r, f, m)

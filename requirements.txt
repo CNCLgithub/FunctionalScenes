@@ -5,8 +5,10 @@ sqlalchemy
 numba
 opencv-python-headless
 ninja
+plotly
 torch
 torchvision
+drjit
 mitsuba
 fvcore
 iopath

@@ -151,7 +151,7 @@ delta_hr_by_scene %>%
 t0 = mean(delta_hr_by_scene$abs_f_diff)
 
 
-f1 <- delta_hr_by_scene %>%
+delta_hr_by_scene %>%
   ggplot(aes(abs_f_diff)) +
   geom_vline(xintercept = `t0`, 
              size = 1.25, 
@@ -223,7 +223,7 @@ inv_t0 = 0.063
 sum((inv_t0 < reps$t)) / length(reps$t)
 
 rdf = data.frame(t = reps$t)
-p <- rdf %>%
+rdf %>%
   ggplot(aes(x = t)) +
   geom_histogram(fill = "grey") +
   geom_vline(xintercept = reps$t0,
@@ -298,6 +298,66 @@ upright_dhr_analysis %>%
 t.test(upright_dhr_analysis$up_diff, upright_dhr_analysis$abs_f_diff)
 
 ```
+
+
+### Path length analysis
+
+
+```{r}
+
+
+path_metrics <- read.csv("~/project/spaths/datasets/ccn_2023_exp_path_metrics.csv") %>%
+  rename(scene = id)
+
+path_comps <- path_metrics %>%
+  group_by(scene, door) %>%
+  select(scene, door, starts_with("path")) %>%
+  summarise(across(everything(), 
+                   list(mean = mean, max = max, min = min, diff = diff))) %>%
+  left_join(passed_hits)
+
+path_comps %>%
+  ggplot(aes(x = path_cost_diff, y = f, label = scene, color = factor(door))) +
+  geom_point() + 
+  geom_text(hjust=0, vjust=0)
+
+path_comps %>%
+  ggplot(aes(x = path_dist_mean, y = f, label = scene, color = factor(door), group = scene)) +
+  geom_point() + 
+  geom_text(hjust=0, vjust=0) +
+  geom_line()
+
+path_comps %>%
+  with(lm(f ~ path_dist_mean)) %>%
+  summary()
+
+path_comps %>%
+  ggplot(aes(x = path_dist_max, y = f, label = scene, color = factor(door))) +
+  geom_point() + 
+  geom_text(hjust=0, vjust=0)
+
+path_comps %>%
+  with(lm(f ~ path_dist_max)) %>%
+  summary()
+
+pairwise_differences <- path_comps %>%
+  group_by(scene) %>%
+  summarise(across(c(path_dist_mean), 
+                   list(mean = mean, diff = diff))) %>%
+left_join(delta_hr_by_scene)
+
+pairwise_differences %>%
+  ggplot(aes(x = path_dist_mean_diff, y = f_diff, label = scene)) +
+  geom_point() + 
+  geom_text(hjust=0, vjust=0)
+
+pairwise_differences %>%
+  ggplot(aes(x = path_dist_mean_mean, y = f_diff, label = scene)) +
+  geom_point() + 
+  geom_text(hjust=0, vjust=0)
+
+```
+
 
 ### Multi-granular Attention
 

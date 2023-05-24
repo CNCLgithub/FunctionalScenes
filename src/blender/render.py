@@ -12,8 +12,6 @@ import json
 import time
 import argparse
 
-import numpy as np
-
 # Flush stdout in case blender is complaining
 sys.stdout.flush()
 
