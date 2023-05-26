@@ -1,10 +1,22 @@
-using Images: colorview, RGB
+# using Images: colorview, RGB
+using Colors, Images
 using ImageInTerminal
 
 export viz_room
 
 function Base.display(r::GridRoom)
     viz_room(r)
+end
+
+
+function viz_room(r::GridRoom, p::Matrix{Float64})
+    d = data(r)
+    reds = zeros(size(p))
+    reds[d .== obstacle_tile] .= 1
+    blues = zeros(size(p))
+    blues[d .== wall_tile] .= 1
+    m = colorview(RGB{Float64}, reds, p, blues)
+    display(rotr90(m, 3))
 end
 
 function viz_room(r::GridRoom, p::Array{Int64})

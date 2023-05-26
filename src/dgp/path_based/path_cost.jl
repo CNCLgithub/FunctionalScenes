@@ -1,6 +1,7 @@
 using ImageFiltering
 
-export NoisyPath, noisy_path, path_cost, distance_to_path
+export NoisyPath, noisy_path, path_cost, distance_to_path,
+    noisy_shortest_paths
 
 @with_kw struct NoisyPath
     obstacle_cost::Float64 = 1.0
@@ -24,6 +25,8 @@ function nav_graph(r::GridRoom, params::NoisyPath, sigma::Float64)
     ws[d .== wall_tile] .+= wall_cost
     noisy_ws = imfilter(ws, Kernel.gaussian([sigma, sigma],
                                             [kernel_width, kernel_width]))
+    noisy_ws[d .== wall_tile] .+= wall_cost
+
     n = length(d)
     row = size(d, 1)
     adm = fill(false, (n, n))
@@ -35,7 +38,7 @@ function nav_graph(r::GridRoom, params::NoisyPath, sigma::Float64)
         adm[i, j] = adm[j, i] = true
         dsm[i, j] = dsm[j, i] = noisy_ws[i] + noisy_ws[j]
     end
-    (adm, dsm)
+    (noisy_ws, adm, dsm)
 end
 
 function cart_dist(src, trg, n)
@@ -57,7 +60,7 @@ end
 function Graphs.a_star(r::GridRoom, params::NoisyPath, sigma::Float64)
     ent = first(entrance(r))
     ext = first(exits(r))
-    ad, dm = nav_graph(r, params, sigma)
+    _, ad, dm = nav_graph(r, params, sigma)
     g = SimpleGraph(ad)
     h = x -> cart_dist(x, ext, size(data(r), 1))
     path = a_star(g, ent, ext, dm, h)
@@ -72,6 +75,15 @@ function path_cost(path, dm)
     c::Float64 = 0.0
     @inbounds for step in path
         c += dm[src(step), dst(step)]
+    end
+    return c
+end
+
+
+function path_cost(path::Vector{Int64}, dm)
+    c::Float64 = 0.0
+    @inbounds for step in path
+        c += dm[step]
     end
     return c
 end
@@ -102,4 +114,30 @@ function noisy_path(room::GridRoom, params::NoisyPath;
         end
     end
     (c / samples, pmat ./ samples)
+end
+
+function noisy_k_paths(r::GridRoom, params::NoisyPath, k::Int64)
+    ent = first(entrance(r))
+    ext = first(exits(r))
+    ws, ad, dm = nav_graph(r, params)
+    g = SimpleGraph(ad)
+    st = yen_k_shortest_paths(g, ent, ext, dm, k)
+    st, ws
+end
+
+function noisy_shortest_paths(room::GridRoom, params::NoisyPath;
+                              k::Int64 = 20)
+    c::Float64 = 0.0
+    pmat = zeros(steps(room))
+    st, ws = noisy_k_paths(room, params, k)
+    @inbounds for i = 1:k
+        path = st.paths[i]
+        c += path_cost(path, ws)
+        @inbounds for v in path
+            pmat[v] += 1.0
+        end
+    end
+    rmul!(pmat, 1/k)
+    c /= k
+    (c, pmat)
 end
