@@ -11,16 +11,20 @@ using FunctionalCollections
 # using StatProfilerHTML
 
 function valid_pair(pair::Tuple, m::Move;
-                    min_abs_pc_thresh::Float64 = 5.0,
-                    min_upper_bound = 0.32
+                    min_pc_thresh::Float64 = 5.0,
+                    max_pc_thresh::Float64 = 0.32,
+                    max_pc_diff_thresh::Float64 = 20.0,
+                    min_pd_diff_thresh::Float64 = 3.0
                     )::Bool
 
-    (d1, d2, f, pc1, pc2) = pair
-    @show (pc1, pc2)
-    # f > 0
+    @show pair[4:end]
+    (d1, d2, f, pc1, pc2, pd1, pd2) = pair
+    mu_pc = 0.5 * (pc1 + pc2)
     f > 0 &&
-        abs(pc1 - pc2) >= min_abs_pc_thresh &&
-        min(pc1, pc2) <= min_upper_bound
+        mu_pc > min_pc_thresh &&
+        mu_pc < max_pc_thresh &&
+        abs(pc1 - pc2) < max_pc_diff_thresh &&
+        abs(pd1 - pd2) > min_pd_diff_thresh
 end
 
 function gen_obstacle_weights(template::GridRoom;
@@ -69,9 +73,9 @@ function select_obstacle(r::GridRoom, m::Move;
             (abs(avg_pos[2]) < ybuffer))
     end
     srw = sum(raw_weights)
-    srw == 0 && return 0
+    srw == 0 && return (fs, 0)
     ws = raw_weights ./ srw
-    categorical(ws)
+    fs, categorical(ws)
 end
 
 function create_pair(door_conditions::Vector{GridRoom},
@@ -93,20 +97,23 @@ function create_pair(door_conditions::Vector{GridRoom},
     d2 = expand(add(with_furn, door_conditions[2]), factor)
 
     # pick a random obstacle to move
-    furn_selected = select_obstacle(d1, move)
-
+    f, fi = select_obstacle(d1, move)
+    # failed to select
+    fi == 0 && return (d1, d2, fi, 0, 0, 0, 0)
     # measure the differences in path complexity between the two doors
-    pc_1, _ = noisy_path(d1, path_params; samples = samples)
-    pc_2, _ = noisy_path(d2, path_params; samples = samples)
+    pc_1, p1 = noisy_path(d1, path_params; samples = samples)
+    pd_1 = FunctionalScenes.min_distance_to_path(f[fi], p1)
+    pc_2, p2 = noisy_path(d2, path_params; samples = samples)
+    pd_2 = FunctionalScenes.min_distance_to_path(f[fi], p2)
 
-    (d1, d2, furn_selected, pc_1, pc_2)
+    (d1, d2, fi, pc_1, pc_2, pd_1, pd_2)
 end
 
 function update_df!(df::DataFrame, id::Int64, move::Move,
                     flipx::Bool, pair::Tuple)
-    d1, d2, furn_selected, pc_1, pc_2 = pair
-    push!(df, (id, flipx, 1, furn_selected, move, pc_1))
-    push!(df, (id, flipx, 2, furn_selected, move, pc_2))
+    d1, d2, furn_selected, pc_1, pc_2, pd_1, pd_2 = pair
+    push!(df, (id, flipx, 1, furn_selected, move, pc_1, pd_1))
+    push!(df, (id, flipx, 2, furn_selected, move, pc_2, pd_2))
     return nothing
 end
 
@@ -126,7 +133,7 @@ end
 
 function main()
     # dataset name
-    name = "pathcost_3.0"
+    name = "pathcost_6.0"
 
     dataset_out = "/spaths/datasets/$(name)"
     isdir(dataset_out) || mkdir(dataset_out)
@@ -143,19 +150,23 @@ function main()
     # will only consider these moves
     moves = [down_move, up_move]
 
-    # Path planning
-    # leaving gamma(a,b) to default
+    # Path planning parameters
+    # - 05/30/23 based on 5.2.0 results
     path_params = NoisyPath(
-        obstacle_cost = 1.64,
-        # obstacle_cost = 2.0,
+        obstacle_cost = 3.2,
+        floor_cost = 0.01,
         kernel_width = 7,
-        floor_cost = 0.05
+        kernel_beta = 2.0,
+        kernel_sigma = 5.0,
+        wall_cost = 32.0,
     )
 
     # Acceptance criteria, see `valid_pair`
     criteria = Dict(
-        :min_abs_pc_thresh => 8.0,
-        :min_upper_bound => 35.0
+        :min_pc_thresh => 76.0,
+        :max_pc_thresh => 86.0,
+        :max_pc_diff_thresh => 7.5,
+        :min_pd_diff_thresh => 1.5,
     )
 
     # number of trials
@@ -177,27 +188,28 @@ function main()
                    door = Int64[],
                    furniture = Int64[],
                    move = Symbol[],
-                   path_cost = Float64[])
+                   path_cost = Float64[],
+                   path_dist = Float64[])
     for (idx, move) in enumerate(moves)
         i = 1
         while i <= max_per_move
             # generate a room pair
             pair = create_pair(templates, move, obstacle_weights,
-                               path_params; samples = 100)
+                               path_params; samples = 250)
 
             # no valid pair generated, try again or finish
             !valid_pair(pair, move; criteria...) && continue
 
             # organize and save
             id = (idx - 1) * max_per_move + i
-            pc1, pc2 = pair[end-1:end]
+            pd1, pd2 = pair[end-1:end]
             # balance most complex door along L,R
             # pc1 < pc2 ; odd   ; result
             # T         ; T     ; T
             # T         ; F     ; F
             # F         ; T     ; F
             # F         ; F     ; T
-            flipx = !xor(pc1 < pc2, Bool((i-1) % 2))
+            flipx = !xor(pd1 < pd2, Bool((i-1) % 2))
             update_df!(df, id, move, flipx, pair)
 
             # save scenes as json

@@ -1,7 +1,7 @@
 using ImageFiltering
 
 export NoisyPath, noisy_path, path_cost, distance_to_path,
-    noisy_shortest_paths
+    noisy_shortest_paths, path_density
 
 @with_kw struct NoisyPath
     obstacle_cost::Float64 = 1.0
@@ -88,16 +88,69 @@ function path_cost(path::Vector{Int64}, dm)
     return c
 end
 
+function kernel_from_linear(i::Int64, m::Matrix{Float64}, w::Int64)
+    ny= size(m, 1)
+    offset = Int64((w-1) / 2)
+    result::Float64 = 0.
+    for y = -offset:offset
+        yoffset = y * ny
+        for x = -offset:offset
+            xoffset = x + i
+            result += get(m, yoffset + xoffset, 1.0)
+        end
+    end
+    result / n
+end
+
+function path_density(path::Vector{T}, m::Matrix{Float64}, w::Int64) where
+    {T <: Edge}
+    sm = sum(m)
+    d::Float64 = 0.0
+    @inbouds for e = path
+        d += kernel_from_linear(dst(e), m, w) / sm
+    end
+    return d
+end
+
 function distance_to_path(vs, pmat)
     n = size(pmat, 1)
     loc = avg_location(vs, n)
     d = 0
+    normedpmat = pmat ./ sum(pmat)
     for x = 1:size(pmat,2), y = 1:size(pmat, 1)
         # occupancy weight * neg log of l2 distance
         # d += pmat[y,x] * log( sqrt( (ceil(x/n) - loc[1])^2 + (y % n - loc[2])^2))
-        d += pmat[y,x] * sqrt( (ceil(x/n) - loc[1])^2 + (y % n - loc[2])^2)
+        d += normedpmat[y,x] *
+            sqrt( (ceil(x/n) - loc[1])^2 + (y % n - loc[2])^2)
     end
     return d
+end
+
+# function nearest_k_distance(vs, pmat)
+#     n = size(pmat, 1)
+#     loc = avg_location(vs, n)
+#     d = Inf
+#     ws = Matrix{Float64}(undef, size(pmat))
+#     sum_pmat = sum(pmat)
+#     @inbounds for x = 1:size(pmat,2), y = 1:size(pmat, 1)
+#         ws[y, x] = sqrt( (ceil(x/n) - loc[1])^2 + (y % n - loc[2])^2) /
+#             (pmat[y,x] / sum_pmat)
+#     end
+
+#     return d
+# end
+
+function min_distance_to_path(vs, pmat)
+    # n = size(pmat, 1)
+    # loc = avg_location(vs, n)
+    # d = Inf
+    # for x = 1:size(pmat,2), y = 1:size(pmat, 1)
+    #     # occupancy weight * neg log of l2 distance
+    #     # d += pmat[y,x] * log( sqrt( (ceil(x/n) - loc[1])^2 + (y % n - loc[2])^2))
+    #     val = sqrt( (ceil(x/n) - loc[1])^2 + (y % n - loc[2])^2) / pmat[y,x]
+    #     d = min(d, val)
+    # end
+    # return d
 end
 
 function noisy_path(room::GridRoom, params::NoisyPath;
@@ -105,15 +158,15 @@ function noisy_path(room::GridRoom, params::NoisyPath;
     c::Float64 = 0.0
     pmat = zeros(steps(room))
     for _ = 1:samples
-        # var = inv_gamma(1.2, 0.8)
         var = gamma(params.kernel_alpha, params.kernel_beta)
         path, dm = Graphs.a_star(room, params, sqrt(var))
-        c += path_cost(path, dm)
+        c += path_density(path, dm)
         @inbounds for step in path
-            pmat[dst(step)] += 1.0
+            pmat[dst(step)] += (1.0 / samples)
         end
     end
-    (c / samples, pmat ./ samples)
+    c /= samples
+    (c, pmat)
 end
 
 function noisy_k_paths(r::GridRoom, params::NoisyPath, k::Int64)

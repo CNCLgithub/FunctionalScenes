@@ -211,6 +211,19 @@ function strongly_connected(r::GridRoom, f::Furniture, m::Move)
     return connected
 end
 
+
+function furniture_weights(r::GridRoom)
+    fs = furniture(r)
+    nf = length(fs)
+    possible_moves = Matrix{Bool}(undef, 4, nf)
+    @inbounds for i = 1:nf
+        possible_moves[:, i] = valid_moves(r, fs[i])
+    end
+    move_counts = sum(possible_moves, dim = 2)
+    f_weights = move_counts ./ sum(move_counts)
+    (possible_moves, move_counts, f_weights)
+end
+
 # @gen functions
 include("gen.jl")
 include("path_based/path_based.jl")

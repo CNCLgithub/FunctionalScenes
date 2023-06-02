@@ -37,7 +37,7 @@ function render_stims(df::DataFrame, name::String;
 end
 
 function main()
-    cmd = ["pathcost_3.0", "0"]
+    cmd = ["pathcost_6.0", "0"]
     args = parse_commandline(;x=cmd)
 
     name = args["dataset"]

@@ -99,25 +99,20 @@ end
 
 # furniture_chain = Gen.Unfold(furniture_step)
 
-# """
-# Move a piece of furniture
-# """
-# @gen function reorganize(r::Room)
-#     # pick a random furniture block, this will prefer larger pieces
-#     g = pathgraph(r)
-#     vs = @>> g vertices filter(v -> istype(g, v, :furniture))
-#     n = length(vs)
-#     ps = fill(1.0/n, n)
-#     vi = @trace(categorical(ps), :block)
-#     v = vs[vi]
-#     f = connected(g, v)
-#     # find the valid moves and pick one at random
-#     # each move will be one unit
-#     moves = valid_moves(r, f)
+"""
+Move a piece of furniture
+"""
+@gen (static) function reorganize(r::GridRoom)
+    # pick a random furniture block, this will prefer larger pieces
+    possible_moves, move_counts, f_weights =
+        furniture_weights(r)
+    f_idx = @trace(categorical(f_weights), :furniture)
+    f = fs[f_idx]
 
-#     inds = CartesianIndices(steps(r))
-#     move_probs = moves ./ sum(moves)
-#     move_id = @trace(categorical(move_probs), :move)
-#     move = move_map[move_id]
-#     new_r = shift_furniture(r, f, move)
-# end
+    # find the valid moves and pick one at random
+    # each move will be one unit
+    m_weights = possible_moves[:, f_idx] ./ move_counts[f_idx]
+    m_idx = @trace(categorical(m_weights), :move)
+    move = move_map[m_idx]
+    new_r = shift_furniture(r, f, move)
+end
