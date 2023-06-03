@@ -121,28 +121,6 @@ function is_floor(r::GridRoom, t::Int64)::Bool
     has_vertex(g, t) && d[t] == floor_tile
 end
 
-function valid_move(r::Room, fid::Int64, m::Move)::Bool
-    valid_move(r, furniture(r)[fid], m)
-end
-function valid_move(r::Room, f::Furniture, m::Move)::Bool
-    g = pathgraph(r)
-    mf = move(r, f, m)
-    @>> setdiff(mf, f) begin
-        collect(Int64)
-        map(v -> is_floor(r, v))
-        all
-    end
-end
-
-function valid_moves(r::Room, f::Furniture)::BitVector
-    g = pathgraph(r)
-    vs = vertices(g)
-    moves = Vector{Bool}(undef, 4)
-    @inbounds for i = 1:4
-        moves[i] = valid_move(r, f, move_map[i])
-    end
-    BitVector(moves)
-end
 
 function purge_around!(vm::Vector{Bool}, r::GridRoom, f::Furniture)
     # want to prevent "stitching" new pieces together
@@ -219,9 +197,13 @@ function furniture_weights(r::GridRoom)
     @inbounds for i = 1:nf
         possible_moves[:, i] = valid_moves(r, fs[i])
     end
-    move_counts = sum(possible_moves, dim = 2)
-    f_weights = move_counts ./ sum(move_counts)
-    (possible_moves, move_counts, f_weights)
+    move_counts = sum(possible_moves; dims = 1)
+    f_weights = vec(move_counts ./ sum(move_counts))
+    (fs, possible_moves, move_counts, f_weights)
+end
+
+function move_weights(possible_moves, move_counts, f_idx)
+    vec(possible_moves[:, f_idx] / move_counts[f_idx])
 end
 
 # @gen functions
