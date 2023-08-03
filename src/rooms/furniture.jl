@@ -54,12 +54,12 @@ function remove(r::GridRoom, f::Furniture)::GridRoom
              r.exits, g, d)
 end
 
-function clear_room(r::GridRoom)::Room
+function clear_room(r::GridRoom)::GridRoom
     g = @> r steps grid PathGraph
     d = deepcopy(r.data)
     d[d .== obstacle_tile] .= floor_tile
     prune_edges!(g, d)
-    GridGridRoom(r.steps, r.bounds, r.entrance,
+    GridRoom(r.steps, r.bounds, r.entrance,
              r.exits, g, d)
 end
 

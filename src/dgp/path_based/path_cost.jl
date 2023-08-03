@@ -1,6 +1,7 @@
 using ImageFiltering
+using Random
 
-export PathProcedure, AStarPath, astar_path,
+export PathProcedure, AStarPath, NoisyPath, path_analysis,
     path_density, distance_to_path
 
 abstract type PathProcedure end
@@ -16,8 +17,8 @@ function nav_graph(r::GridRoom, params::AStarPath)
     @unpack obstacle_cost, floor_cost, wall_cost = params
     d = data(r)
     ws = fill(floor_cost, size(d))
-    ws[d .== obstacle_tile] .+= obstacle_cost
-    ws[d .== wall_tile] .+= wall_cost
+    ws[d .== obstacle_tile] .= obstacle_cost
+    ws[d .== wall_tile] .= wall_cost
 
     n = length(d)
     row = size(d, 1)
@@ -33,12 +34,11 @@ function nav_graph(r::GridRoom, params::AStarPath)
     (ws, adm, dsm)
 end
 
-function Graphs.a_star(r::GridRoom, params::AStarPath)
+function path_procedure(r::GridRoom, params::AStarPath)
     ent = first(entrance(r))
     ext = first(exits(r))
     g = pathgraph(r)
     w, ad, dm = nav_graph(r, params)
-    # g = SimpleGraph(ad)
     h = x -> round(cart_dist(x, ext, size(data(r), 1)))
     path = a_star(g, ent, ext, weights(g), h)
     path, w, ad, dm
@@ -51,8 +51,6 @@ end
     wall_cost::Float64 = obstacle_cost * wall_cost_ratio
     kernel_sigma::Float64 = 1.0
     kernel_width::Int64 = 7
-    kernel_alpha::Float64 = 2.0
-    kernel_beta::Float64 = 0.9
 end
 
 function nav_graph(r::GridRoom, params::NoisyPath)
@@ -62,11 +60,11 @@ function nav_graph(r::GridRoom, params::NoisyPath, sigma::Float64)
     @unpack obstacle_cost, floor_cost, wall_cost, kernel_width = params
     d = data(r)
     ws = fill(floor_cost, size(d))
-    ws[d .== obstacle_tile] .+= obstacle_cost
-    ws[d .== wall_tile] .+= wall_cost
+    ws[d .== obstacle_tile] .= obstacle_cost
+    ws[d .== wall_tile] .= obstacle_cost
     noisy_ws = imfilter(ws, Kernel.gaussian([sigma, sigma],
                                             [kernel_width, kernel_width]))
-    noisy_ws[d .== wall_tile] .+= wall_cost
+    noisy_ws[d .== wall_tile] .= wall_cost
 
     n = length(d)
     row = size(d, 1)
@@ -80,6 +78,19 @@ function nav_graph(r::GridRoom, params::NoisyPath, sigma::Float64)
         dsm[i, j] = dsm[j, i] = noisy_ws[i] + noisy_ws[j]
     end
     (noisy_ws, adm, dsm)
+end
+
+path_procedure(r::GridRoom, params::NoisyPath) = path_procedure(r, params,
+                                                                params.kernel_sigma)
+
+function path_procedure(r::GridRoom, params::NoisyPath, sigma::Float64)
+    ent = first(entrance(r))
+    ext = last(exits(r))
+    w, ad, dm = nav_graph(r, params, sigma)
+    g = SimpleGraph(ad)
+    h = x -> cart_dist(x, ext, size(data(r), 1))
+    path = a_star(g, ent, ext, dm, h)
+    path, w, ad, dm
 end
 
 function cart_dist(src, trg, n)
@@ -96,16 +107,6 @@ function avg_location(lvs, n::Int64)
     end
     center ./= length(lvs)
     return center
-end
-
-function Graphs.a_star(r::GridRoom, params::NoisyPath, sigma::Float64)
-    ent = first(entrance(r))
-    ext = first(exits(r))
-    # _, ad, dm = nav_graph(r, params, sigma)
-    # g = simplegraph(ad)
-    h = x -> cart_dist(x, ext, size(data(r), 1))
-    path = a_star(g, ent, ext, dm, h)
-    path, dm
 end
 
 function path_cost(path)
@@ -132,12 +133,14 @@ end
 function kernel_from_linear(i::Int64, m::Matrix{Float64}, w::Int64)
     ny= size(m, 1)
     offset = Int64((w-1) / 2)
+    mx = @inbounds m[1] # HACK: should be wall tile
     result::Float64 = 0.
     for y = -offset:offset
         yoffset = y * ny
         for x = -offset:offset
             xoffset = x + i
-            result += get(m, yoffset + xoffset, 1.0)
+            scale = exp(-sqrt(x^2  + y^2)/sqrt(w))
+            result += scale * get(m, yoffset + xoffset, mx)
         end
     end
     result / (w ^ 2)
@@ -171,48 +174,123 @@ function distance_to_path(r::GridRoom, vs, path::Array{T}) where {T<:Edge}
     n = steps(r)[2]
     loc = avg_location(vs, n)
     ne = length(path)
-    d::Float64 = 0.0
+    # d::Float64 = 0.0
+    # for e in path
+    #     v = dst(e)
+    #     x = ceil(v / n)
+    #     y = v % n
+    #     d += sqrt((x - loc[1])^2 + (y - loc[2])^2)
+    # end
+    # return d / ne
+    d::Float64 = Inf
     for e in path
         v = dst(e)
-        x = ceil(v / n), y = v % n
-        d += sqrt((x - loc[1])^2 + (y - loc[2])^2)
+        x = ceil(v / n)
+        y = v % n
+        d  = min(sqrt((x - loc[1])^2 + (y - loc[2])^2), d)
     end
-    return d / ne
+    return d
 end
 
-# function nearest_k_distance(vs, pmat)
-#     n = size(pmat, 1)
-#     loc = avg_location(vs, n)
-#     d = Inf
-#     ws = Matrix{Float64}(undef, size(pmat))
-#     sum_pmat = sum(pmat)
-#     @inbounds for x = 1:size(pmat,2), y = 1:size(pmat, 1)
-#         ws[y, x] = sqrt( (ceil(x/n) - loc[1])^2 + (y % n - loc[2])^2) /
-#             (pmat[y,x] / sum_pmat)
-#     end
+function diffusion!(
+    m::Array{Int64},
+    g::AbstractGraph{T},
+    p::Real,
+    n::Integer,
+    terminal::Set{T},
+    node_weights::Vector,
+    initial_infections::Vector{T}
+    ) where {T}
 
-#     return d
-# end
+    # Initialize
+    infected_vertices = BitSet(initial_infections)
 
-function astar_path(room::GridRoom, params::AStarPath;
-                    kernel::Int64 = 5,
-                    samples::Int64 = 50)
-    pmat = zeros(steps(room))
-    path, w, _... = Graphs.a_star(room, params)
-    c = path_density(w, path, kernel)
-    @inbounds for step in path
-        pmat[dst(step)] += 1.0
+    # Run simulation
+    for step in 2:n
+        new_infections = Set{T}()
+
+        @inbounds for i in infected_vertices
+            outn = outneighbors(g, i)
+            outd = length(outn)
+            cur_dis = node_weights[i]
+            for n in outn
+                n_dis = node_weights[n]
+                local_p = cur_dis >= n_dis ? 1.0 : p
+                if rand() < local_p
+                    push!(new_infections, n)
+                end
+            end
+        end
+
+        # Record only new infections
+        setdiff!(new_infections, infected_vertices)
+        for v in new_infections
+            m[v] += 1
+        end
+
+        # Kill of terminal infections
+        setdiff!(new_infections, terminal)
+
+        # Add new to master set of infected
+        union!(infected_vertices, new_infections)
     end
-    # c::Float64 = 0.0
-    # pmat = zeros(steps(room))
-    # for _ = 1:samples
-    #     sample = reorganize(room)
-    #     path, w, _... = Graphs.a_star(sample, params)
-    #     c += path_density(w, path, kernel)
-    #     @inbounds for step in path
-    #         pmat[dst(step)] += (1.0 / samples)
-    #     end
-    # end
-    # c /= samples
-    (c, pmat)
+
+    return nothing
+end
+
+
+function obstacle_diffusion(room::GridRoom, f::Furniture,
+                            path::Array{T},
+                            p::Float64, n::Int64) where {T<:Edge}
+    # diffusion on target furniture
+    vs = dst.(path)
+    m = zeros(Int64, steps(room))
+    g = pathgraph(clear_room(room))
+    clear_gds = gdistances(g, last(vs))
+    fs = furniture(room)
+    terminal = union(fs...)
+    diffusion!(m, g, p, n, terminal, clear_gds, vs)
+    # estimate the "cost" incurred by each obstacle
+    cost_of_f::Float64 = 0.0
+    @inbounds for v in f
+        cost_of_f += m[v]
+    end
+    # diffusion across all furniture
+    # tot = sum(m)
+    tot::Int64 = 0
+    gt_c::Float64 = 0
+    @inbounds for fi in fs
+        f_s = 0
+        for v in fi
+            f_s += m[v]
+        end
+        if f_s > cost_of_f
+            gt_c +=1
+        end
+        tot += f_s
+    end
+    frac = iszero(tot) ? 0. : cost_of_f / tot
+    sm = sum(m)
+    path_covered = iszero(sm) ? 0. : tot / sm
+    (cost_of_f, frac, gt_c, tot, Matrix{Float64}(m .> 0.))
+end
+
+function path_analysis(room::GridRoom, params::PathProcedure,
+                       f::Furniture;
+                       kernel::Int64 = 4, p::Float64 = 0.5,
+                       n::Int64 = 3)
+    pmat = zeros(steps(room))
+    path, w, _... = path_procedure(room, params)
+    c, fc, mc, sc, m = obstacle_diffusion(room, f, path, p, n)
+    result = Dict{Symbol, Any}(
+        :density => path_density(w, path, kernel),
+        :diffusion_ct => c,
+        :diffusion_ct_max => mc,
+        :diffusion_ct_gt => mc,
+        :diffusion_prop => fc,
+        :diffusion_tot => sc,
+        :path_dist => distance_to_path(room, f, path),
+        :path_length => length(path)
+                  )
+    return (m, result)
 end

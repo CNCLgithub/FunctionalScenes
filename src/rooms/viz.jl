@@ -4,8 +4,8 @@ using ImageInTerminal
 
 export viz_room
 
-function Base.display(r::GridRoom)
-    viz_room(r)
+function draw_room(r::GridRoom, p::Array{T}) where {T<:Edge}
+    draw_room(r, map(dst, p))
 end
 
 function draw_room(r::GridRoom, p::Array{Int64})
@@ -34,4 +34,8 @@ end
 
 function viz_room(r::GridRoom)
     viz_room(r, Int64[])
+end
+
+function Base.display(r::GridRoom)
+    viz_room(r)
 end
