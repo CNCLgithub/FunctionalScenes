@@ -47,7 +47,7 @@ end
 
 function build(door_conditions::Vector{GridRoom},
                move::Move;
-               max_f::Int64 = 11,
+               max_f::Int64 = 9,
                max_size::Int64 = 5,
                factor::Int64 = 1,
                pct_open::Float64 = 0.3,
@@ -75,9 +75,8 @@ function build(door_conditions::Vector{GridRoom},
     # generate furniture once and then apply to
     # each door condition
     with_furn = furniture_gm(rex, vmap, max_f, max_size)
-    with_furn = expand(with_furn, factor)
     n_v = prod(steps(with_furn))
-    exp_bases = map(r -> add(with_furn, expand(r, factor)),
+    exp_bases = map(r -> add(with_furn, r),
                     door_conditions)
     fs = furniture(with_furn)
     results = DataFrame(door = Int64[],
@@ -104,7 +103,7 @@ end
 
 
 function main()
-    name = "vss_pilot_11f_32x32_restricted"
+    name = "09_02_2023"
     dataset_out = "/spaths/datasets/$(name)"
     isdir(dataset_out) || mkdir(dataset_out)
 
@@ -120,7 +119,7 @@ function main()
     doors = inds[door_rows, room_dims[2]]
 
     # number of trials
-    n = 30
+    n = 6
 
     # will only consider these moves
     moves = [down_move, up_move]

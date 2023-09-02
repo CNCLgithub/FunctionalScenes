@@ -54,7 +54,7 @@ function remove(r::GridRoom, f::Furniture)::GridRoom
              r.exits, g, d)
 end
 
-function clear_room(r::Room)::Room
+function clear_room(r::GridRoom)::GridRoom
     g = @> r steps grid PathGraph
     d = deepcopy(r.data)
     d[d .== obstacle_tile] .= floor_tile
@@ -63,15 +63,38 @@ function clear_room(r::Room)::Room
              r.exits, g, d)
 end
 
-function shift_furniture(r::Room, f::Furniture, m::Symbol)
+function valid_move(r::GridRoom, fid::Int64, m::Move)::Bool
+    valid_move(r, furniture(r)[fid], m)
+end
+function valid_move(r::GridRoom, f::Furniture, m::Move)::Bool
+    mf = move(r, f, m)
+    @>> setdiff(mf, f) begin
+        collect(Int64)
+        map(v -> is_floor(r, v))
+        all
+    end
+end
+
+function valid_moves(r::GridRoom, f::Furniture)::BitVector
+    vs = vertices(pathgraph(r))
+    moves = Vector{Bool}(undef, 4)
+    @inbounds for i = 1:4
+        moves[i] = valid_move(r, f, move_map[i])
+    end
+    BitVector(moves)
+end
+
+function shift_furniture(r::GridRoom, f::Furniture, m::Symbol)
     shift_furniture(r, f, move_d[m])
 end
-function shift_furniture(r::Room, f::Furniture, m::Int64)
+function shift_furniture(r::GridRoom, f::Furniture, m::Int64)
     shift_furniture(r, f, move_map[m])
 end
 
 function shift_furniture(r::GridRoom, f::Furniture, m::Move)
     @assert all(r.data[f] .== obstacle_tile)
+    g = pathgraph(r)
+    !valid_move(r, f, m) && return r
     d = deepcopy(r.data)
     # apply move
     moved_f = move(r, f, m)

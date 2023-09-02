@@ -97,27 +97,37 @@ Adds a randomly generated piece of furniture
     return result
 end
 
-# furniture_chain = Gen.Unfold(furniture_step)
+@gen (static) function reorganize_furniture(fi::Int64, r::GridRoom, furniture)
+    m_idx = @trace(categorical(fill(0.25, 4)), :move)
+    move = move_map[m_idx]
+    f = furniture[fi]
+    new_r::GridRoom = shift_furniture(r, f, move)
+    return new_r
+end
 
-# """
-# Move a piece of furniture
-# """
-# @gen function reorganize(r::Room)
-#     # pick a random furniture block, this will prefer larger pieces
-#     g = pathgraph(r)
-#     vs = @>> g vertices filter(v -> istype(g, v, :furniture))
-#     n = length(vs)
-#     ps = fill(1.0/n, n)
-#     vi = @trace(categorical(ps), :block)
-#     v = vs[vi]
-#     f = connected(g, v)
-#     # find the valid moves and pick one at random
-#     # each move will be one unit
-#     moves = valid_moves(r, f)
-
-#     inds = CartesianIndices(steps(r))
-#     move_probs = moves ./ sum(moves)
-#     move_id = @trace(categorical(move_probs), :move)
-#     move = move_map[move_id]
-#     new_r = shift_furniture(r, f, move)
+"""
+Move a piece of furniture
+"""
+# @gen (static) function reorganize(r::GridRoom)
+#     fs = furniture(r)
+#     nf = length(fs)
+#     stages =
+#         @trace(Unfold(reorganize_furniture)(nf, r, fs), :furniture)
+#     result::GridRoom = last(stages)
+#     return result
 # end
+@gen (static) function reorganize(r::GridRoom)
+    # pick a random furniture block, this will prefer larger pieces
+    fs, possible_moves, move_counts, f_weights =
+        furniture_weights(r)
+    f_idx = @trace(categorical(f_weights), :furniture)
+    f = fs[f_idx]
+
+    # find the valid moves and pick one at random
+    # each move will be one unit
+    m_weights = move_weights(possible_moves, move_counts, f_idx)
+    m_idx = @trace(categorical(m_weights), :move)
+    move = move_map[m_idx]
+    result::GridRoom = shift_furniture(r, f, move)
+    return result
+end

@@ -14,7 +14,7 @@ def main():
     )
     parser.add_argument('--dataset', type = str,
                         help = "Which scene dataset to use",
-                        default = 'vss_pilot')
+                        default = 'pathcost')
     parser.add_argument('--render', type = str,
                         help = "Which render mode", choices = ['cycles'],
                         default = 'cycles')
@@ -30,14 +30,11 @@ def main():
     # groupby move
     for (_, r) in df.iterrows():
         # first create each `a->a` trial
-        base = '{0:d}_{1:d}.png'.format(r.id, r.door)
-
-        aa_movies.append([base, base, r.flip])
+        base = f'{r.scene}_{r.door}.png'
+        aa_movies.append([base, base, r.flipx])
         # then proceed to make `a -> b` trials
-        move = '{0:d}_{1:d}_{2:d}_{3!s}.png'.format(r.id, r.door,
-                                                    r.furniture,
-                                                    r.move)
-        ab_movies.append([base, move, r.flip])
+        move = f'{r.scene}_{r.door}_shifted.png'
+        ab_movies.append([base, move, r.flipx])
 
     # repeate aa trials to have a 50/50 split
     naa = len(aa_movies)

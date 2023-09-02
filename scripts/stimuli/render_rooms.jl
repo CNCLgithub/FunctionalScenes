@@ -9,7 +9,8 @@ using FunctionalScenes
 cycles_args = Dict(
     :mode => "full",
     # :mode => "none",
-    :navigation => false
+    :navigation => false,
+    :template => "/spaths/datasets/vss_template.blend"
 )
 
 function render_stims(df::DataFrame, name::String;
@@ -17,41 +18,37 @@ function render_stims(df::DataFrame, name::String;
     out = "/spaths/datasets/$(name)/render_cycles"
     isdir(out) || mkdir(out)
     for r in eachrow(df)
-        base_p = "/spaths/datasets/$(name)/scenes/$(r.id)_$(r.door).json"
+        base_p = "/spaths/datasets/$(name)/scenes/$(r.scene)_$(r.door).json"
         local base_s
         open(base_p, "r") do f
             base_s = JSON.parse(f)
         end
         base = from_json(GridRoom, base_s)
-        p = "$(out)/$(r.id)_$(r.door)"
+        p = "$(out)/$(r.scene)_$(r.door)"
         render(base, p;
                cycles_args...)
         room = shift_furniture(base,
                                furniture(base)[r.furniture],
                                Symbol(r.move))
-        p = "$(out)/$(r.id)_$(r.door)_$(r.furniture)_$(r.move)"
+        p = "$(out)/$(r.scene)_$(r.door)_shifted"
         render(room, p;
                cycles_args...)
     end
 end
 
 function main()
-    # args = Dict(
-    #     "dataset" => "vss_pilot_11f_32x32",
-    #     "scene" => 1,
-    #     "threads" => Sys.CPU_THREADS
-    # )
-    args = parse_commandline()
+    cmd = ["pathcost_6.0", "0"]
+    args = parse_commandline(;x=cmd)
 
     name = args["dataset"]
     src = "/spaths/datasets/$(name)"
     df = DataFrame(CSV.File("$(src)/scenes.csv"))
-    seeds = unique(df.id)
+    seeds = unique(df.scene)
     if args["scene"] == 0
-        seeds = unique(df.id)
+        seeds = unique(df.scene)
     else
         seeds = [args["scene"]]
-        df = df[df.id .== args["scene"], :]
+        df = df[df.scene .== args["scene"], :]
     end
 
     render_stims(df, name,
@@ -62,7 +59,7 @@ end
 
 
 
-function parse_commandline()
+function parse_commandline(;x=ARGS)
     s = ArgParseSettings()
 
     @add_arg_table! s begin
@@ -82,7 +79,7 @@ function parse_commandline()
         arg_type = Int64
         default = 4
     end
-    return parse_args(s)
+    return parse_args(x, s)
 end
 
 

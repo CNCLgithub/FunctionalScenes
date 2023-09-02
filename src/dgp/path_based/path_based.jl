@@ -100,10 +100,14 @@ const MoveDeque = Vector{Tuple{Int64, Int64, Int64}}
 function noisy_distm(r::GridRoom, w::Float64)
     g = pathgraph(r)
     d = data(r)
+    nrow = size(d, 1)
     n = length(d)
-    m = Matrix{Float64}(undef, n, n)
+    # m = Matrix{Float64}(undef, n, n)
+    m = fill(Inf, (n, n))
 
     @inbounds for i = 1:n, j = 1:n
+        vd = abs(i - j) == 1
+        (vd == 1 || vd == nrow) || continue
         # case which di is (free tile, free tile)
             # m[i,j] should be 0.1
         # case which di is (free_tile, obstacle) or any permutation
@@ -186,3 +190,4 @@ function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
 end
 
 include("gen.jl")
+include("path_cost.jl")
