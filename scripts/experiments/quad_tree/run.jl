@@ -5,6 +5,7 @@ using JLD2
 using FileIO
 using ArgParse
 using DataFrames
+using Gen_Compose
 using FunctionalScenes
 using FunctionalScenes: shift_furniture
 
@@ -52,41 +53,18 @@ function parse_commandline(c)
         "scene"
         help = "Which scene to run"
         arg_type = Int64
-        required = true
+        default = 1
 
         "door"
         help = "door"
         arg_type = Int64
-        required = true
+        default = 2
 
         "chain"
         help = "The number of chains to run"
         arg_type = Int
-        required = true
+        default = 1
 
-        "attention", "A"
-        help = "Using trackers"
-        action = :command
-
-        "naive", "N"
-        help = "Naive approximation"
-        action = :command
-
-
-    end
-
-    @add_arg_table! s["attention"] begin
-        "--params"
-        help = "Attention params"
-        arg_type = String
-        default = "$(@__DIR__)/attention.json"
-
-    end
-    @add_arg_table! s["naive"] begin
-        "--params"
-        help = "Attention params"
-        arg_type = String
-        default = "$(@__DIR__)/naive.json"
     end
 
     return parse_args(c, s)
@@ -113,10 +91,8 @@ end
 
 
 
-function main(;c=ARGS)
+function main(c=ARGS)
     args = parse_commandline(c)
-    att_mode = args["%COMMAND%"]
-
     base_path = "/spaths/datasets/$(dataset)/scenes"
     scene = args["scene"]
     door = args["door"]
@@ -144,10 +120,10 @@ function main(;c=ARGS)
     # Load estimator - Adaptive MCMC
     model_params = first(query.args)
     ddp_params = DataDrivenState(;config_path = args["ddp"],
-                                 var = 0.175)
+                                 var = 0.185)
     gt_img = render_mitsuba(room, model_params.scene, model_params.sparams,
                             model_params.skey, model_params.spp)
-    proc = FunctionalScenes.load(AttentionMH, args[att_mode]["params"];
+    proc = FunctionalScenes.load(AttentionMH, "$(@__DIR__)/attention.json";
                                  ddp_args = (ddp_params, gt_img, model_params))
 
     println("Loaded configuration...")
@@ -162,7 +138,7 @@ function main(;c=ARGS)
     # save the gt image for reference
     save_img_array(gt_img, "$(out_path)/gt.png")
 
-    # which chain to run
+    # how many chains to run
     for c = 1:args["chain"]
         Random.seed!(c)
         out = joinpath(out_path, "$(c).jld2")
@@ -192,8 +168,10 @@ function main(;c=ARGS)
         end
         if !complete
             println("starting chain $c")
-            results = run_inference(query, proc, out )
-            save_img_array(get_retval(results.state).img_mu,
+            nsteps = proc.samples
+            dlog = JLD2Logger(10, out)
+            chain = run_chain(proc, query, nsteps, dlog)
+            save_img_array(get_retval(chain.state).img_mu,
                         "$(out_path)/$(c)_img_mu.png")
             println("Chain $(c) complete")
         end
@@ -204,31 +182,14 @@ end
 
 
 
-function outer()
-    args = Dict("scene" => 8)
-    # args = parse_outer()
-    i = args["scene"]
-    # scene | door | chain | attention
-    # cmd = ["$(i)","1", "1", "A"]
-    cmd = ["--restart", "$(i)", "1", "1", "A"]
-    main(c=cmd);
-end
-
-
-
-function parse_outer()
-    s = ArgParseSettings()
-
-    @add_arg_table! s begin
-        "scene"
-        help = "Which scene to run"
-        arg_type = Int64
-        required = true
-
-    end
-
-    return parse_args(s)
-end
+# function outer()
+#     args = Dict("scene" => 8)
+#     # args = parse_outer()
+#     i = args["scene"]
+#     # scene | door | chain | attention
+#     cmd = ["$(i)","1", "1", "A"]
+#     # cmd = ["--restart", "$(i)", "1", "1", "A"]
+#     main(cmd);
+# end
 
 main();
-# outer();

@@ -123,11 +123,12 @@ function stats_from_qt(qt::QuadTree,
     result = @pycall mi.render(scene, spp=spp)::PyObject
     # need to set gamma correction for proper numpy export
     result = @pycall mi.Bitmap(result).convert(srgb_gamma=true)::PyObject
+    # avg around 0.17
     mu = @pycall numpy.array(result)::Array{Float32, 3}
     sd = fill(p.base_sigma, size(mu))
 
     # REVIEW: might not be necessary
-    sync_params!(sparams, skey, prev_val)
+    # sync_params!(sparams, skey, prev_val)
 
     return (mu, sd)
 end
@@ -175,9 +176,7 @@ function nav_graph(lv::Vector{QTAggNode}, w::Float64)
         contact(x.node, y.node) || continue
         d = dist(x.node, y.node)
         #  work to traverse each node
-        # p = area(x.node) / (area(x.node) + area(y.node))
-        # work = d + (p * weight(x) + (1-p)*weight(y))
-        work = d + w*(area(x.node) * weight(x) + area(y.node)*weight(y))
+        work = d + w*(length(x.node) * weight(x) + length(y.node)*weight(y))
         adm[i, j] = adm[j, i] = true
         dsm[i, j] = dsm[j, i] = work
     end

@@ -1,4 +1,6 @@
 using Base.Iterators: take
+using Base.Order: ReverseOrdering, Reverse
+using DataStructures: PriorityQueue
 
 export AttentionMH
 
@@ -52,14 +54,16 @@ end
 
 mutable struct AttentionAux <: AuxillaryState
     initialized::Bool
-    sensitivities::Array{Float64}
-    weights::Array{Float64}
+    sensitivities::Matrix{Float64}
+    queue::PriorityQueue{Int64, Float64, ReverseOrdering}
     node::Int64
 end
 
+const AMHChain = Gen_Compose.MHChain{StaticQuery, AttentionMH}
 
 function Gen_Compose.initialize_chain(proc::AttentionMH,
-                                      query::StaticQuery)
+                                      query::StaticQuery,
+                                      n::Int)
     # Intialize using DDP
     cm = query.observations
     tracker_cm = generate_qt_from_ddp(proc.ddp_args...)
@@ -70,91 +74,50 @@ function Gen_Compose.initialize_chain(proc::AttentionMH,
                            cm)
     # initialize auxillary state
     dims = first(get_args(trace)).dims
-    n = prod(dims)
+    ndims = prod(dims)
     sensitivities = zeros(dims)
-    weights = fill(1.0/n, n)
-    aux = AttentionAux(false,
+    queue = init_queue(trace)
+    aux = AttentionAux(true,
                        sensitivities,
-                       weights,
+                       queue,
                        0)
     # initialize chain
-    StaticMHChain(query,  proc, trace, aux)
+    AMHChain(query, proc, trace, aux, 1, n)
 end
 
-function Gen_Compose.mc_step!(chain::StaticMHChain,
-                              proc::AttentionMH,
-                              i::Int)
+
+function Gen_Compose.step!(chain::AMHChain)
 
     @debug "mc step $(i)"
 
-    @unpack auxillary = chain
-    # initialize kernel by exploring nodes
-    auxillary.initialized || kernel_init!(chain, proc)
+    aux = auxillary(chain)
+    # # initialize kernel by exploring nodes
+    # aux.initialized || kernel_init!(chain)
 
     # proposal
-    kernel_move!(chain, proc)
+    kernel_move!(chain)
 
     viz_chain(chain)
     println("current score $(get_score(chain.state))")
     return nothing
 end
 
-function update_weights!(chain::StaticMHChain, proc::AttentionMH)
-    @unpack auxillary = chain
-    auxillary.weights = softmax(proc.smoothness .* vec(auxillary.sensitivities))
-    chain.auxillary = auxillary
+#################################################################################
+# Helpers
+#################################################################################
+
+function update_weights!(chain::AMHChain)
+    aux = auxillary(chain)
+    proc = estimator(chain)
+    aux.weights = softmax(proc.smoothness .* vec(aux.sensitivities))
+    chain.auxillary = aux
     return nothing
 end
 
-function kernel_init!(chain::StaticMHChain, proc::AttentionMH)
-    @unpack state = chain
-    @unpack init_cycles, objective, distance = proc
-    # current trace
-    t = state
-    # objective of current trace
-    obj_t = objective(t)
-    # loop through each node in initial trace
-    st::QuadTreeState = get_retval(t)
-    if init_cycles == 0
-        chain.auxillary.initialized = true
-        return nothing
-    end
-    _t  = t
-    accept_ct = 0
-    println("Running init kernel on $(length(st.qt.leaves)) nodes")
-    for i = 1:length(st.qt.leaves)
-        node = st.qt.leaves[i].node
-        accept_ct = 0
-        e_dist = 0
-        # println("INIT KERNEL: node $(node.tree_idx)")
-        for j = 1:init_cycles
-            _t, alpha = rw_move(t, node.tree_idx)
-            w = exp(clamp(alpha, -Inf, 0))
-            # w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
-            obj_t_prime = objective(_t)
-            e_dist += distance(obj_t, objective(_t)) * w
-            if log(rand()) < alpha
-                t = _t
-                obj_t = obj_t_prime
-                accept_ct += 1
-            end
-        end
-        e_dist /= init_cycles
-        # map node to sensitivity matrix
-        sidx = node_to_idx(node, max_leaves(st.qt))
-        chain.auxillary.sensitivities[sidx] .= e_dist
-        # println("\t avg distance: $(e_dist)")
-        # println("\t acceptance ratio: $(accept_ct/init_cycles)")
-    end
-
-    chain.state = t
-    chain.auxillary.initialized = true
-    update_weights!(chain, proc)
-    return nothing
-end
-
-function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
-    @unpack state, auxillary = chain
+function kernel_move!(chain::AMHChain)
+    state = estimate(chain)
+    proc = estimator(chain)
+    aux = auxillary(chain)
     @unpack rw_cycles, sm_cycles, objective, distance = proc
     # current trace
     t = state
@@ -163,21 +126,18 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     st::QuadTreeState = get_retval(t)
 
     # select node to rejuv
-    room_idx = categorical(auxillary.weights)
-    node = room_to_leaf(st, room_idx, params.dims[1]).node
-
-    println("ATTENTION KERNEL: node $(node.tree_idx), prob $(auxillary.weights[room_idx])")
+    node, gr = first(aux.queue)
+    println("ATTENTION KERNEL: node $(node); prev gr $(gr)")
 
     # RW moves - first stage
-    accept_ct = 0
-    e_dist = 0
+    accept_ct::Int64 = 0
+    delta_pi::Float64 = 0.0
+    delta_s::Float64 = 0.0
     for j = 1:rw_cycles
-        _t, alpha = rw_move(t, node.tree_idx)
-        # w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
-        w = exp(clamp(alpha, -Inf, 0))
+        _t, alpha = rw_move(t, node)
         obj_t_prime = objective(_t)
-        e_dist += distance(obj_t, obj_t_prime) * w
-        # @show alpha
+        delta_pi += distance(obj_t, obj_t_prime)
+        delta_s += exp(clamp(alpha, -Inf, 0.))
         if log(rand()) < alpha
             t = _t
             obj_t = obj_t_prime
@@ -188,14 +148,12 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
     # if RW acceptance ratio is high, add more
     # otherwise, ready for SM
     accept_ratio = accept_ct / rw_cycles
-    addition_rw_cycles = floor(Int64, sm_cycles * accept_ratio)
+    addition_rw_cycles = (delta_pi > 0) * floor(Int64, sm_cycles * accept_ratio)
     for j = 1:addition_rw_cycles
-        _t, alpha = rw_move(t, node.tree_idx)
-        # w = abs(0.5 - exp(clamp(alpha, -Inf, 0)))
-        w = exp(clamp(alpha, -Inf, 0))
+        _t, alpha = rw_move(t, node)
         obj_t_prime = objective(_t)
-        e_dist += distance(obj_t, obj_t_prime) * w
-        # @show alpha
+        delta_pi += distance(obj_t, obj_t_prime)
+        delta_s += exp(clamp(alpha, -Inf, 0.))
         if log(rand()) < alpha
             t = _t
             obj_t = obj_t_prime
@@ -203,44 +161,89 @@ function kernel_move!(chain::StaticMHChain, proc::AttentionMH)
         end
     end
 
-    e_dist /= (rw_cycles + addition_rw_cycles)
+    # compute goal-relevance
+    total_cycles = rw_cycles + addition_rw_cycles
+    delta_pi /= total_cycles
+    delta_s /= total_cycles
+    goal_relevance = delta_pi * delta_s
 
-    sidx = node_to_idx(node, max_leaves(st.qt))
-    auxillary.sensitivities[sidx] .*= 0.5
-    auxillary.sensitivities[sidx] .+= 0.5 * e_dist
-    auxillary.node = node.tree_idx
+    # update aux state
+    prod_node = traverse_qt(st.qt, node).node
+    sidx = node_to_idx(prod_node, max_leaves(st.qt))
+    aux.sensitivities[sidx] .= goal_relevance
+    aux.queue[node] = goal_relevance
+    aux.node = node
 
-    println("\t avg distance: $(e_dist)")
+    println("\t delta pi: $(delta_pi)")
+    println("\t delta S: $(delta_s)")
+    println("\t goal relevance: $(goal_relevance)")
     println("\t rw acceptance ratio: $(accept_ratio)")
+
 
     # SM moves
     remaining_sm = sm_cycles - addition_rw_cycles
-    can_split = node.max_level > node.level
+    can_split = prod_node.max_level > prod_node.level
     accept_ct = 0
     if can_split
-        is_balanced = balanced_split_merge(t, node.tree_idx)
+        is_balanced = balanced_split_merge(t, node)
         moves = is_balanced ? [split_move, merge_move] : [split_move]
         for i = 1 : remaining_sm
             move = rand(moves)
-            _t, _w = split_merge_move(t, node.tree_idx, move)
+            _t, _w = split_merge_move(t, node, move)
             if log(rand()) < _w
                 t = _t
                 accept_ct += 1
+                update_queue!(aux, node, move)
                 break
             end
         end
     end
     println("\t accepted SM move: $(accept_ct == 1)")
 
+    display_selected_node(sidx, size(aux.sensitivities))
+
     # update trace
     chain.state = t
-    chain.auxillary = auxillary
-    # finally update weights for next step
-    update_weights!(chain, proc)
+    chain.auxillary = aux
     return nothing
 end
 
-function viz_chain(chain::StaticMHChain)
+function init_queue(tr::Gen.Trace)
+    st = get_retval(tr)
+    q = PriorityQueue{Int64, Float64, ReverseOrdering}(Reverse)
+    # go through the current set of terminal nodes
+    # and intialize priority
+    for n = st.qt.leaves
+        q[n.node.tree_idx] = 0.1 * area(n.node)
+    end
+    return q
+end
+
+function update_queue!(aux::AttentionAux, node::Int64, move::Split)
+    prev_val = aux.queue[node] * 0.25
+    # copying parent's (node) value to children
+    for i = 1:4
+        cid = Gen.get_child(node, i, 4)
+        aux.queue[cid] = prev_val
+    end
+    delete!(aux.queue, node)
+    return nothing
+end
+
+function update_queue!(aux::AttentionAux, node::Int64, move::Merge)
+    # merge to parent, averaging siblings relevance
+    parent = Gen.get_parent(node, 4)
+    prev_val = 0.
+    for i = 1:4
+        cid = Gen.get_child(parent, i, 4)
+        prev_val += aux.queue[cid]
+        delete!(aux.queue, cid)
+    end
+    aux.queue[parent] = prev_val
+    return nothing
+end
+
+function viz_chain(chain::AMHChain)
     @unpack auxillary, state = chain
     params = first(get_args(state))
     trace_st = get_retval(state)

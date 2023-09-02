@@ -22,7 +22,7 @@ function build(r::GridRoom;
                max_f::Int64 = 11,
                max_size::Int64 = 5,
                pct_open::Float64 = 0.3,
-               side_buffer::Int64 = 2,
+               side_buffer::Int64 = 0,
                factor = 2)
 
     dims = steps(r)

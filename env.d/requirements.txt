@@ -12,7 +12,5 @@ fvcore
 iopath
 ffcv
 lightning
--e deps/slurmpy
--e .
-
-
+slurmpy @ git+https://github.com/belledon/slurm.git@master
+-e /project
