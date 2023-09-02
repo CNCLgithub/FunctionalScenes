@@ -35,6 +35,8 @@ The area of the node.
 """
 area(n::QTProdNode) = prod(n.dims)
 
+Base.length(n::QTProdNode) = n.dims[1]
+
 """
     max_leaves(n::QTProdNode)::Int
 

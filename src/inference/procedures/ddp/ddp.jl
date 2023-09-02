@@ -45,16 +45,12 @@ function generate_qt_from_ddp(ddp_params::DataDrivenState, img, model_params,
                               min_depth::Int64 = 1)
     @unpack nn, device, var = ddp_params
 
-    max_depth::Int64 = 4
+    max_depth::Int64 = 5
     pimg = permutedims(img, (3,1,2))
     x = @pycall torch.tensor(pimg, device = device)::PyObject
     x = @pycall x.unsqueeze(0)::PyObject
     x = @pycall nn.determ_forward(x)::PyObject
     state = @pycall x.detach().cpu().numpy()::Matrix{Float64}
-    # setting unseen corners to prior
-    # TODO: this could be acheived with a better training dataset
-    state[1:6, 1:6] .= 0.5
-    state[end-6:end, 1:6] .= 0.5
     println("Data-driven state")
     display_mat(state)
     head = model_params.start_node

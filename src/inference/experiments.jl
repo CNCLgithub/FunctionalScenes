@@ -1,24 +1,6 @@
 export run_inference, resume_inference, query_from_params, proc_from_params
 
-function run_inference(query::StaticQuery,
-                       proc::AttentionMH)
-
-    results = static_monte_carlo(proc, query,
-                                 buffer_size = proc.samples)
-end
-function run_inference(query::StaticQuery,
-                       proc::AttentionMH,
-                       path::String)
-
-    results = static_monte_carlo(proc, query,
-                                 buffer_size = proc.samples,
-                                 path = path)
-end
-function resume_inference(path::String, proc::AttentionMH)
-    Gen_Compose.resume_mc_chain(path, proc.samples)
-end
-
-function ex_choicemap(c::StaticMHChain)
+function ex_choicemap(c::AMHChain)
     ex_choicemap(c.state)
 end
 function ex_choicemap(tr::Gen.Trace)
@@ -27,17 +9,17 @@ function ex_choicemap(tr::Gen.Trace)
     get_selected(choices, s)
 end
 
-function ex_projected(c::StaticMHChain)
+function ex_projected(c::AMHChain)
      st = get_retval(c.state)
      deepcopy(st.qt.projected)
 end
 
-function ex_img_mu(c::StaticMHChain)
+function ex_img_mu(c::AMHChain)
     st = get_retval(c.state)
     deepcopy(st.img_mu)
 end
 
-function ex_granularity(c::StaticMHChain)
+function ex_granularity(c::AMHChain)
     st = get_retval(c.state)
     n = size(st.qt.projected, 1)
     m = Matrix{Int64}(undef, n, n)
@@ -48,7 +30,7 @@ function ex_granularity(c::StaticMHChain)
     m
 end
 
-function ex_path(c::StaticMHChain)
+function ex_path(c::AMHChain)
     st = get_retval(c.state)
     n = size(st.qt.projected, 1)
     leaves = st.qt.leaves
@@ -64,10 +46,9 @@ function ex_path(c::StaticMHChain)
     m
 end
 
-function ex_attention(c::StaticMHChain)
+function ex_attention(c::AMHChain)
     @unpack auxillary = c
-    Dict(:weights => deepcopy(auxillary.weights),
-         :sensitivities => deepcopy(auxillary.sensitivities),
+    Dict(:sensitivities => deepcopy(auxillary.sensitivities),
          :node => deepcopy(auxillary.node))
 end
 

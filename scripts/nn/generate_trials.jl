@@ -22,7 +22,7 @@ function build(r::GridRoom;
                max_f::Int64 = 11,
                max_size::Int64 = 5,
                pct_open::Float64 = 0.3,
-               side_buffer::Int64 = 2,
+               side_buffer::Int64 = 0,
                factor = 2)
 
     dims = steps(r)
@@ -40,10 +40,9 @@ function build(r::GridRoom;
     weights[start_y:stop_y, start_x:stop_x] .= 1.0
     vmap = PersistentVector(vec(weights))
 
-    # generate furniture once and then apply to
-    # each door condition
+    # generate furniture
     with_furn = furniture_gm(r, vmap, max_f, max_size)
-    with_furn = expand(with_furn, factor)
+    expand(with_furn, factor)
 end
 
 function save_trial(dpath::String, i::Int64, r::GridRoom,

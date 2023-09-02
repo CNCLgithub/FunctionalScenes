@@ -35,8 +35,6 @@ library(ggplot2)
 library(readr)
 library(boot)
 library(svglite)
-
-library(tidyverse)
 ```
 
 
@@ -60,8 +58,7 @@ parsed_trials <- read_csv(exp_path) %>%
   filter(row_number() == 1) %>%
   ungroup()
 
-exp_data <- read_csv(exp_scenes) %>%
-  rename(scene = id) 
+exp_data <- read_csv(exp_scenes)
 ```
 
 
@@ -270,8 +267,8 @@ f2 <- upright_dhr_analysis %>%
         axis.text = element_text(size = 20),
         ) 
 
-ggsave(file="vss_poster/vss_poster_files/figure-html/results_2_1.svg", plot=f2,
-       width = 9, height = 7)
+# ggsave(file="vss_poster/vss_poster_files/figure-html/results_2_1.svg", plot=f2,
+       # width = 9, height = 7)
 
 f3 <- upright_dhr_analysis %>%
   ggplot(aes(x = abs_f_diff, y = up_diff)) + 
@@ -281,8 +278,8 @@ f3 <- upright_dhr_analysis %>%
   theme(axis.title = element_blank(),
         axis.text = element_text(size = 20))
 
-ggsave(file="vss_poster/vss_poster_files/figure-html/results_2_2.svg", plot=f3,
-     width = 9, height = 7)
+# ggsave(file="vss_poster/vss_poster_files/figure-html/results_2_2.svg", plot=f3,
+     # width = 9, height = 7)
 
 upright_dhr_analysis %>%
   with(lm(upright ~ f_mean)) %>%

@@ -75,7 +75,7 @@ rstudio_dest="${SENV[envd]}/rstudio"
     $SING exec "${cont_dest}" bash -c "virtualenv ${SENV[pyenv]} && \
     source ${SENV[pyenv]}/bin/activate && \
     python -m pip install --upgrade pip" && \
-    ./env.d/run.sh python -m pip install --no-cache-dir -r /project/requirements.txt
+    ./env.d/run.sh python -m pip install --no-cache-dir -r /project/env.d/requirements.txt
 
 
 #################################################################################
