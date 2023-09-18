@@ -23,11 +23,10 @@ function camera(r::Room)
     pos = transform.(Tuple.(cis[entrance(r)]))
     # REVIEW: may need adjustment along y (forward-back)
     # NOTE: push back slightly to maximize visability of scene
-    y = pos[1][2] - 1.75 * space[2]
-    x = mean(first.(pos)) + 0.5
+    y = pos[1][2] - 2.25 * space[2]
     # center of x-y for entrances
     camera_height = 0.75 * tile_height
-    pos = [x, y, camera_height]
+    pos = [0., y, camera_height]
     orientation = [0.475 * pi, 0., 0.]
     Dict(:position => pos,
          :orientation => orientation)

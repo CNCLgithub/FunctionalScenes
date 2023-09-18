@@ -2,7 +2,7 @@ using ImageFiltering
 using Random
 
 export PathProcedure, AStarPath, NoisyPath, path_analysis,
-    path_density, distance_to_path
+    path_density, distance_to_path, path_procedure
 
 abstract type PathProcedure end
 
@@ -61,9 +61,10 @@ function nav_graph(r::GridRoom, params::NoisyPath, sigma::Float64)
     d = data(r)
     ws = fill(floor_cost, size(d))
     ws[d .== obstacle_tile] .= obstacle_cost
-    ws[d .== wall_tile] .= obstacle_cost
+    # ws[d .== wall_tile] .= obstacle_cost
     noisy_ws = imfilter(ws, Kernel.gaussian([sigma, sigma],
                                             [kernel_width, kernel_width]))
+    noisy_ws[d .== obstacle_tile] .= obstacle_cost
     noisy_ws[d .== wall_tile] .= wall_cost
 
     n = length(d)
@@ -75,7 +76,7 @@ function nav_graph(r::GridRoom, params::NoisyPath, sigma::Float64)
         delta = abs(i - j)
         delta == 1 || delta == row || continue
         adm[i, j] = adm[j, i] = true
-        dsm[i, j] = dsm[j, i] = noisy_ws[i] + noisy_ws[j]
+        dsm[i, j] = dsm[j, i] = noisy_ws[i] + noisy_ws[j] + 1.0
     end
     (noisy_ws, adm, dsm)
 end

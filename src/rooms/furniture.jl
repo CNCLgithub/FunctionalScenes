@@ -84,6 +84,11 @@ function valid_moves(r::GridRoom, f::Furniture)::BitVector
     BitVector(moves)
 end
 
+function shift_furniture(r::GridRoom, i::Int64, m::Move)
+    f = furniture(r)[i]
+    shift_furniture(r, f, m)
+end
+
 function shift_furniture(r::GridRoom, f::Furniture, m::Symbol)
     shift_furniture(r, f, move_d[m])
 end

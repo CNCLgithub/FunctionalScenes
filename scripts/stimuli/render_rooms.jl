@@ -17,27 +17,27 @@ function render_stims(df::DataFrame, name::String;
                       threads = Sys.CPU_THREADS)
     out = "/spaths/datasets/$(name)/render_cycles"
     isdir(out) || mkdir(out)
-    for r in eachrow(df)
-        base_p = "/spaths/datasets/$(name)/scenes/$(r.scene)_$(r.door).json"
+    for r in eachrow(df), door = 1:2
+        base_p = "/spaths/datasets/$(name)/scenes/$(r.scene)_$(door).json"
         local base_s
         open(base_p, "r") do f
             base_s = JSON.parse(f)
         end
         base = from_json(GridRoom, base_s)
-        p = "$(out)/$(r.scene)_$(r.door)"
+        p = "$(out)/$(r.scene)_$(door)"
         render(base, p;
                cycles_args...)
         room = shift_furniture(base,
                                furniture(base)[r.furniture],
                                Symbol(r.move))
-        p = "$(out)/$(r.scene)_$(r.door)_shifted"
+        p = "$(out)/$(r.scene)_$(door)_shifted"
         render(room, p;
                cycles_args...)
     end
 end
 
 function main()
-    cmd = ["pathcost_6.0", "0"]
+    cmd = ["09_02_2023", "0"]
     args = parse_commandline(;x=cmd)
 
     name = args["dataset"]

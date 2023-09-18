@@ -29,12 +29,13 @@ def main():
     ab_movies = []
     # groupby move
     for (_, r) in df.iterrows():
-        # first create each `a->a` trial
-        base = f'{r.scene}_{r.door}.png'
-        aa_movies.append([base, base, r.flipx])
-        # then proceed to make `a -> b` trials
-        move = f'{r.scene}_{r.door}_shifted.png'
-        ab_movies.append([base, move, r.flipx])
+        for door in [1, 2]:
+            # first create each `a->a` trial
+            base = f'{r.scene}_{door}.png'
+            aa_movies.append([base, base, r.flipx])
+            # then proceed to make `a -> b` trials
+            move = f'{r.scene}_{door}_shifted.png'
+            ab_movies.append([base, move, r.flipx])
 
     # repeate aa trials to have a 50/50 split
     naa = len(aa_movies)
