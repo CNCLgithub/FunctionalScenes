@@ -18,12 +18,12 @@ function prop_weights()
         end
     end
 
-    ws .+= 0.1 # adds noise to prop rules
+    ws .+= 0.05 # adds noise to prop rules
 
     # ws = gen_prop_rules()
     ws[1, :] .+= 0.75 # bump empty hyper tile
-    ws[2:end, 1] .+= 0.25 #
-    ws[end, 1] += 0.25 #
+    ws[2:end, 1] .+= 0.1 #
+    ws[end, 1] += 0.2 #
     return ws
 end
 
@@ -86,7 +86,6 @@ function analyze_path(room::GridRoom, params::PathProcedure)
 end
 
 function eval_pair(left_door::GridRoom, right_door::GridRoom,
-                   move::Move,
                    path_params::PathProcedure)
 
     # initial paths
@@ -101,14 +100,12 @@ function eval_pair(left_door::GridRoom, right_door::GridRoom,
     candidates = falses(length(fs))
     for (fi, f) in enumerate(fs)
         length(f) > 3 && continue
-        # shifted_left = shift_furniture(left_door, f, move)
         shifted_left = remove(left_door, f)
         shifted_left_pc = analyze_path(shifted_left, path_params)
         abs(initial_left_pc - shifted_left_pc) > 0.1 && continue
-        # shifted_right = shift_furniture(right_door, f, move)
         shifted_right = remove(right_door, f)
         shifted_right_pc = analyze_path(shifted_right, path_params)
-        (initial_right_pc - shifted_right_pc) < 2.5 && continue
+        (initial_right_pc - shifted_right_pc) < 3.5 && continue
         candidates[fi] = true
     end
 
@@ -141,14 +138,7 @@ function main()
                             kernel_width = 3)
 
     # number of trials
-    n = 10
-
-    # will only consider these moves
-    moves = [down_move, up_move]
-    n_moves = length(moves)
-
-    # number of trials per move condition
-    max_count = Int64(ceil(n / n_moves))
+    n = 20
 
     # empty room with doors
     left_cond = empty_room(room_steps, room_bounds, entrance, [doors[1]])
@@ -162,46 +152,42 @@ function main()
     # will store summary of generated rooms here
     df = DataFrame(scene = Int64[],
                    flipx = Bool[],
-                   furniture = Int64[],
-                   move = Symbol[])
+                   furniture = Int64[])
 
-    for (idx, move) in enumerate(moves)
-        i = 1
-        while i <= max_count
-            # generate a room pair
-            (left, right) = sample_pair(left_cond, right_cond, template, pws)
-            fi = eval_pair(left, right, move, path_params)
-            # no valid pair generated, try again or finish
-            fi == 0 && continue
+    i = 1
+    while i <= n
+        # generate a room pair
+        (left, right) = sample_pair(left_cond, right_cond, template, pws)
+        fi = eval_pair(left, right,  path_params)
+        # no valid pair generated, try again or finish
+        fi == 0 && continue
 
-            # valid pair found, organize and store
-            id = (idx - 1) * max_count + i
-            toflip = (i-1) % 2
-            push!(df, [id, toflip, fi, move])
+        # valid pair found, organize and store
+        toflip = (i-1) % 2
+        push!(df, [i, toflip, fi])
 
-            right_path, _... = path_procedure(right, path_params)
-            viz_room(right, right_path)
-            # shifted_right = shift_furniture(right, fi, move)
-            shifted_right = remove(right, furniture(right)[fi])
-            shifted_right_path, _... = path_procedure(shifted_right, path_params)
-            viz_room(shifted_right, shifted_right_path)
-            left_path, _... = path_procedure(left, path_params)
-            viz_room(left, left_path)
-            # shifted_left = shift_furniture(left, fi, move)
-            shifted_left = remove(left, furniture(left)[fi])
-            shifted_left_path, _... = path_procedure(shifted_left, path_params)
-            viz_room(shifted_left, shifted_left_path)
-            # save scenes as json
-            open("$(scenes_out)/$(id)_1.json", "w") do f
-                write(f, left |> json)
-            end
-            open("$(scenes_out)/$(id)_2.json", "w") do f
-                write(f, right |> json)
-            end
-
-            print("move $(idx): $(i)/$(max_count)\r")
-            i += 1
+        right_path, _... = path_procedure(right, path_params)
+        viz_room(right, right_path)
+        # shifted_right = shift_furniture(right, fi, move)
+        shifted_right = remove(right, furniture(right)[fi])
+        shifted_right_path, _... = path_procedure(shifted_right, path_params)
+        viz_room(shifted_right, shifted_right_path)
+        left_path, _... = path_procedure(left, path_params)
+        viz_room(left, left_path)
+        # shifted_left = shift_furniture(left, fi, move)
+        shifted_left = remove(left, furniture(left)[fi])
+        shifted_left_path, _... = path_procedure(shifted_left, path_params)
+        viz_room(shifted_left, shifted_left_path)
+        # save scenes as json
+        open("$(scenes_out)/$(i)_1.json", "w") do f
+            write(f, left |> json)
         end
+        open("$(scenes_out)/$(i)_2.json", "w") do f
+            write(f, right |> json)
+        end
+
+        print("scene $(i)/$(n)\r")
+        i += 1
     end
     @show df
     # saving summary / manifest

@@ -1,5 +1,4 @@
 using CSV
-using Lazy
 using JSON
 using FileIO
 using ArgParse
@@ -27,17 +26,16 @@ function render_stims(df::DataFrame, name::String;
         p = "$(out)/$(r.scene)_$(door)"
         render(base, p;
                cycles_args...)
-        room = shift_furniture(base,
-                               furniture(base)[r.furniture],
-                               Symbol(r.move))
-        p = "$(out)/$(r.scene)_$(door)_shifted"
+        room = remove(base,
+                      furniture(base)[r.furniture])
+        p = "$(out)/$(r.scene)_$(door)_removed"
         render(room, p;
                cycles_args...)
     end
 end
 
 function main()
-    cmd = ["09_02_2023", "0"]
+    cmd = ["09_18_2023", "0"]
     args = parse_commandline(;x=cmd)
 
     name = args["dataset"]
