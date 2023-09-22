@@ -54,6 +54,15 @@ function remove(r::GridRoom, f::Furniture)::GridRoom
              r.exits, g, d)
 end
 
+function remove(r::GridRoom, i::Int64)::GridRoom
+    g = @> r steps grid PathGraph
+    d = deepcopy(r.data)
+    d[i] = floor_tile
+    prune_edges!(g, d)
+    GridRoom(r.steps, r.bounds, r.entrance,
+             r.exits, g, d)
+end
+
 function clear_room(r::GridRoom)::GridRoom
     g = @> r steps grid PathGraph
     d = deepcopy(r.data)

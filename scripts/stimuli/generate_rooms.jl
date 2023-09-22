@@ -9,21 +9,27 @@ using WaveFunctionCollapse
 function prop_weights()
     n = length(HT2D_vec)
     ws = zeros(n, n)
+    # column `i` in `ws` defines the weights over
+    # h-tiles (the rows) associated with `i`.
+
+    # Want mostly empty space
+    ws[1, :] .= 1.0 #
+
+    # Add "islands"
+    ws[2:end, 1] .= 0.7
+
+    # Grow islands with smaller parts
     for (i, hti) = enumerate(HT2D_vec)
         ni = count(hti)
+        ni < 2 && continue
         for (j,  htj) = enumerate(HT2D_vec)
             nj = count(htj)
-            ws[i, j] = ((hti[3] == htj[1]) + (hti[4] == htj[2])) *
-                    ((1+nj)/(1+ni))
+            nj >= ni && continue
+            ws[j, i] += 10 * ((hti[3] == htj[1]) && (hti[4] == htj[2])) *
+                    (1.0 / (nj+1)^2)
         end
     end
 
-    ws .+= 0.05 # adds noise to prop rules
-
-    # ws = gen_prop_rules()
-    ws[1, :] .+= 0.75 # bump empty hyper tile
-    ws[2:end, 1] .+= 0.1 #
-    ws[end, 1] += 0.2 #
     return ws
 end
 
@@ -42,8 +48,8 @@ function room_to_template(r::GridRoom;
         cell = walls[row_start:row_end, col_start:col_end]
         result[ir, ic] = WaveFunctionCollapse._ht2_hash_map[cell]
     end
-    gap_rng = (gap+1):(r-gap)
-    result[gap_rng, gap_rng] .= 0
+    gap_rng = 2:(r-gap-1)
+    result[gap_rng, 2:(end-1)] .= 0
     return sparse(result)
 end
 
@@ -56,12 +62,14 @@ end
 
 function sample_obstacles(template::AbstractMatrix{Int64},
                           pr::Matrix{Float64})
-    ws = WaveState(template, pr)
+    tmp = zeros(Int64, size(template))
+    ws = WaveState(tmp, pr)
     collapse!(ws, pr)
     # empty out original walls
     ws.wave[template .!= 0] .= 1
     expanded = WaveFunctionCollapse.expand(ws)
-    Set{Int64}(findall(vec(expanded)))
+    # REVIEW: why rot?
+    Set{Int64}(findall(vec(rotr90(expanded))))
 end
 
 function sample_pair(left_room::GridRoom,
@@ -81,42 +89,34 @@ function sample_pair(left_room::GridRoom,
 end
 
 function analyze_path(room::GridRoom, params::PathProcedure)
-    path, _, _, dm = path_procedure(room, params)
-    path_cost(path, dm)
+    path, _... = path_procedure(room, params)
+    d = FunctionalScenes.obstacle_diffusion(room, path, 0.2, 10)
 end
 
 function eval_pair(left_door::GridRoom, right_door::GridRoom,
                    path_params::PathProcedure)
 
     # initial paths
-    initial_left_pc = analyze_path(left_door, path_params)
-    initial_right_pc = analyze_path(right_door, path_params)
+    diff_left = analyze_path(left_door, path_params)
+    diff_right = analyze_path(right_door, path_params)
 
-    # jitter each furniture
-    # consider as candidate if:
-    #   1. move does not change left path
-    #   2. move changes right path
     fs = furniture(left_door)
     candidates = falses(length(fs))
     for (fi, f) in enumerate(fs)
-        length(f) > 3 && continue
-        shifted_left = remove(left_door, f)
-        shifted_left_pc = analyze_path(shifted_left, path_params)
-        abs(initial_left_pc - shifted_left_pc) > 0.1 && continue
-        shifted_right = remove(right_door, f)
-        shifted_right_pc = analyze_path(shifted_right, path_params)
-        (initial_right_pc - shifted_right_pc) < 3.5 && continue
-        candidates[fi] = true
+        candidates[fi] =
+            length(f) < 4 &&
+            diff_left[fi] < 1.0 &&
+            diff_right[fi] > 5.0
     end
 
     # pick a random candidate
-    any(candidates) ? rand(findall(candidates)) : 0
+    length(fs) > 3 && any(candidates) ? rand(findall(candidates)) : 0
 end
 
 
 
 function main()
-    name = "09_18_2023"
+    name = "diffusion_09_18_2023"
     dataset_out = "/spaths/datasets/$(name)"
     isdir(dataset_out) || mkdir(dataset_out)
 
@@ -138,7 +138,7 @@ function main()
                             kernel_width = 3)
 
     # number of trials
-    n = 20
+    n = 1
 
     # empty room with doors
     left_cond = empty_room(room_steps, room_bounds, entrance, [doors[1]])
@@ -152,14 +152,16 @@ function main()
     # will store summary of generated rooms here
     df = DataFrame(scene = Int64[],
                    flipx = Bool[],
-                   furniture = Int64[])
+                   fidx = Int64[])
 
     i = 1
-    while i <= n
+    c = 0
+    while i <= n && c < 100 * n
         # generate a room pair
         (left, right) = sample_pair(left_cond, right_cond, template, pws)
         fi = eval_pair(left, right,  path_params)
         # no valid pair generated, try again or finish
+        c += 1
         fi == 0 && continue
 
         # valid pair found, organize and store

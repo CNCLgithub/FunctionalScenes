@@ -175,14 +175,6 @@ function distance_to_path(r::GridRoom, vs, path::Array{T}) where {T<:Edge}
     n = steps(r)[2]
     loc = avg_location(vs, n)
     ne = length(path)
-    # d::Float64 = 0.0
-    # for e in path
-    #     v = dst(e)
-    #     x = ceil(v / n)
-    #     y = v % n
-    #     d += sqrt((x - loc[1])^2 + (y - loc[2])^2)
-    # end
-    # return d / ne
     d::Float64 = Inf
     for e in path
         v = dst(e)
@@ -239,6 +231,27 @@ function diffusion!(
     return nothing
 end
 
+
+function obstacle_diffusion(room::GridRoom,
+                            path::Array{T},
+                            p::Float64, n::Int64) where {T<:Edge}
+    vs = dst.(path)
+    m = zeros(Int64, steps(room))
+    g = pathgraph(clear_room(room))
+    clear_gds = gdistances(g, last(vs))
+    fs = furniture(room)
+    isempty(fs) && return zeros(size(fs))
+    terminal = reduce(union, fs)
+    diffusion!(m, g, p, n, terminal, clear_gds, vs)
+
+    result = zeros(size(fs))
+    for (fi, f) = enumerate(fs)
+        @inbounds for v in f
+            result[fi] += m[v]
+        end
+    end
+    return result
+end
 
 function obstacle_diffusion(room::GridRoom, f::Furniture,
                             path::Array{T},
