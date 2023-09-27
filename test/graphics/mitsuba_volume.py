@@ -11,7 +11,7 @@ from functional_scenes.render.interface import (initialize_scene,
 
 def main():
     mi.set_variant('cuda_ad_rgb')
-    dimensions = [32, 32, 5]
+    dimensions = [16, 16, 5]
     door = [10, -8]
     res = (128, 128)
     # res = (120, 180)
@@ -22,7 +22,7 @@ def main():
     scene = mi.load_dict(d)
     key = 'object.interior_medium.sigma_t.data'
     params = mi.traverse(scene)
-    params[key] = np.random.rand(1, 32, 32, 1)
+    params[key] = np.random.rand(1, 16, 16, 1)
     params.update()
     # print(params)
     start_time = time.time()

@@ -8,33 +8,32 @@ using WaveFunctionCollapse
 
 function prop_weights()
     n = length(HT2D_vec)
-    ws = zeros(n, n)
     # column `i` in `ws` defines the weights over
     # h-tiles (the rows) associated with `i`.
-
+    ws = zeros(n, n)
     # Want mostly empty space
-    ws[1, :] .= 1.0 #
-
-    # Add "islands"
-    ws[2:end, 1] .= 0.7
-
+    ws[1, :] .= 25.0 #
+    # Add "islands" proportional to size
+    # ws[2:end, 1] .= 20
+    for (i, hti) = enumerate(HT2D_vec)
+        ws[i, 1] += 10.0 * count(hti)
+    end
     # Grow islands with smaller parts
     for (i, hti) = enumerate(HT2D_vec)
         ni = count(hti)
-        ni < 2 && continue
+        # ni < 2 && continue
         for (j,  htj) = enumerate(HT2D_vec)
             nj = count(htj)
-            nj >= ni && continue
-            ws[j, i] += 10 * ((hti[3] == htj[1]) && (hti[4] == htj[2])) *
-                    (1.0 / (nj+1)^2)
+            (nj == 0 || nj >= ni) && continue
+            ws[j, i] += 6 * (4 - nj) *
+                ((hti[3] == htj[1]) || (hti[4] == htj[2]))
         end
     end
-
     return ws
 end
 
 function room_to_template(r::GridRoom;
-                          gap::Int64 = 2)
+                          gap::Int64 = 1)
     d = data(r)
     walls = d .== wall_tile
     y, x = size(d)
@@ -62,8 +61,7 @@ end
 
 function sample_obstacles(template::AbstractMatrix{Int64},
                           pr::Matrix{Float64})
-    tmp = zeros(Int64, size(template))
-    ws = WaveState(tmp, pr)
+    ws = WaveState(template, pr)
     collapse!(ws, pr)
     # empty out original walls
     ws.wave[template .!= 0] .= 1
@@ -90,7 +88,7 @@ end
 
 function analyze_path(room::GridRoom, params::PathProcedure)
     path, _... = path_procedure(room, params)
-    d = FunctionalScenes.obstacle_diffusion(room, path, 0.2, 10)
+    d = FunctionalScenes.obstacle_diffusion(room, path, 0.5, 5)
 end
 
 function eval_pair(left_door::GridRoom, right_door::GridRoom,
@@ -101,22 +99,18 @@ function eval_pair(left_door::GridRoom, right_door::GridRoom,
     diff_right = analyze_path(right_door, path_params)
 
     fs = furniture(left_door)
-    candidates = falses(length(fs))
-    for (fi, f) in enumerate(fs)
-        candidates[fi] =
-            length(f) < 4 &&
-            diff_left[fi] < 1.0 &&
-            diff_right[fi] > 5.0
+    candidates = Vector{Bool}(undef, length(fs))
+    @inbounds for (fi, f) in enumerate(fs)
+        candidates[fi] = diff_left[fi] < 0.1 &&
+            diff_right[fi] > 3.0
     end
-
-    # pick a random candidate
-    length(fs) > 3 && any(candidates) ? rand(findall(candidates)) : 0
+    length(fs) > 3  && any(candidates) ? rand(findall(candidates)) : 0
 end
 
 
 
 function main()
-    name = "diffusion_09_18_2023"
+    name = "diffusion_n_block"
     dataset_out = "/spaths/datasets/$(name)"
     isdir(dataset_out) || mkdir(dataset_out)
 
@@ -138,7 +132,7 @@ function main()
                             kernel_width = 3)
 
     # number of trials
-    n = 1
+    n = 15
 
     # empty room with doors
     left_cond = empty_room(room_steps, room_bounds, entrance, [doors[1]])

@@ -249,6 +249,7 @@ function obstacle_diffusion(room::GridRoom,
         @inbounds for v in f
             result[fi] += m[v]
         end
+        result[fi] *= 1.0 / length(f)
     end
     return result
 end

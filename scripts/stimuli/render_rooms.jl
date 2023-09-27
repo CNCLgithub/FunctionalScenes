@@ -4,13 +4,23 @@ using FileIO
 using ArgParse
 using DataFrames
 using FunctionalScenes
+using FunctionalScenes: render_mitsuba
+using Images:colorview, RGB
 
 cycles_args = Dict(
     :mode => "full",
     # :mode => "none",
     :navigation => false,
-    :template => "/spaths/datasets/vss_template.blend"
+    :template => "/spaths/datasets/vss_template.blend",
 )
+
+function load_from_disk(path::String)
+    local base_s
+    open(path, "r") do f
+        base_s = JSON.parse(f)
+    end
+    from_json(GridRoom, base_s)
+end
 
 function render_stims(df::DataFrame, name::String;
                       threads = Sys.CPU_THREADS)
@@ -18,14 +28,13 @@ function render_stims(df::DataFrame, name::String;
     isdir(out) || mkdir(out)
     for r in eachrow(df), door = 1:2
         base_p = "/spaths/datasets/$(name)/scenes/$(r.scene)_$(door).json"
-        local base_s
-        open(base_p, "r") do f
-            base_s = JSON.parse(f)
-        end
-        base = from_json(GridRoom, base_s)
+        base = load_from_disk(base_p)
         p = "$(out)/$(r.scene)_$(door)"
+        # original room
         render(base, p;
                cycles_args...)
+
+        # removed one obstacle cluster
         f = furniture(base)[r.fidx]
         rem = remove(base, f)
         p = "$(out)/$(r.scene)_$(door)_removed"
@@ -35,7 +44,7 @@ function render_stims(df::DataFrame, name::String;
 end
 
 function main()
-    cmd = ["diffusion_09_18_2023", "0"]
+    cmd = ["diffusion_n_block", "0"]
     args = parse_commandline(;x=cmd)
 
     name = args["dataset"]
@@ -50,7 +59,7 @@ function main()
     end
 
     render_stims(df, name,
-                 threads = args["threads"]
+                 threads = args["threads"],
                  )
     return nothing
 end

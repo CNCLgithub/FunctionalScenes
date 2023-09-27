@@ -186,7 +186,7 @@ class Scene:
         bpy.context.scene.render.resolution_x = resolution[0]
         bpy.context.scene.render.resolution_y = resolution[1]
         bpy.context.scene.render.resolution_percentage = 100
-        bpy.context.scene.render.engine = 'CYCLES'
+        # bpy.context.scene.render.engine = 'CYCLES'
         # bpy.context.scene.render.engine = 'BLENDER_EEVEE'
         # bpy.context.scene.cycles.samples = 128
         # bpy.context.scene.render.tile_x = 16
@@ -244,8 +244,8 @@ class Scene:
         :type camera_rot: float
 
         """
-        if not (resolution is None):
-            self.set_rendering_params(resolution)
+        # if not (resolution is None):
+        #     self.set_rendering_params(resolution)
 
         if os.path.isfile(output_name):
             print('File {0!s} exists'.format(output_name))
@@ -255,8 +255,10 @@ class Scene:
         t0 = time.time()
         print('Rendering ')
         sys.stdout.flush()
+        # hide blender output
         with Suppressor():
             bpy.ops.render.render(write_still=True)
+        bpy.ops.render.render(write_still=True)
         print('Rendering took {}s'.format(time.time() - t0))
         sys.stdout.flush()
 
@@ -332,14 +334,19 @@ def main():
 
     scene = Scene(args.scene)
 
-    if args.gpu:
-        print('Using gpu')
-        bpy.context.scene.cycles.device = 'GPU'
+    # if args.gpu:
+    #     print('Using gpu')
+    #     bpy.context.scene.cycles.device = 'GPU'
 
     path = os.path.join(args.out, 'render')
     if not os.path.isdir(path):
         os.mkdir(path)
 
+    for s in bpy.data.scenes:
+        s.cycles.device = 'GPU'
+
+    bpy.context.scene.cycles.device = 'GPU'
+    # bpy.ops.render.render(True)
 
     if args.mode == 'full':
         p = args.out + '.png'

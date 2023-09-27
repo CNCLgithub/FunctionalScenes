@@ -6,7 +6,7 @@ const obstacle_height = 0.3 * tile_height
 function light(pos)
     Dict(:position => [pos..., 0.95 * tile_height],
          :orientation => [0., 0., 0.5 * pi],
-         :intensity => 150.0)
+         :intensity => 100.0)
 end
 
 function lights(r::Room)
