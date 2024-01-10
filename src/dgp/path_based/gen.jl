@@ -1,6 +1,5 @@
 @gen static function prod_grow_path(st::PathState)
-    ns = neighbors(st.g, st.head)
-    ws = head_weights(st, ns)
+    ns, ws = head_weights(st)
     c = @trace(categorical(ws), :new_head)
     new_head  = ns[c]
     new_state::PathState = PathState(new_head, st)
@@ -25,7 +24,7 @@ const recurse_path = Recurse(prod_grow_path,
 
 
 @gen static function recurse_path_gm(r::GridRoom,
-                                     temp::Float64)
+                                     temp::Function)
     x = PathState(r; temp = temp)
     y = @trace(recurse_path(x, 1), :steps)
     path::Vector{Int64} = parse_recurse_path(y)

@@ -26,16 +26,15 @@ function render_stims(df::DataFrame, name::String;
         p = "$(out)/$(r.scene)_$(door)"
         render(base, p;
                cycles_args...)
-        f = furniture(base)[r.fidx]
-        rem = remove(base, f)
-        p = "$(out)/$(r.scene)_$(door)_removed"
-        render(rem, p;
+        blocked = add(base, Set{Int64}(r.tidx))
+        p = "$(out)/$(r.scene)_$(door)_blocked"
+        render(blocked, p;
                cycles_args...)
     end
 end
 
 function main()
-    cmd = ["diffusion_09_18_2023", "0"]
+    cmd = ["path_block_2024-01-10", "0"]
     args = parse_commandline(;x=cmd)
 
     name = args["dataset"]

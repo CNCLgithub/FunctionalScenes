@@ -5,7 +5,9 @@ using Colors
 using Images: colorview
 using ImageInTerminal
 
-export save_img_array
+export save_img_array,
+    softmax,
+    softmax!
 
 
 # index arrays using sets. Order doesn't matter
@@ -89,12 +91,37 @@ end
 # Math
 #################################################################################
 
-function softmax(x; t::Float64 = 1.0)
-    x = x .- maximum(x)
-    exs = exp.(x ./ t)
-    sxs = sum(exs)
-    n = length(x)
-    isnan(sxs) || iszero(sxs) ? fill(1.0/n, n) : exs ./ sxs
+# function softmax(x; t::Float64 = 1.0)
+#     x = x .- maximum(x)
+#     exs = exp.(x ./ t)
+#     sxs = sum(exs)
+#     n = length(x)
+#     isnan(sxs) || iszero(sxs) ? fill(1.0/n, n) : exs ./ sxs
+# end
+
+
+function softmax(x::Array{Float64}; t::Float64 = 1.0)
+    out = similar(x)
+    softmax!(out, x; t = t)
+    return out
+end
+
+function softmax!(out::Array{Float64}, x::Array{Float64}; t::Float64 = 1.0)
+    nx = length(x)
+    maxx = maximum(x)
+    sxs = 0.0
+
+    if maxx == -Inf
+        out .= 1.0 / nx
+        return nothing
+    end
+
+    @inbounds for i = 1:nx
+        out[i] = @fastmath exp((x[i] - maxx) / t)
+        sxs += out[i]
+    end
+    rmul!(out, 1.0 / sxs)
+    return nothing
 end
 
 function uniform_weights(x)::Vector{Float64}

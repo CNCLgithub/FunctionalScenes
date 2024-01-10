@@ -11,30 +11,40 @@ struct PathState
     # current tile
     head::Int64
     # temperature for next head
-    temp::Float64
+    temp::Function
     # step count
     step::Int64
 end
 
-function PathState(r::GridRoom; temp::Float64 = 1.0)
+function PathState(r::GridRoom; temp = x ->  1.0 / x)
     dims = steps(r)
     ent = first(entrance(r))
     ext = first(exits(r))
+    @show ext
     g = pathgraph(r)
     dm = noisy_distm(r, 0.1)
-    ds = 1.0 ./ dijkstra_shortest_paths(g, ext, dm).dists
-
-    PathState(dims, g, ds, ent, temp, 0)
+    ds = dijkstra_shortest_paths(g, entrance(r), dm).dists
+    # ds = 1.0 ./ gdistances(g, ext)
+    PathState(dims, g, ds, ext, temp, 0)
 end
 
 function PathState(new_head::Int64, st::PathState)
     PathState(st.dims, st.g, st.gs, new_head, st.temp, st.step + 1)
 end
 
-function head_weights(st::PathState, ns)
-    @unpack gs, temp, step = st
-    ds = gs[ns]
-    ws = softmax(ds; t = temp / step)
+function head_weights(st::PathState)
+    @unpack g, gs, head, temp, step = st
+    ns = neighbors(g, head)
+    d = gs[head]
+    ds = d .- gs[ns]
+    t = temp(step)
+    ws = softmax(ds; t = t)
+    @show step
+    @show t
+    @show d
+    @show ds
+    @show ws
+    ns, ws
 end
 
 function is_adjacent(t1::Int64, t2::Int64, col_dim::Int64)::Bool
@@ -99,94 +109,79 @@ const MoveDeque = Vector{Tuple{Int64, Int64, Int64}}
 
 function noisy_distm(r::GridRoom, w::Float64)
     g = pathgraph(r)
-    d = data(r)
+    d = data(r) .== floor_tile
     nrow = size(d, 1)
     n = length(d)
     # m = Matrix{Float64}(undef, n, n)
     m = fill(Inf, (n, n))
 
     @inbounds for i = 1:n, j = 1:n
-        vd = abs(i - j) == 1
+        vd = abs(i - j)
         (vd == 1 || vd == nrow) || continue
         # case which di is (free tile, free tile)
             # m[i,j] should be 0.1
         # case which di is (free_tile, obstacle) or any permutation
             # m[i,j] should be 0.9
-        m[i,j] = (d[i] == d[j]) ? w : 1 - w
+        m[i,j] = (d[i] && d[j]) ? w : 1 - w
     end
     return m
 end
 
-function fix_shortest_path(r::GridRoom, p::Vector{Int64})::GridRoom
+
+function _update_fix_weights!(weights::Array{Float64},
+                              path::Vector{Int64},
+                              g::SimpleGraph,
+                              gds::Array,
+                              mpd::Int64)
+    # weights to add obstacle
+    @inbounds for i = eachindex(weights)
+        weights[i] = gds[i] <= mpd ? mpd - gds[i] : -Inf
+    end
+    # prioritize tiles neighboring the path
+    @inbounds for (i, x) in enumerate(path)
+        for n = neighbors(g, x)
+            # `n` is closer to exit
+            if gds[n] <= gds[x]
+                weights[n] = mpd - gds[n] + 2
+            end
+        end
+    end
+    weights[path] .= -Inf
+    weights[1:32] .= -Inf
+end
+
+function fix_shortest_path(r::GridRoom, p::Vector{Int64},
+                           max_steps = 20)
     # no path to fix
     isempty(p) && return r
     # info of current room
-    ent = first(entrance(r))
-    ext = first(exits(r))
     g = deepcopy(pathgraph(r))
-    # an empty room for reference
-    ref_g = @>> r clear_room pathgraph
-    # distances from entrance
-    dm = noisy_distm(r, 0.1)
-    ds = dijkstra_shortest_paths(g, ext, dm, allpaths=true, trackvertices=true)
 
-    # matrices representing obstacles and paths
-    omat = Matrix{Bool}(data(r) .== obstacle_tile)
-    pmat = Matrix{Bool}(falses(steps(r)))
-    pmat[p] .= true
+    # reference distances
+    gds = gdistances(g, exits(r))
+    max_path_d = length(p)
 
-    saturated = Vector{Bool}(falses(length(p)))
-    s = MoveDeque()
-    np = length(p)
-    i = 1
-    @inbounds while i <= np
-        # @show i => saturated[i]
-        if saturated[i]
-            i += 1
-            continue
+    blocked = Set{Int64}()
+    # weights to add obstacle
+    weights = fill(-Inf, length(gds))
+    _update_fix_weights!(weights, p, g, gds, max_path_d)
+
+    c = 0
+    while c < max_steps && any(!isinf, weights)
+        to_block = categorical(softmax(weights))
+        weights[to_block] = -Inf
+        push!(blocked, to_block)
+        # remove edges
+        for n = neighbors(g, to_block)
+            rem_edge!(g, to_block, n)
+            rem_edge!(g, n, to_block)
         end
-        x = p[i]
-        y::Int64 = find_invalid_path(omat, g, x, ds.dists, pmat)
-
-        if y == 0
-            saturated[i] = true
-            i += 1
-        else
-            # not able to fix further up the path
-            if i == 1 || saturated[i-1]
-                # reset saturation
-                saturated[:] .= false
-                # clear later placements
-                # in case they are no longer needed
-                j,v,o = isempty(s) ? (i, x, y) : last(s)
-                # @show (i, x, y)
-                # @show s
-                while j > i && !isempty(s)
-                    # @show (j, v, o)
-                    pop!(s)
-                    for n = collect(neighbors(ref_g, o))
-                        # only reconnect if open
-                        omat[n] || add_edge!(g, Edge(o, n))
-                    end
-                    omat[o] = false
-                    (j, v, o) = isempty(s) ? (i,x,y) : last(s)
-                end
-                
-                # add block move
-                omat[y] = true
-                for ny in collect(neighbors(g, y))
-                    rem_edge!(g, Edge(y, ny))
-                end
-                push!(s, (i, x, y))
-                # synchronize distances
-                dm = noisy_distm(r, 0.1)
-                ds = dijkstra_shortest_paths(g, ext, dm, allpaths=true, trackvertices=true)
-            end
-            # restart
-            i = 1
-        end
+        # update distances and weights
+        gds = gdistances(g, exits(r))
+        _update_fix_weights!(weights, p, g, gds, max_path_d)
+        c += 1
     end
-    new_r::GridRoom = @>> omat vec findall Set add(r)
+    blocked
 end
 
 include("gen.jl")

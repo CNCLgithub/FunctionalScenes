@@ -1,5 +1,6 @@
 export GridRoom, pathgraph, data, entrance, exits, bounds, steps, expand,
-    from_json, viz_room, print_room
+    from_json, viz_room, print_room,
+    init_pathgraph
 
 #################################################################################
 # Type aliases
@@ -67,9 +68,8 @@ Builds a room given ...
 """
 function GridRoom(steps, bounds, ent, exs)
 
-    g = PathGraph(grid(steps))
     d = Matrix{Tile}(undef, steps)
-    d[:, :] .= floor_tile
+    fill!(d, floor_tile)
 
     # add walls
     d[:, 1] .= wall_tile
@@ -83,16 +83,66 @@ function GridRoom(steps, bounds, ent, exs)
     d[exs] .= floor_tile
 
     # walls and non-walls cannot be connected
-    prune_edges!(g, d)
+    # g = PathGraph(grid(steps))
+    # prune_edges!(g, d)
+    g = init_pathgraph(d)
 
     GridRoom(steps, bounds, ent, exs, g, d)
 end
 
+function rem_edges!(adjm::Matrix{Bool}, i::Int64)
+    r, c = size(adjm)
+    deltas = [-1, 1, -r, r]
+    @inbounds for j = deltas
+        ji = i + j
+        if ji < 1 || ji > n
+            continue
+        end
+        adjm[ji, i] = adjm[i, ji] = false
+    end
+    return nothing
+end
 
-# TODO: Generalize?
-function prune_edges!(g, d)
+
+function add_edges!(adjm::Matrix{Bool}, i::Int64)
+    r, c = size(adjm)
+    deltas = [-1, 1, -r, r]
+    @inbounds for j = deltas
+        ji = i + j
+        if ji < 1 || ji > n
+            continue
+        end
+        adjm[ji, i] = adjm[i, ji] = true
+    end
+    return nothing
+end
+
+function init_pathgraph(d::Matrix{Tile})
+    r, c = size(d)
+    n = length(d)
+    deltas = [-1, 1, -r, r]
+    adjm = Matrix{Bool}(undef, n, n)
+    fill!(adjm, false)
+    @inbounds for i = 1:n
+        for j = deltas
+            ji = i + j
+            if ji < 1 || ji > n
+                continue
+            end
+            adjm[ji, i] = adjm[i, ji] = d[i] == d[ji]
+        end
+    end
+    PathGraph(adjm)
+end
+
+function prune_edges!(g::SimpleGraph, d::Matrix{Tile})
     for e in collect(edges(g))
-        !matched_tile(d, e) && rem_edge!(g, e)
+        if matched_tile(d, e)
+            add_edge!(g, e)
+        else
+            rem_edge!(g, e)
+        end
+        # !matched_tile(d, e) && rem_edge!(g, e)
     end
     return nothing
 end

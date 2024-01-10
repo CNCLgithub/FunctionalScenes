@@ -1,0 +1,26 @@
+bootstrap: localimage
+from: env.d/base.sif
+
+%environment
+    # setup PATH to point to julia and blender
+    export PATH=$PATH:"/usr/local/blender"
+    export PATH=$PATH:"/usr/local/julia-1.9.3/bin"
+
+%runscript
+    exec bash "$@"
+
+
+%files
+    env.d/blender-4.0.2-linux-x64.tar.xz /build-ctx/
+
+
+%post
+    cd /build-ctx
+    # blender
+    apt-get install -y libsm6 libxext6
+    tar -xf "blender-4.0.2-linux-x64.tar.xz"
+    mv blender-4.0.2-linux-x64 "/usr/local/blender"
+    chmod +x "/usr/local/blender/blender"
+
+    # clean up
+    rm -rf /build-ctx

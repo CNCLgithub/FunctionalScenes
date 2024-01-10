@@ -26,21 +26,29 @@ end
 Adds the furniture of `src` to `dest`
 """
 #TODO: Try out "flattened" update scheme (avoid `fold`)
-function add(src::GridRoom, dest::GridRoom)::GridRoom
+function add(dest::GridRoom, src::GridRoom)::GridRoom
     omap = src.data .== obstacle_tile
     d = deepcopy(dest.data)
-    d[omap] .= obstacle_tile
-    g = deepcopy(dest.graph)
-    prune_edges!(g, d)
+    for i = eachindex(src.data)
+        if src.data[i] == obstacle_tile
+            d[i] = obstacle_tile
+        end
+    end
+    # g = deepcopy(dest.graph)
+    # prune_edges!(g, d)
+    g = init_pathgraph(d)
     GridRoom(dest.steps, dest.bounds, dest.entrance,
              dest.exits, g, d)
 end
 
 function add(r::GridRoom, f::Furniture)::GridRoom
-    g = @> r steps grid PathGraph
     d = deepcopy(r.data)
-    d[f] .= obstacle_tile
-    prune_edges!(g, d)
+    for i = f
+        d[i] = obstacle_tile
+    end
+    # g = @> r steps grid PathGraph
+    # prune_edges!(g, d)
+    g = init_pathgraph(d)
     GridRoom(r.steps, r.bounds, r.entrance,
              r.exits, g, d)
 end
