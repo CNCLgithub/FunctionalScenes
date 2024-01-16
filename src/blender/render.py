@@ -158,9 +158,14 @@ class Scene:
 
         if 'appearance' in object_d:
             mat = object_d['appearance']
+            # HACK: this is a block
+            if mat == "blue":
+                ob.data.materials.append(mat_blue2)
+                ob.data.materials.append(bpy.data.materials[mat])
+                ob.data.polygons[5].material_index = 1
         else:
             mat = 'U'
-        self.set_appearance(ob, mat)
+            self.set_appearance(ob, mat)
 
     def load_scene(self, scene_dict):
         """ Configures the ramp, table, and balls
@@ -297,6 +302,15 @@ class Suppressor(object):
         for fd in self.null_fds + self.save_fds:
             os.close(fd)
 
+# from https://blender.stackexchange.com/a/240875
+def create_material(mat_name, diffuse_color=(1,1,1,1)):
+    mat = bpy.data.materials.new(name=mat_name)
+    mat.diffuse_color = diffuse_color
+    return mat
+
+# Generate 2 demo materials
+mat_red = create_material("Red", (1,0,0,1))
+mat_blue2 = create_material("Blue2", (0.01,0.4,0.9,1.0))
 
 def parser(args):
     """Parses extra arguments

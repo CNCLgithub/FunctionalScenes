@@ -25,23 +25,23 @@ def main():
 
     df = pd.read_csv(os.path.join(dataset, 'scenes.csv'))
 
-    aa_movies = []
-    ab_movies = []
+    aa_trials = []
+    ab_trials = []
     # groupby move
     for (_, r) in df.iterrows():
         for door in [1, 2]:
             # first create each `a->a` trial
             base = f'{r.scene}_{door}.png'
-            aa_movies.append([base, base, r.flipx])
+            aa_trials.append([base, base, r.flipx])
             # then proceed to make `a -> b` trials
-            move = f'{r.scene}_{door}_removed.png'
-            ab_movies.append([base, move, r.flipx])
+            diff = f'{r.scene}_{door}_blocked.png'
+            ab_trials.append([base, diff, r.flipx])
 
     # repeate aa trials to have a 50/50 split
-    naa = len(aa_movies)
-    nab = len(ab_movies)
+    naa = len(aa_trials)
+    nab = len(ab_trials)
 
-    trials = [aa_movies + ab_movies]
+    trials = [aa_trials + ab_trials]
     with open(os.path.join(dataset, 'condlist.json'), 'w') as f:
        json.dump(trials, f)
 
