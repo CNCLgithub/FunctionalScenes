@@ -10,27 +10,6 @@ using Graphs
 using FunctionalScenes
 using FunctionalCollections
 
-function room_to_template(r::GridRoom;
-                          gap::Int64 = 2)
-    d = data(r)
-    occupied = d.== obstacle_tile
-    y, x = size(d) # room dimensions (e.g., 16x16)
-    # hyper tile dimensions (8x8)
-    r, c = Int64(y / 2), Int64(x / 2)
-    result = Matrix{Int64}(undef, r, c)
-    for ir = 1:r, ic = 1:c
-        row_start = (ir - 1) * 2 + 1
-        row_end = ir * 2
-        col_start = (ic - 1) * 2 + 1
-        col_end = ic * 2
-        cell = occupied[row_start:row_end, col_start:col_end]
-        result[ir, ic] = htmap[cell]
-    end
-    # gap_rng = 2:(r-gap-1)
-    # result[gap_rng, 2:(end-1)] .= 0
-    return sparse(result)
-end
-
 function empty_room(steps, bounds, entrance, exits)
     r = GridRoom(steps, bounds, entrance, exits)
     m = data(r)
@@ -120,7 +99,7 @@ function gen_obstacle_weights(template::GridRoom,
     # -3 hard to detect spaces next to walls
     weights = Matrix{Bool}(zeros(dims))
     # ensures that there is no furniture near the observer
-    start_x = 5 # Int64(ceil(last(dims) * pct_open))
+    start_x = 6 # Int64(ceil(last(dims) * pct_open))
     stop_x = last(dims) - 4 # nor blocking the exit
     # buffer along sides
     start_y = side_buffer + 1
@@ -146,49 +125,37 @@ function sample_pair(left_room::GridRoom,
                      right_room::GridRoom,
                      chisel_temp::Float64 = -1.0,
                      fix_steps::Int64 = 10,
-                     extra_pieces::Int64 = 10,
-                     piece_size::Int64 = 4)
+                     extra_pieces::Int64 = 13,
+                     piece_size::Int64 = 5)
 
     # sample some obstacles in the middle section of the roo
     oweights = gen_obstacle_weights(right_room, Int64[])
     right_room = furniture_gm(right_room, oweights,
                               extra_pieces, piece_size)
     left_room  = add(left_room, right_room)
-    # viz_room(right_room)
 
-    # sample a random path for right room
-    path_tiles = chisel_path(right_room, chisel_temp)
-    right_path = findall(vec(path_tiles))
-    # add some obstacles to coerce this path
-    fixed = fix_shortest_path(right_room, right_path, fix_steps)
-    right_room = add(right_room, fixed)
+    # # sample a random path for right room
+    # path_tiles = chisel_path(right_room, chisel_temp)
+    # right_path = findall(vec(path_tiles))
+    # # add some obstacles to coerce this path
+    # fixed = fix_shortest_path(right_room, right_path, fix_steps)
+    # right_room = add(right_room, fixed)
     right_path = dpath(right_room)
 
-    # add obstacles to left room
-    left_room = add(left_room, fixed)
-    # left path accounting for right path
-    visited = Matrix{Bool}(data(left_room) .!= floor_tile)
-    visited[right_path] .= true
-    path_tiles = chisel_path(left_room, chisel_temp, visited)
-    left_path = findall(vec(path_tiles))
-    fixed = fix_shortest_path(left_room, left_path, fix_steps)
-    left_room = add(left_room, fixed)
+    # # add obstacles to left room
+    # left_room = add(left_room, fixed)
+    # # left path accounting for right path
+    # visited = Matrix{Bool}(data(left_room) .!= floor_tile)
+    # visited[right_path] .= true
+    # path_tiles = chisel_path(left_room, chisel_temp, visited)
+    # left_path = findall(vec(path_tiles))
+    # fixed = fix_shortest_path(left_room, left_path, fix_steps)
+    # left_room = add(left_room, fixed)
     left_path = dpath(left_room)
 
-    # add left chisels to right door
-    right_room = add(right_room, fixed)
-
-    # add more obstacles, avoiding both paths
-    # oweights = gen_obstacle_weights(right_room, union(left_path,
-    #                                                   right_path))
-    # right_room = furniture_gm(right_room, oweights,
-    #                           extra_pieces, piece_size)
-    # left_room = add(left_room, right_room)
-
-    # evaulate the paths one last time
-    right_path = dpath(right_room)
-    # left_path = dpath(left_room)
-
+    # # add left chisels to right door
+    # right_room = add(right_room, fixed)
+    # right_path = dpath(right_room)
 
     (left_room, left_path, right_room, right_path)
 end
@@ -201,7 +168,10 @@ function eval_pair(left_door::GridRoom,
 
     tile = 0
     # Not a valid sample
-    (isempty(left_path) || isempty(right_path)) && return tile
+    ((isempty(left_path) || isempty(right_path)) ||
+        length(intersect(left_path, right_path)) > 7 ||
+        abs(length(right_path) - length(left_path)) > 3) &&
+        return tile
 
     # Where to place obstacle that blocks the right path
     nl = length(right_path)
@@ -211,33 +181,32 @@ function eval_pair(left_door::GridRoom,
     gt = deepcopy(g)
     ens = entrance(right_door)
     ext = exits(right_door)
-    left_path = Int64[]
     # look for first tile that blocks the path
+
     @inbounds for i = trng
         tid = right_path[i]
         # block tile
-        ns = collect(neighbors(g, tid))
-        for n = ns
-            rem_edge!(gt, tid, n)
-        end
+        right_temp = add(right_door, Set{Int64}(tid))
+        # ns = collect(neighbors(g, tid))
+        # for n = ns
+        #     rem_edge!(gt, tid, n)
+        # end
         # does it block path ?
-        new_path = dpath(gt, ens, ext)
-        if isempty(new_path)
-            tile = tid
-            left_temp = add(left_door, Set{Int64}(tile))
-            left_path = dpath(pathgraph(left_temp),
-                              entrance(left_temp),
-                              exits(left_temp))
-            break
-        else
-            # reset block
-            for n = ns
-                add_edge!(gt, tid, n)
+        new_path = dpath(right_temp)
+        if isempty(new_path) || length(new_path) > nl + 7
+            left_temp = add(left_door, Set{Int64}(tid))
+            new_left_path = dpath(left_temp)
+            if new_left_path == left_path
+                tile = tid
+                break
             end
+        # else
+            # # reset block
+            # for n = ns
+            #     add_edge!(gt, tid, n)
+            # end
         end
     end
-
-    tile = isempty(left_path) ? 0 : tile
 
     return tile
 end
@@ -275,7 +244,7 @@ function main()
 
     i = 1 # scene id
     c = 0 # number of attempts;
-    while i <= n && c < 100 * n
+    while i <= n && c < 1000 * n
         # generate a room pair
         (left, lpath, right, rpath) = sample_pair(left_cond, right_cond)
         tile = eval_pair(left, lpath, right, rpath)
@@ -285,8 +254,9 @@ function main()
 
         println("accepted pair!")
         viz_room(right, rpath)
+        blocked_room = add(right, Set{Int64}(tile))
+        viz_room(blocked_room, dpath(blocked_room))
         viz_room(left, lpath)
-        viz_room(add(right, Set{Int64}(tile)))
 
         # save
         toflip = (i-1) % 2

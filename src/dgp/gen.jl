@@ -63,7 +63,7 @@ end
     sampled_f = @trace(furnish(st.template, st.vm, st.max_size),
                        :furniture)
     new_state = FurnishState(st, sampled_f)
-    c = new_state.max_count > new_state.count
+    c = new_state.max_count > new_state.count && count(new_state.vm) > 0
     result = Production(new_state, fill(new_state, c))
     return result
 end
